@@ -1,3 +1,4 @@
+import json
 from google import genai
 
 client = genai.Client(
@@ -12,30 +13,39 @@ def generate_short(topic: str):
     prompt = f"""
 당신은 대한민국 최고의 건강 유튜브 쇼츠 작가입니다.
 
-주제
-
+주제:
 {topic}
 
-아래 형식으로 작성하세요.
+반드시 아래 JSON 형식으로만 답하세요.
+설명은 쓰지 말고 JSON만 출력하세요.
 
-제목
-
-훅
-
-대본
-
-장면
-
-Scene1
-Scene2
-Scene3
-Scene4
-
-각 Scene마다
-- 내레이션
-- 이미지 프롬프트
-
-를 작성하세요.
+{{
+  "title": "...",
+  "hook": "...",
+  "script": "...",
+  "scenes": [
+    {{
+      "scene": 1,
+      "narration": "...",
+      "image_prompt": "..."
+    }},
+    {{
+      "scene": 2,
+      "narration": "...",
+      "image_prompt": "..."
+    }},
+    {{
+      "scene": 3,
+      "narration": "...",
+      "image_prompt": "..."
+    }},
+    {{
+      "scene": 4,
+      "narration": "...",
+      "image_prompt": "..."
+    }}
+  ]
+}}
 """
 
     response = client.models.generate_content(
@@ -43,7 +53,12 @@ Scene4
         contents=prompt,
     )
 
+    text = response.text.strip()
+
+    if text.startswith("```json"):
+        text = text.replace("```json", "").replace("```", "").strip()
+
     return {
         "success": True,
-        "result": response.text
+        "data": json.loads(text)
     }
