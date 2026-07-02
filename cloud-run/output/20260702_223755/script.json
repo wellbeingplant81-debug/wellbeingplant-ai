@@ -1,0 +1,37 @@
+{
+    "title": "피곤한 게 아니었어요. 몸이 보내는 경고",
+    "hook": "요즘 부쩍 피곤하고 몸이 이상한가요?",
+    "script": "요즘 부쩍 피곤하고 몸이 이상한가요? 단순한 컨디션 난조라고 생각하기 쉽지만, 사실은 몸이 보내는 위험 신호일 수 있습니다. 가벼운 피부 트러블이나 감기 몸살 같은 증상. 대수롭지 않게 넘겼던 이것들이 사실은 성병의 초기 신호일 수 있다는 사실, 알고 계셨나요? 성병은 더 이상 특정 사람들의 이야기가 아닙니다. 증상이 없는 '침묵의 감염'도 많아, 자신도 모르는 사이 파트너에게 전파할 수 있죠. 방치된 성병은 골반염, 불임 등 심각한 합병증으로 이어질 수 있습니다. '나중에'라는 생각은 위험해요. 내 몸을 위한 골든타임은 바로 지금입니다. 하지만 너무 걱정 마세요. 가장 확실한 예방은 안전한 관계이며, 조금이라도 의심된다면 주저하지 말고 검사받는 것이 중요합니다. 익명 검사도 가능해요. 나와 파트너의 건강을 지키는 가장 용감한 선택. 부끄러운 것이 아니라, 내 몸을 사랑하는 당연한 권리이자 책임입니다. 당신의 건강을 응원합니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "요즘 부쩍 피곤하고 몸이 이상한가요? 단순한 컨디션 난조라고 생각하기 쉽지만, 사실은 몸이 보내는 위험 신호일 수 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean person in their 20s sitting on a bed, looking thoughtfully out a window, appearing slightly tired and pensive. Warm natural lighting from the window illuminates the room. Documentary style. Professional photography. Natural facial expression. Correct human anatomy. Korean. realistic skin. realistic eyes. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "가벼운 피부 트러블이나 감기 몸살 같은 증상. 대수롭지 않게 넘겼던 이것들이 사실은 성병의 초기 신호일 수 있다는 사실, 알고 계셨나요?",
+            "image_prompt": "Ultra realistic, documentary style close-up shot of a Korean person's hand gently touching their own neck, a look of subtle concern on their face reflected in a bathroom mirror. The focus is on the reflection. Cinematic photography. Warm, soft bathroom lighting. Professional photography. Natural facial expression. Correct human anatomy. Korean. realistic skin. realistic hands. realistic fingers. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "성병은 더 이상 특정 사람들의 이야기가 아닙니다. 증상이 없는 '침묵의 감염'도 많아, 자신도 모르는 사이 파트너에게 전파할 수 있죠.",
+            "image_prompt": "Ultra realistic, cinematic photography of a crowded Seoul street during a weekday afternoon. A Korean man in his early 30s is in the foreground, blurred figures of diverse people in the background. He looks normal, just walking. Documentary style. Professional photography. Natural facial expression. Correct human anatomy. Korean. realistic skin. Highly detailed. Photorealistic. 8K quality. Shallow depth of field with focus on the main subject. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "방치된 성병은 골반염, 불임 등 심각한 합병증으로 이어질 수 있습니다. '나중에'라는 생각은 위험해요. 내 몸을 위한 골든타임은 바로 지금입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean woman in her late 20s sitting alone on a couch in a dimly lit living room at dusk. She is looking down at her clasped hands on her lap, a worried and contemplative expression on her face. Documentary style. Professional photography. Natural facial expression. Correct human anatomy. Korean. realistic skin. realistic hands. realistic fingers. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "하지만 너무 걱정 마세요. 가장 확실한 예방은 안전한 관계이며, 조금이라도 의심된다면 주저하지 말고 검사받는 것이 중요합니다. 익명 검사도 가능해요.",
+            "image_prompt": "Ultra realistic, over-the-shoulder shot of a Korean person's hands holding a smartphone. On the screen, a generic clinic or health booking website is visible (blurry, no recognizable text). The person's thumb is decisively tapping the screen. The background is a clean, modern apartment. Cinematic photography. Documentary style. Professional photography. Korean. realistic hands. realistic fingers. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "나와 파트너의 건강을 지키는 가장 용감한 선택. 부끄러운 것이 아니라, 내 몸을 사랑하는 당연한 권리이자 책임입니다. 당신의 건강을 응원합니다.",
+            "image_prompt": "Ultra realistic, cinematic portrait of a Korean person in their late 20s, looking directly at the camera with a gentle, confident smile. They are standing outdoors in a park with soft, warm afternoon sunlight filtering through the trees behind them. Documentary style. Professional photography. Natural facial expression. Correct human anatomy. Korean. realistic skin. realistic eyes. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        }
+    ]
+}

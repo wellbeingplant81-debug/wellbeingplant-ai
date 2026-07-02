@@ -1,0 +1,27 @@
+{
+    "title": "자면서 살 빠지는 기적의 1분 습관",
+    "hook": "잠 못 자는 당신, 딱 한 가지만 바꿔보세요.",
+    "script": "밤새 뒤척이고 계신가요? 수많은 생각에 잠 못 이루는 밤, 정말 괴롭죠. 이럴 땐 잠들기 1시간 전, 따뜻한 우유 한 잔을 마셔보세요. 우유 속 트립토판 성분은 마음을 편안하게 해주는 세로토닌 분비를 촉진해 숙면을 유도합니다. 화려한 야식이나 자극적인 음료 대신, 이 따뜻한 한 잔이 당신의 몸과 마음에 온전한 휴식을 선물할 거예요. 오늘 밤, 1분의 투자로 얻는 꿀잠. 내일 아침, 당신은 훨씬 더 가볍고 상쾌하게 일어날 수 있을 겁니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "밤새 뒤척이고 계신가요? 수많은 생각에 잠 못 이루는 밤, 정말 괴롭죠.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A middle-aged Korean woman in her 30s lying in bed in a dark room, her face illuminated by the soft glow of a bedside lamp. She has a tired and slightly frustrated expression, unable to sleep. The focus is on her face and the tangled sheets. Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 2,
+            "narration": "이럴 땐 잠들기 1시간 전, 따뜻한 우유 한 잔을 마셔보세요. 우유 속 트립토판 성분은 마음을 편안하게 해주는 세로토닌 분비를 촉진해 숙면을 유도합니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, Close-up shot of a Korean woman's realistic hands pouring fresh white milk from a glass bottle into a ceramic mug in a cozy, dimly lit kitchen at night. Steam is gently rising from the mug, suggesting it's being warmed. The background is softly blurred. Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 3,
+            "narration": "화려한 야식이나 자극적인 음료 대신, 이 따뜻한 한 잔이 당신의 몸과 마음에 온전한 휴식을 선물할 거예요.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A Korean woman in comfortable pajamas sitting on the edge of her bed, holding a warm mug of milk with both hands near her face. Her eyes are closed, and she has a serene, peaceful expression as if savoring the moment of calm before sleep. Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 4,
+            "narration": "오늘 밤, 1분의 투자로 얻는 꿀잠. 내일 아침, 당신은 훨씬 더 가볍고 상쾌하게 일어날 수 있을 겁니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, The same Korean woman now deeply asleep in her bed. Her face is completely relaxed and peaceful. Soft, early morning sunlight streams through the window, gently illuminating her face and the room, signifying a new, refreshed day. Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI, Korean, realistic skin, realistic eyes."
+        }
+    ]
+}

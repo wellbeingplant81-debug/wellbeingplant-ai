@@ -1,0 +1,27 @@
+{
+    "title": "의사도 놀란 무좀 박멸 음식",
+    "hook": "지긋지긋한 무좀, 이제 먹어서 해결하세요!",
+    "script": "지긋지긋한 무좀, 발에 약만 바르고 계셨나요? 이제 먹어서 해결하세요! 사실 무좀균은 우리 몸의 면역력과 아주 깊은 관련이 있습니다. 매일 먹는 이 음식이 바로 무좀균의 천적입니다. 바로 마늘입니다. 마늘의 알리신 성분은 강력한 항진균 작용을 합니다. 알리신은 곰팡이균의 증식을 억제하고, 몸 전체의 면역력을 높여 무좀균이 살기 어려운 환경을 만들어주죠. 연구에 따르면 꾸준한 마늘 섭취는 진균 감염 재발률을 낮추는 데 도움이 됩니다. 물론, 바르는 약과 함께 식단에 마늘을 더해보세요. 굽거나 볶아도 좋으니, 오늘부터 꾸준히 챙겨 드시는 건 어떨까요? 지긋지긋한 가려움에서 해방될 수 있습니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "지긋지긋한 무좀, 발에 약만 바르고 계셨나요? 이제 먹어서 해결하세요! 사실 무좀균은 우리 몸의 면역력과 아주 깊은 관련이 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a middle-aged Korean man sitting on the edge of his bed in a dimly lit room, looking down at his own foot with a frustrated and tired expression. His face is the main focus, conveying annoyance. Correct human anatomy. Natural facial expression. Realistic skin. Realistic eyes. Warm natural lighting filtering through a window. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "매일 먹는 이 음식이 바로 무좀균의 천적입니다. 바로 마늘입니다. 마늘의 알리신 성분은 강력한 항진균 작용을 합니다.",
+            "image_prompt": "Documentary style, professional photography. An extreme close-up shot of a hand holding several perfect, fresh, peeled garlic cloves. The garlic skin is translucent and papery. The cloves are plump and luminous. Dark, rustic wooden background. Warm natural lighting. Highly detailed texture of the garlic. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. Korean. Realistic hands. Realistic fingers. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "알리신은 곰팡이균의 증식을 억제하고, 몸 전체의 면역력을 높여 무좀균이 살기 어려운 환경을 만들어주죠. 연구에 따르면 꾸준한 마늘 섭취는 진균 감염 재발률을 낮추는 데 도움이 됩니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean woman's hands skillfully mincing fresh garlic on a clean wooden chopping board in a bright, modern kitchen. Sunlight streams into the kitchen, creating a warm and healthy atmosphere. Focus is on the hands and the knife cutting through the garlic. Correct human anatomy. Realistic hands. Realistic fingers. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "물론, 바르는 약과 함께 식단에 마늘을 더해보세요. 굽거나 볶아도 좋으니, 오늘부터 꾸준히 챙겨 드시는 건 어떨까요? 지긋지긋한 가려움에서 해방될 수 있습니다.",
+            "image_prompt": "Professional photography, advertisement quality food shot. A beautifully prepared bowl of Korean Aglio e Olio pasta, garnished with golden-brown fried garlic chips and fresh parsley. The pasta is glistening with olive oil. The dish is presented on a minimalist ceramic plate. Very fresh. Warm natural lighting. Highly detailed. Photorealistic. 8K quality. Shallow depth of field. Vertical composition 9:16. No text. No watermark. No logo. No illustration. No cartoon. No CGI."
+        }
+    ]
+}

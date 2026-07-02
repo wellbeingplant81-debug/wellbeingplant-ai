@@ -1,0 +1,27 @@
+{
+    "title": "사랑 후 찾아온 불청객, 혹시 나도?",
+    "hook": "피곤하고 몸살 기운, 감기인 줄 알았는데...",
+    "script": "피곤하고 몸살 기운, 감기인 줄 알았는데... 이게 성병의 첫 신호일 수 있다는 사실, 아셨나요? HIV나 매독 같은 일부 성병은 초기 증상이 감기와 아주 비슷해요. 열이 나고, 근육통이 생기고, 온몸에 힘이 없죠. 두 번째, 원인 모를 피부 발진이나 물집이 생기기도 합니다. 마지막으로, 가장 확실한 신호는 생식기 주변의 변화인데요. 소변 볼 때 아프거나, 평소와 다른 분비물이 나온다면 의심해봐야 합니다. 하지만 가장 무서운 건, 아무 증상이 없는 경우도 많다는 거예요. 그래서 가장 중요한 건 ‘검사’입니다. 새로운 파트너가 생겼거나, 조금이라도 불안하다면 주저 말고 검사받으세요. 당신의 건강을 지키는 가장 확실한 방법입니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "피곤하고 몸살 기운, 감기인 줄 알았는데... 이게 성병의 첫 신호일 수 있다는 사실, 아셨나요?",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, a young Korean woman in her 20s sitting on the edge of her bed, looking tired and holding a thermometer with a worried expression, realistic skin, realistic eyes, realistic hands, realistic fingers, natural facial expression, correct human anatomy, Warm natural lighting from a nearby window, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "HIV나 매독 같은 일부 성병은 초기 증상이 감기와 아주 비슷해요. 열이 나고, 근육통이 생기고, 온몸에 힘이 없죠.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, a close-up shot of a Korean man's hand placing a cool towel on his own forehead as he lies in bed, looking feverish and uncomfortable, realistic skin, realistic hands, realistic fingers, correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "두 번째, 원인 모를 피부 발진이나 물집이 생기기도 합니다. 마지막으로, 가장 확실한 신호는 생식기 주변의 변화인데요. 소변 볼 때 아프거나, 평소와 다른 분비물이 나온다면 의심해봐야 합니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, a concerned Korean person in their late 20s looking at a subtle, non-graphic rash on their inner forearm in a well-lit bathroom. Their face shows worry and confusion. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, natural facial expression, correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "하지만 가장 무서운 건, 아무 증상이 없는 경우도 많다는 거예요. 그래서 가장 중요한 건 ‘검사’입니다. 새로운 파트너가 생겼거나, 조금이라도 불안하다면 주저 말고 검사받으세요. 당신의 건강을 지키는 가장 확실한 방법입니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, shot from behind a young Korean patient looking at a friendly, reassuring doctor in a bright and modern clinic office. The patient has a look of relief and determination after the consultation. Korean, realistic skin, realistic eyes, natural facial expression, correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        }
+    ]
+}

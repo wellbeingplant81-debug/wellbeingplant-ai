@@ -1,0 +1,37 @@
+{
+    "title": "딱 1분, 평생 예뻐지는 기적의 습관",
+    "hook": "매일 아침, 1분만 투자해서 평생 예뻐질 수 있다면?",
+    "script": "매일 아침 거울 앞에서 한숨 쉬고 있나요? 비싼 화장품으로도 가려지지 않는 칙칙함, 그 원인은 피부 속 '이것'이 부족하기 때문입니다. 정답은 바로 '물'입니다. 하지만 그냥 마시는 것만으로는 부족해요. 최고의 효과를 내는 '물 마시는 시간'이 따로 있다는 사실, 알고 계셨나요? 밤새 쌓인 노폐물을 배출하고 신진대사를 깨우는 아침 공복의 물 한 잔. 이것이 바로 당신의 몸을 위한 가장 강력한 디톡스이자 수분 폭탄입니다. 단 1주일만 실천해도 느껴질 거예요. 푸석했던 피부가 속부터 차오르는 촉촉함을 되찾고, 아침에 일어나는 것이 한결 가벼워지는 놀라운 변화를요. 이 간단한 습관이 혈액순환을 촉진하고 세포 재생을 도와, 당신 본연의 건강한 아름다움을 되찾아줍니다. 진정한 '이쁨'은 바로 이런 생기에서 시작되니까요. 세상에서 가장 강력한 안티에이징은 비싼 시술이 아니라, 매일 아침 당신이 마시는 물 한 잔입니다. 오늘부터 바로 시작해 보세요, 당신의 가장 이쁜 순간을 위해.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "매일 아침 거울 앞에서 한숨 쉬고 있나요? 비싼 화장품으로도 가려지지 않는 칙칙함, 그 원인은 피부 속 '이것'이 부족하기 때문입니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. A thoughtful Korean woman in her late 20s looking at her tired reflection in a slightly steamy bathroom mirror. Natural facial expression of concern. Correct human anatomy. Warm natural lighting from a window is mixed with soft bathroom light. Highly detailed, Photorealistic, 8K quality. Shallow depth of field focusing on her face in the reflection. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic skin with pores, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 2,
+            "narration": "정답은 바로 '물'입니다. 하지만 그냥 마시는 것만으로는 부족해요. 최고의 효과를 내는 '물 마시는 시간'이 따로 있다는 사실, 알고 계셨나요?",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. A close-up shot of a Korean person's hand pouring crystal clear water from a minimalist glass pitcher into an elegant drinking glass. Bubbles are visible in the water. Warm natural lighting from a nearby window. Highly detailed, Photorealistic, 8K quality. Shallow depth of field with focus on the pouring water. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic hands, realistic fingers."
+        },
+        {
+            "scene": 3,
+            "narration": "밤새 쌓인 노폐물을 배출하고 신진대사를 깨우는 아침 공복의 물 한 잔. 이것이 바로 당신의 몸을 위한 가장 강력한 디톡스이자 수분 폭탄입니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. A serene Korean woman in cozy white pajamas standing by a large window, bathed in soft morning sunlight. She is drinking a glass of water, with a peaceful and content natural facial expression. Correct human anatomy. Warm natural lighting. Highly detailed, Photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic skin, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 4,
+            "narration": "단 1주일만 실천해도 느껴질 거예요. 푸석했던 피부가 속부터 차오르는 촉촉함을 되찾고, 아침에 일어나는 것이 한결 가벼워지는 놀라운 변화를요.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. An extreme close-up on the cheek and eye of a beautiful Korean woman, she is smiling softly. Her skin looks dewy, hydrated, and glowing with health. Natural facial expression of quiet happiness. Correct human anatomy. Warm natural lighting that highlights the skin's texture. Highly detailed, Photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic skin with subtle texture, realistic eyes."
+        },
+        {
+            "scene": 5,
+            "narration": "이 간단한 습관이 혈액순환을 촉진하고 세포 재생을 도와, 당신 본연의 건강한 아름다움을 되찾아줍니다. 진정한 '이쁨'은 바로 이런 생기에서 시작되니까요.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. A vibrant Korean woman with a genuine, joyful laugh, her head tilted back slightly. She is outdoors in a lush green park with golden hour sunlight filtering through the leaves, creating a beautiful flare. Natural facial expression of pure happiness. Correct human anatomy. Warm natural lighting. Highly detailed, Photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic skin, realistic eyes, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 6,
+            "narration": "세상에서 가장 강력한 안티에이징은 비싼 시술이 아니라, 매일 아침 당신이 마시는 물 한 잔입니다. 오늘부터 바로 시작해 보세요, 당신의 가장 이쁜 순간을 위해.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography. A close-up shot of a Korean person's hand placing a full glass of water on a wooden nightstand next to a bed. The morning light is soft and hazy. The background is out of focus, showing a hint of a tidy bedroom. The mood is calm and preparatory. Highly detailed, Photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, No watermark, No logo, No illustration, No cartoon, No CGI. Realistic hands, realistic fingers."
+        }
+    ]
+}

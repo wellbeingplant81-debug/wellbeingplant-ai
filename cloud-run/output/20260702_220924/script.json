@@ -1,0 +1,27 @@
+{
+    "title": "절대 무시하면 안되는 성병 신호",
+    "hook": "피곤해서 생긴 뾰루지인 줄 알았는데...",
+    "script": "피곤해서 생긴 뾰루지인 줄 알았는데... 성병은 생각보다 흔하고, 증상도 다양합니다. 첫째, 평소와 다른 분비물. 색깔이나 냄새가 이상하다면 의심해봐야 해요. 둘째, 가려움이나 통증. 특히 소변 볼 때 따끔거린다면 바로 병원으로 가세요. 셋째, 피부에 나타나는 이상한 발진이나 물집. 그냥 두면 더 큰 병이 될 수 있습니다. 성병은 부끄러운 게 아닙니다. 방치하면 더 위험할 뿐이죠. 나와 파트너를 위해, 조금이라도 이상하다면 꼭 검사받으세요.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "피곤해서 생긴 뾰루지인 줄 알았는데... 성병은 생각보다 흔하고, 증상도 다양합니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a worried young Korean person in their late 20s looking at their reflection in a bathroom mirror. The lighting is dim, warm natural lighting coming from a single source. Their face shows a subtle, natural facial expression of concern. Shallow depth of field, focusing on their realistic eyes. Realistic skin, realistic hands. Documentary style. Professional photography. Highly detailed, photorealistic, 8K quality. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 2,
+            "narration": "첫째, 평소와 다른 분비물. 색깔이나 냄새가 이상하다면 의심해봐야 해요. 둘째, 가려움이나 통증. 특히 소변 볼 때 따끔거린다면 바로 병원으로 가세요.",
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean person in their 20s sitting on the edge of their bed, looking down with a troubled natural facial expression. They are wearing simple loungewear. The room is lit by warm natural lighting from a window. The focus is on their posture and clasped hands, conveying discomfort. Documentary style. Professional photography. Realistic skin, realistic eyes, realistic hands, realistic fingers. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 3,
+            "narration": "셋째, 피부에 나타나는 이상한 발진이나 물집. 그냥 두면 더 큰 병이 될 수 있습니다.",
+            "image_prompt": "Ultra realistic, documentary style close-up of a Korean person's realistic hands pulling back a sweater sleeve to look at their forearm with a worried expression. The focus is on the act of checking their skin, not on any visible lesion. Warm natural lighting illuminates their realistic skin and the texture of the sweater. Professional photography. Cinematic. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy, realistic fingers."
+        },
+        {
+            "scene": 4,
+            "narration": "성병은 부끄러운 게 아닙니다. 방치하면 더 위험할 뿐이죠. 나와 파트너를 위해, 조금이라도 이상하다면 꼭 검사받으세요.",
+            "image_prompt": "Ultra realistic, cinematic photography, over-the-shoulder shot of a young Korean person standing and looking towards a modern, clean, and discreet clinic entrance. They have a determined but calm posture. The scene is shot with warm natural lighting in the late afternoon. The focus is on the person's back, with the clinic sign blurred in the background. Professional photography, documentary style. Realistic skin, realistic hands. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+{
+    "title": "절대 무시하면 안 될 성병 신호 3가지",
+    "hook": "혹시 소변 볼 때 아프거나, 이상한 분비물이 나온 적 있나요?",
+    "script": "혹시 소변 볼 때 아프거나, 이상한 분비물이 나온 적 있나요? 단순한 염증이라고 생각하기 쉽지만, 몸이 보내는 위험 신호일 수 있습니다. 첫째, 평소와 다른 색이나 냄새의 분비물. 둘째, 소변을 볼 때 느껴지는 타는 듯한 통증이나 불편함. 이런 증상들은 클라미디아나 임질 같은 성병의 대표적인 초기 증상입니다. 셋째, 성기 주변의 가려움, 발진이나 물집. 헤르페스나 곤지름을 의심해볼 수 있죠. 하지만 가장 무서운 건, 아무런 증상이 없는 '무증상 감염'이 훨씬 많다는 겁니다. 나도 모르는 사이 소중한 사람에게 옮길 수 있어요. 성병은 더 이상 부끄러운 병이 아닙니다. 감기처럼 누구에게나 올 수 있어요. 조금이라도 의심된다면, 나와 파트너의 건강을 위해 바로 검사받는 용기가 필요합니다. 정기적인 검진이 최고의 예방입니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "혹시 소변 볼 때 아프거나, 이상한 분비물이 나온 적 있나요? 단순한 염증이라고 생각하기 쉽지만, 몸이 보내는 위험 신호일 수 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A young Korean man in his 20s, sitting on the edge of his bed in a modern apartment, looking down with a worried and pensive expression. Natural facial expression. Correct human anatomy. Warm natural lighting from a nearby window illuminates the room. Highly detailed, photorealistic, 8K quality. Shallow depth of field with the background softly blurred. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Korean, realistic skin, realistic eyes."
+        },
+        {
+            "scene": 2,
+            "narration": "첫째, 평소와 다른 색이나 냄새의 분비물. 둘째, 소변을 볼 때 느껴지는 타는 듯한 통증이나 불편함. 이런 증상들은 클라미디아나 임질 같은 성병의 대표적인 초기 증상입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. Extreme close-up on the hands of a young Korean woman, nervously clasped together in her lap. The background is a brightly lit, clean, out-of-focus modern bathroom. Correct human anatomy. Warm natural lighting. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Korean, realistic skin, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 3,
+            "narration": "셋째, 성기 주변의 가려움, 발진이나 물집. 헤르페스나 곤지름을 의심해볼 수 있죠. 하지만 가장 무서운 건, 아무런 증상이 없는 '무증상 감염'이 훨씬 많다는 겁니다. 나도 모르는 사이 소중한 사람에게 옮길 수 있어요.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A tender close-up shot of a Korean couple's hands holding each other. One hand gently rests on top of the other. The focus is on their intertwined fingers, symbolizing connection and care. Soft, warm natural lighting. Correct human anatomy. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Korean, realistic skin, realistic hands, realistic fingers."
+        },
+        {
+            "scene": 4,
+            "narration": "성병은 더 이상 부끄러운 병이 아닙니다. 감기처럼 누구에게나 올 수 있어요. 조금이라도 의심된다면, 나와 파트너의 건강을 위해 바로 검사받는 용기가 필요합니다. 정기적인 검진이 최고의 예방입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A profile shot of a young Korean woman in her 20s, looking out a large window with a gentle, relieved smile on her face. Bright, warm natural sunlight streams in, creating a lens flare and highlighting her features. Natural facial expression of hope. The background is a soft, blurred cityscape. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Korean, realistic skin, realistic eyes."
+        }
+    ]
+}

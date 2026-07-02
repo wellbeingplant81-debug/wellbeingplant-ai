@@ -2,7 +2,7 @@ import json
 import os
 
 from app.services.project_service import create_project
-from app.services.content_service import generate_short
+from app.services.script_service import generate_script
 from app.services.image_service import generate_image
 from app.services.video_builder import build_video
 from app.services.tts_service import create_tts
@@ -18,12 +18,16 @@ def generate_short_video(topic: str):
 
     print(f"Project : {project_path}")
 
-    # 1. 대본 생성
-    short = generate_short(topic)
+    # 대본 생성
+    result = generate_script(
+        topic=topic,
+        target_duration=45,
+        scene_count=6,
+    )
 
-    data = short["data"]
+    data = result["data"]
 
-    # 2. script.json 저장
+    # script.json 저장
     with open(
         os.path.join(project_path, "script.json"),
         "w",
@@ -31,7 +35,7 @@ def generate_short_video(topic: str):
     ) as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-    # 3. 이미지 생성
+    # 이미지 생성
     for i, scene in enumerate(data["scenes"], start=1):
 
         output_file = os.path.join(
@@ -45,16 +49,16 @@ def generate_short_video(topic: str):
             output_file,
         )
 
-    # 4. 영상 생성
-    build_video(project_path)
-
-    # 5. 음성 생성
+    # 음성 생성
     create_tts(
         data["script"],
         project_path,
     )
 
-    # 6. 영상 + 음성 합치기
+    # 영상 생성
+    build_video(project_path)
+
+    # 최종 영상 생성
     merge_video_audio(project_path)
 
     return {

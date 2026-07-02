@@ -1,0 +1,27 @@
+{
+    "title": "무좀, 식초에 발 담그면 큰일납니다!",
+    "hook": "무좀 없애려다 발 다 망가집니다.",
+    "script": "무좀 없애려다 발 다 망가집니다. 지긋지긋한 발 가려움, 혹시 민간요법으로 해결하려 하시나요? 특히 식초 물에 발을 담그는 분들, 정말 위험합니다. 강한 산성인 식초는 피부 보호막을 손상시켜요. 결국 약해진 피부 틈으로 무좀균이 더 깊숙이 파고들어 상태를 악화시킬 뿐입니다. 무좀은 피부병, 즉 곰팡이 감염입니다. 반드시 약국이나 병원에서 항진균제를 처방받아 꾸준히 발라야만 뿌리 뽑을 수 있어요. 그리고 가장 중요한 것! 치료만큼 중요한 것이 관리입니다. 발을 씻은 후엔 발가락 사이사이까지 완벽하게 말려주는 습관을 들이세요. 이것만 지켜도 재발을 막을 수 있습니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "지긋지긋한 발 가려움, 혹시 민간요법으로 해결하려 하시나요? 특히 식초 물에 발을 담그는 분들, 정말 위험합니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography of a Korean person sitting on a bed in a minimalist room, looking down at their own bare feet with a frustrated and concerned natural facial expression. The focus is on the person's expression and posture, with the feet slightly blurred. Correct human anatomy, realistic skin, realistic eyes. Warm natural lighting creating soft shadows. Highly detailed, photorealistic, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "강한 산성인 식초는 피부 보호막을 손상시켜요. 결국 약해진 피부 틈으로 무좀균이 더 깊숙이 파고들어 상태를 악화시킬 뿐입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. Extreme close-up on the skin of a human foot, showing redness and irritation, implying a bad reaction. The texture of the skin is highly detailed and photorealistic. The image should convey discomfort without being graphic. Correct human anatomy, realistic skin. Warm natural lighting. Highly detailed, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "무좀은 피부병, 즉 곰팡이 감염입니다. 반드시 약국이나 병원에서 항진균제를 처방받아 꾸준히 발라야만 뿌리 뽑을 수 있어요.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A close-up shot of a Korean person's hand squeezing a small amount of white medicinal cream from a generic tube onto their index finger. The background is a clean, bright bathroom setting. Correct human anatomy, realistic skin, realistic hands, realistic fingers. Warm natural lighting. Highly detailed, photorealistic, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "그리고 가장 중요한 것! 치료만큼 중요한 것이 관리입니다. 발을 씻은 후엔 발가락 사이사이까지 완벽하게 말려주는 습관을 들이세요. 이것만 지켜도 재발을 막을 수 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A low-angle close-up shot of a Korean person carefully drying the area between their toes with a clean, fluffy white towel after a shower. The focus is on the action of drying. Correct human anatomy, realistic skin, realistic hands, realistic fingers. Warm natural lighting from a nearby window. Highly detailed, photorealistic, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

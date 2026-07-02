@@ -1,0 +1,27 @@
+{
+    "title": "커피, 이때 마시면 독이 됩니다",
+    "hook": "당신의 아침 커피, 건강을 망치고 있습니다.",
+    "script": "당신의 아침 커피, 건강을 망치고 있습니다. 혹시 매일 아침 눈 뜨자마자 커피부터 찾으시나요? 우리 몸은 아침에 코르티솔이라는 호르몬으로 잠을 깨우는데, 이때 커피를 마시면 오히려 불안감을 유발하고 장기적으로는 카페인 내성만 키우게 됩니다. 커피 효과를 최대로 누리는 골든타임은 기상 2시간 뒤, 코르티솔이 낮아지는 오전 9시 반에서 11시 반 사이입니다. 이때 마시는 커피가 진짜 활력을 주죠. 이제 커피, 골든타임에 맞춰 더 건강하게 즐기세요. 진짜 활력이 시작될 겁니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "당신의 아침 커피, 건강을 망치고 있습니다. 혹시 매일 아침 눈 뜨자마자 커피부터 찾으시나요?",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A tired Korean woman in her 30s just waking up in a sunlit bedroom, she is reaching for a steaming cup of coffee on her nightstand, Natural facial expression of fatigue, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": 2,
+            "narration": "우리 몸은 아침에 코르티솔 호르몬으로 잠을 깨우는데, 이때 커피를 마시면 오히려 불안감을 유발하고 카페인 내성만 키우게 됩니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A stressed Korean office worker in his late 20s at his desk, looking anxious with jittery hands around a coffee cup, Natural facial expression of anxiety, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, Correct human anatomy, Cool office lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": 3,
+            "narration": "커피 효과를 최대로 누리는 골든타임은 기상 2시간 뒤, 코르티솔이 낮아지는 오전 9시 반에서 11시 반 사이입니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A happy and focused Korean woman in her 30s enjoying a cup of coffee at a bright, minimalist cafe, she has a gentle smile, Natural facial expression of contentment, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, The coffee is an advertising photo quality latte with beautiful art, very fresh, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": 4,
+            "narration": "이제 커피, 골든타임에 맞춰 더 건강하게 즐기세요. 진짜 활력이 시작될 겁니다.",
+            "image_prompt": "Ultra realistic, Cinematic photography, Documentary style, Professional photography, A close-up shot of Korean hands pouring freshly brewed black coffee from a glass carafe into a beautiful ceramic mug, with steam rising elegantly, The coffee is advertising photo quality, rich and dark, very fresh, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, Korean, realistic hands, realistic fingers, Correct human anatomy, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        }
+    ]
+}

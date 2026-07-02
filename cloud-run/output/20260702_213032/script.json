@@ -1,0 +1,27 @@
+{
+    "title": "식후 혈당 폭발, 이렇게 막으세요",
+    "hook": "식사하고 바로 졸리신가요? 혈당 스파이크 신호입니다.",
+    "script": "식사하고 바로 졸리신가요? 그게 바로 혈당 스파이크 신호입니다. 우리 몸의 혈당이 롤러코스터처럼 급등했다가 뚝 떨어지는 현상인데요. 이걸 방치하면 만성피로는 물론, 당뇨병의 지름길이 될 수 있습니다. 특히 흰 쌀밥이나 면, 빵 같은 정제 탄수화물을 먼저 먹었을 때 혈당은 무섭게 치솟죠. 맛있지만 몸에는 정말 위험한 신호입니다. 하지만 아주 간단한 방법으로 혈당 스파이크를 막을 수 있습니다. 바로 '식사 순서'를 바꾸는 겁니다. 채소나 나물 반찬을 가장 먼저 드세요. 식이섬유가 혈당 상승을 부드럽게 막아주는 방패 역할을 하거든요. 그 다음 단백질, 마지막으로 밥이나 면을 드시는 겁니다. 식사 순서만 바꿨을 뿐인데 식후 나른함이 사라지고 활력이 생기는 걸 느낄 수 있을 거예요. 오늘 점심부터 바로 시작해보세요!",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "식사하고 바로 졸리신가요? 그게 바로 혈당 스파이크 신호입니다. 우리 몸의 혈당이 롤러코스터처럼 급등했다가 뚝 떨어지는 현상인데요. 이걸 방치하면 만성피로는 물론, 당뇨병의 지름길이 될 수 있습니다.",
+            "image_prompt": "A middle-aged Korean man in his 40s sitting at a dining table, looking tired and drowsy with his head slightly bowed after finishing a meal. Empty bowls are visible on the table. Ultra realistic, cinematic photography, documentary style, professional photography, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "특히 흰 쌀밥이나 면, 빵 같은 정제 탄수화물을 먼저 먹었을 때 혈당은 무섭게 치솟죠. 맛있지만 몸에는 정말 위험한 신호입니다.",
+            "image_prompt": "Extreme close-up, top-down view of a steaming, delicious bowl of Korean white rice. The grains are perfectly cooked and glistening. Advertising photo quality, incredibly fresh. Ultra realistic, cinematic photography, professional photography, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "하지만 아주 간단한 방법으로 혈당 스파이크를 막을 수 있습니다. 바로 '식사 순서'를 바꾸는 겁니다. 채소나 나물 반찬을 가장 먼저 드세요. 식이섬유가 혈당 상승을 부드럽게 막아주는 방패 역할을 하거든요. 그 다음 단백질, 마지막으로 밥이나 면을 드시는 겁니다.",
+            "image_prompt": "A Korean person's hand using elegant metal chopsticks to pick up fresh, vibrant green seasoned spinach (sigeumchi-namul) from a small ceramic side dish bowl. In the background, a bowl of rice and grilled fish are softly blurred. Ultra realistic, cinematic photography, documentary style, professional photography, Korean, realistic skin, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "식사 순서만 바꿨을 뿐인데 식후 나른함이 사라지고 활력이 생기는 걸 느낄 수 있을 거예요. 오늘 점심부터 바로 시작해보세요!",
+            "image_prompt": "The same middle-aged Korean man from scene 1, now looking refreshed and energetic with a subtle, content smile. He is sitting in the same spot, but now bathed in soft, warm afternoon sunlight streaming through a window, looking peacefully outside. Ultra realistic, cinematic photography, documentary style, professional photography, Korean, realistic skin, realistic eyes, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}
