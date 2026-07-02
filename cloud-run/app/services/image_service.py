@@ -8,28 +8,17 @@ client = genai.Client(
 )
 
 
-def generate_image(prompt: str):
+def generate_image(prompt: str, output_file: str):
 
     response = client.models.generate_images(
         model="imagen-4.0-generate-001",
         prompt=prompt,
     )
 
-    output_dir = "output/images"
-    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    files = []
+    image = response.generated_images[0]
 
-    for i, generated_image in enumerate(response.generated_images):
+    image.image.save(output_file)
 
-        filename = os.path.join(output_dir, f"scene{i+1}.png")
-
-        generated_image.image.save(filename)
-
-        files.append(filename)
-
-    return {
-        "success": True,
-        "count": len(files),
-        "files": files
-    }
+    return output_file

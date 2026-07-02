@@ -1,0 +1,27 @@
+{
+    "title": "40대 커피, 매일 마시면 생기는 일",
+    "hook": "40 넘으셨죠? 혹시 이 커피가 독이 될 수도 있다면요?",
+    "script": "40 넘으셨죠? 습관처럼 마시는 이 커피, 혹시 독이 될 수도 있다면요? 하지만 걱정 마세요. 제대로만 마시면 최고의 보약이 됩니다. 매일 1~3잔의 커피는 강력한 항산화 작용으로 노화를 늦추고, 치매와 파킨슨병 위험까지 낮춘다는 연구 결과가 있습니다. 뇌를 깨우는 최고의 부스터죠. 하지만 문제는 '언제', '얼마나' 마시냐는 겁니다. 특히 뼈가 약해지는 40대 이후, 커피의 카페인은 칼슘 흡수를 방해해 골다공증 위험을 높이고, 늦은 오후의 커피는 수면의 질을 떨어뜨려 만성피로를 유발할 수 있습니다. 딱 2가지만 기억하세요. 첫째, 커피는 오후 2시 이전에만! 둘째, 칼슘 보충을 위해 우유를 넣은 라떼로 마시거나, 치즈 같은 유제품을 함께 드세요. 이렇게만 바꾸면 커피는 당신의 가장 든든한 건강 파트너가 될 겁니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "40 넘으셨죠? 습관처럼 마시는 이 커피, 혹시 독이 될 수도 있다면요? 하지만 걱정 마세요. 제대로만 마시면 최고의 보약이 됩니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a tired Korean woman in her mid-40s, sitting at her kitchen table in the early morning. She holds a black coffee mug with both hands, her expression is weary yet contemplative. Warm natural lighting streams through the window, highlighting the steam from the coffee. Documentary style, professional photography, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, natural facial expression, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "매일 1~3잔의 커피는 강력한 항산화 작용으로 노화를 늦추고, 치매와 파킨슨병 위험까지 낮춘다는 연구 결과가 있습니다. 뇌를 깨우는 최고의 부스터죠.",
+            "image_prompt": "Ultra realistic, cinematic photography of a focused Korean man in his late 40s, working on a laptop in a bright, modern office. He has a cup of coffee beside him and a look of sharp concentration and clarity on his face. Natural facial expression. Documentary style, professional photography, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "하지만 문제는 '언제', '얼마나' 마시냐는 겁니다. 특히 뼈가 약해지는 40대 이후, 커피의 카페인은 칼슘 흡수를 방해해 골다공증 위험을 높이고, 늦은 오후의 커피는 수면의 질을 떨어뜨려 만성피로를 유발할 수 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography showing a Korean woman in her 40s, tossing and turning in bed at night, unable to sleep. The room is dark, with only a sliver of moonlight from the window. Her face shows frustration and exhaustion. Documentary style, professional photography, Korean, realistic skin, realistic eyes, correct human anatomy, natural facial expression, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "딱 2가지만 기억하세요. 첫째, 커피는 오후 2시 이전에만! 둘째, 칼슘 보충을 위해 우유를 넣은 라떼로 마시거나, 치즈 같은 유제품을 함께 드세요. 이렇게만 바꾸면 커피는 당신의 가장 든든한 건강 파트너가 될 겁니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a healthy, smiling Korean woman in her mid-40s enjoying a beautiful cafe latte in an outdoor cafe in the morning. A small plate with a piece of fresh cheese is on the table. She looks vibrant and content. The latte is ad-quality, fresh, and has perfect foam art. Professional photography, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}
