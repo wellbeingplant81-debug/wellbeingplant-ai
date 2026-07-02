@@ -1,47 +1,41 @@
-from moviepy import ImageClip, concatenate_videoclips
 import os
+from moviepy import ImageClip, concatenate_videoclips
 
 
-def build_video():
+def build_video(project_path: str):
 
-    image_folder = "output/images"
+    image_folder = os.path.join(project_path, "images")
 
-    image_files = [
-        "scene1.png",
-        "scene2.png",
-        "scene3.png",
-        "scene4.png",
+    images = [
+        os.path.join(image_folder, "scene1.png"),
+        os.path.join(image_folder, "scene2.png"),
+        os.path.join(image_folder, "scene3.png"),
+        os.path.join(image_folder, "scene4.png"),
     ]
 
     clips = []
 
-    for filename in image_files:
+    for image in images:
 
-        path = os.path.join(image_folder, filename)
-
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"{path} 파일이 없습니다.")
-
-        clip = ImageClip(path).with_duration(3)
+        clip = (
+            ImageClip(image)
+            .with_duration(3)
+        )
 
         clips.append(clip)
 
-    final_clip = concatenate_videoclips(clips, method="compose")
+    final = concatenate_videoclips(clips)
 
-    os.makedirs("output/video", exist_ok=True)
+    video_folder = os.path.join(project_path, "video")
+    os.makedirs(video_folder, exist_ok=True)
 
-    output_path = "output/video/short.mp4"
+    output_path = os.path.join(video_folder, "short.mp4")
 
-    final_clip.write_videofile(
+    final.write_videofile(
         output_path,
-        fps=30,
-        codec="libx264",
-        audio=False
+        fps=30
     )
 
-    final_clip.close()
+    final.close()
 
-    return {
-        "success": True,
-        "video": output_path
-    }
+    return output_path
