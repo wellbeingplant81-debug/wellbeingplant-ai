@@ -8,6 +8,7 @@ from app.services.video_builder import build_video
 from app.services.tts_service import create_tts
 from app.services.final_video_service import merge_video_audio
 from app.services.subtitle_service import create_subtitle
+from app.services.audio_service import mix_audio
 
 
 def generate_short_video(topic: str):
@@ -64,6 +65,8 @@ def generate_short_video(topic: str):
         script,
         project_path,
     )
+
+    mix_audio(project_path)
 
     # 자막 생성
     create_subtitle(project_path)

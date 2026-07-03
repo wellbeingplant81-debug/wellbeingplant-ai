@@ -1,0 +1,37 @@
+{
+    "title": "내 여친이 최고의 정신과 의사인 이유",
+    "hook": "세상 모든 짐을 혼자 짊어진 듯 지치고 번아웃이 왔을 때,",
+    "script": "세상 모든 짐을 혼자 짊어진 듯 지치고 번아웃이 왔을 때, 그 어떤 위로도 힘이 되지 않는 순간이 찾아옵니다. 그때 여자친구는 '힘내'라는 말 대신, 그저 아무 말 없이 곁에 앉아 가만히 제 손을 잡아주었습니다. 그리고는 따뜻한 차 한 잔을 건네며, 복잡했던 제 마음을 알아주기라도 하듯 조용히 제 이야기를 들어주었죠. 그 사소하지만 진심 어린 행동 하나에, 딱딱하게 굳어있던 마음이 눈 녹듯 스르르 녹아내리는 걸 느꼈습니다. 진정한 사랑은 엄청난 해결책을 제시하는 게 아니라, 지친 내 편이 되어주고 온전히 나를 믿어주는 것 아닐까요? 당신 곁에 이런 사람이 있다면, 당신은 세상에서 가장 건강하고 값진 관계를 가진 행운아입니다. 절대 놓치지 마세요.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "세상 모든 짐을 혼자 짊어진 듯 지치고 번아웃이 왔을 때, 그 어떤 위로도 힘이 되지 않는 순간이 찾아옵니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style of a young Korean man in his late 20s sitting alone on his sofa at night, looking exhausted and stressed, with a tired and sad natural facial expression. The room is dimly lit by a single lamp. Professional photography, Korean people, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "그때 여자친구는 '힘내'라는 말 대신, 그저 아무 말 없이 곁에 앉아 가만히 제 손을 잡아주었습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, close-up shot of a young Korean woman's hand gently holding a young Korean man's hand. They are sitting on a couch. The focus is on their intertwined hands, conveying comfort and support. Documentary style, professional photography, Korean people, realistic skin, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "그리고는 따뜻한 차 한 잔을 건네며, 복잡했던 제 마음을 알아주기라도 하듯 조용히 제 이야기를 들어주었죠.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style. A young Korean woman with a gentle and caring natural facial expression hands a steaming ceramic mug of tea to a man. The focus is on the act of giving and receiving. Professional photography, Korean people, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "그 사소하지만 진심 어린 행동 하나에, 딱딱하게 굳어있던 마음이 눈 녹듯 스르르 녹아내리는 걸 느꼈습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, close-up portrait of the same young Korean man from scene 1. He is holding a warm mug, and a subtle, genuine smile of relief is on his face. His natural facial expression shows his stress melting away. Documentary style, professional photography, Korean people, realistic skin, realistic eyes, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "진정한 사랑은 엄청난 해결책을 제시하는 게 아니라, 지친 내 편이 되어주고 온전히 나를 믿어주는 것 아닐까요?",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean couple sitting together on a park bench during a golden hour sunset. They are looking at each other with deep affection and understanding in their natural facial expressions. A sense of peace and mutual support. Documentary style, professional photography, Korean people, realistic skin, realistic eyes, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "당신 곁에 이런 사람이 있다면, 당신은 세상에서 가장 건강하고 값진 관계를 가진 행운아입니다. 절대 놓치지 마세요.",
+            "image_prompt": "Ultra realistic, cinematic photography, over-the-shoulder shot. A young Korean man is hugging his girlfriend from behind while she smiles brightly. Both have genuine, happy natural facial expressions. They are in a cozy, sunlit apartment, conveying a feeling of safety and happiness. Documentary style, professional photography, Korean people, realistic skin, realistic eyes, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

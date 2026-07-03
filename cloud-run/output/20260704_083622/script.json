@@ -1,0 +1,37 @@
+{
+    "title": "여친이 내 건강을 망치는 줄 알았다",
+    "hook": "여친 때문에 살 쪘다는 말, 그거 다 핑계입니다.",
+    "script": "밤 11시, 여친과 먹는 야식. 행복하지만 다음 날 아침이면 후회하셨죠? 사실 이건 우리 몸에 보내는 최고의 신호일 수 있습니다. 중요한 건 음식이 아닙니다. 사랑하는 사람과의 교감이죠. 이 시간은 스트레스 호르몬인 코르티솔 수치를 극적으로 낮춰주는 효과가 있습니다. 주말 아침, 억지로 나선 산책길. 함께 걷다 보면 어느새 심박수가 오르고, 엔도르핀이 분비되면서 기분 좋은 에너지가 온몸을 채우게 됩니다. 그녀는 야식만 챙겨주는 게 아닙니다. 제철 과일과 신선한 채소로 차려준 아침 식사는 최고의 항산화제이자 하루를 시작하는 완벽한 연료가 되죠. 일이 잘 안 풀려 지쳐있을 때, 말없이 등을 토닥여주는 것만으로도 충분합니다. 이런 정서적 지지는 면역 체계를 강화시키는 가장 강력한 백신입니다. 그러니 여자친구가 당신의 건강을 관리해주는 최고의 파트너라는 사실을 잊지 마세요. 진짜 건강은 사랑하는 사람과 함께 만들어가는 것이니까요.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "밤 11시, 여친과 먹는 야식. 행복하지만 다음 날 아침이면 후회하셨죠? 사실 이건 우리 몸에 보내는 최고의 신호일 수 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean couple in their 20s, sitting on a cozy living room floor late at night. They are happily sharing and eating a steaming bowl of ramyeon noodles. The man has a slightly guilty but happy natural facial expression. The scene is illuminated by the warm natural lighting of a single floor lamp. Documentary style, professional photography, Korean people, realistic skin, realistic eyes, realistic hands, realistic fingers, correct human anatomy, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "중요한 건 음식이 아닙니다. 사랑하는 사람과의 교감이죠. 이 시간은 스트레스 호르몬인 코르티솔 수치를 극적으로 낮춰주는 효과가 있습니다.",
+            "image_prompt": "Ultra realistic, documentary style close-up shot of a young Korean man's hand gently holding his girlfriend's hand on a wooden table. Their fingers are intertwined. The background is softly blurred, hinting at a cozy cafe. Warm natural lighting from a nearby window enhances the texture of their realistic skin. Cinematic photography, professional photography, Korean people, correct human anatomy, realistic hands, realistic fingers, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "주말 아침, 억지로 나선 산책길. 함께 걷다 보면 어느새 심박수가 오르고, 엔도르핀이 분비되면서 기분 좋은 에너지가 온몸을 채우게 됩니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean couple in their 20s enjoying a morning walk in a sun-dappled park. They are dressed in casual activewear, smiling with refreshed, natural facial expressions. The scene is filled with warm natural lighting filtering through green trees. Documentary style, professional photography, Korean people, realistic skin, realistic eyes, correct human anatomy, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "그녀는 야식만 챙겨주는 게 아닙니다. 제철 과일과 신선한 채소로 차려준 아침 식사는 최고의 항산화제이자 하루를 시작하는 완벽한 연료가 되죠.",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean woman in her 20s, focused on preparing a healthy breakfast in a bright, modern kitchen. Her hands are carefully arranging colorful, fresh fruits and a green salad on a plate. She has a gentle, caring natural facial expression. Over-the-shoulder shot showing the fresh food. Premium food photography. Warm natural lighting from the kitchen window. Documentary style, professional photography, Korean people, realistic skin, realistic hands, realistic fingers, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "일이 잘 안 풀려 지쳐있을 때, 말없이 등을 토닥여주는 것만으로도 충분합니다. 이런 정서적 지지는 면역 체계를 강화시키는 가장 강력한 백신입니다.",
+            "image_prompt": "Ultra realistic, documentary style shot of a young Korean woman gently patting the back of her boyfriend, who is sitting on a sofa looking tired and stressed. Her natural facial expression is full of empathy. The room is softly lit by warm natural lighting from a lamp, creating a safe and comforting mood. Cinematic photography, professional photography, Korean people, correct human anatomy, realistic skin, realistic hands, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "그러니 여자친구가 당신의 건강을 관리해주는 최고의 파트너라는 사실을 잊지 마세요. 진짜 건강은 사랑하는 사람과 함께 만들어가는 것이니까요.",
+            "image_prompt": "Ultra realistic, cinematic photography of a happy and healthy-looking young Korean couple in their late 20s. They are standing close, smiling warmly at each other in a beautiful, sunlit park during golden hour. They have radiant natural facial expressions. The warm natural lighting enhances their glowing, realistic skin. Documentary style, professional photography, Korean people, realistic eyes, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. No text, watermark, logo, illustration, cartoon, CGI."
+        }
+    ]
+}

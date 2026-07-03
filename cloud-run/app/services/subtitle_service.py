@@ -3,7 +3,14 @@ import os
 from datetime import timedelta
 
 
+TOTAL_DURATION = 45.0
+MIN_DURATION = 2.0
+MAX_DURATION = 8.0
+MAX_CHARS = 14
+
+
 def format_srt_time(seconds: float) -> str:
+
     td = timedelta(seconds=seconds)
 
     total_seconds = int(td.total_seconds())
@@ -16,23 +23,32 @@ def format_srt_time(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
 
 
-def split_subtitle(text: str, max_chars: int = 18):
-    words = text.split()
+def split_subtitle(text: str):
 
-    if len(text) <= max_chars:
+    if len(text) <= MAX_CHARS:
         return text
 
-    line1 = ""
-    line2 = ""
+    # 문장 부호 우선 분리
+    for token in [", ", ". ", " 그리고 ", " 하지만 ", " 그래서 ", " 때문에 "]:
 
-    for word in words:
+        if token in text:
+            left, right = text.split(token, 1)
 
-        if len(line1 + " " + word) <= max_chars:
-            line1 = (line1 + " " + word).strip()
-        else:
-            line2 = (line2 + " " + word).strip()
+            if len(left) <= MAX_CHARS:
+                return left + token.strip() + "\n" + right
 
-    return line1 + "\n" + line2
+    # 가운데 기준 분리
+    mid = len(text) // 2
+
+    left = text[:mid]
+    right = text[mid:]
+
+    idx = left.rfind(" ")
+
+    if idx != -1:
+        return left[:idx] + "\n" + left[idx + 1:] + right
+
+    return left + "\n" + right
 
 
 def create_subtitle(project_path: str):
@@ -66,8 +82,31 @@ def create_subtitle(project_path: str):
         "subtitle.srt",
     )
 
-    total_duration = 45
-    scene_duration = total_duration / len(scenes)
+    lengths = [
+        len(scene["narration"])
+        for scene in scenes
+    ]
+
+    total_length = sum(lengths)
+
+    durations = []
+
+    for length in lengths:
+
+        duration = TOTAL_DURATION * (length / total_length)
+
+        duration = max(MIN_DURATION, duration)
+        duration = min(MAX_DURATION, duration)
+
+        durations.append(duration)
+
+    # 총 시간이 45초가 되도록 비율 보정
+    scale = TOTAL_DURATION / sum(durations)
+
+    durations = [
+        d * scale
+        for d in durations
+    ]
 
     current = 0
 
@@ -80,15 +119,19 @@ def create_subtitle(project_path: str):
         for idx, scene in enumerate(scenes, start=1):
 
             start = current
-            end = current + scene_duration
+            end = current + durations[idx - 1]
 
             srt.write(f"{idx}\n")
             srt.write(
                 f"{format_srt_time(start)} --> {format_srt_time(end)}\n"
             )
+
             srt.write(
-                split_subtitle(scene["narration"])
+                split_subtitle(
+                    scene["narration"]
+                )
             )
+
             srt.write("\n\n")
 
             current = end

@@ -1,0 +1,37 @@
+{
+    "title": "여친 생기면 일어나는 놀라운 신체 변화",
+    "hook": "당신의 여자친구는 최고의 개인 트레이너입니다.",
+    "script": "최근 부쩍 건강해졌다는 말을 자주 듣습니다. 사실 저에게는 특별한 비결이 생겼거든요. 바로 제 여자친구입니다. 여자친구와 마주 보고 웃으며 대화하는 것만으로도 스트레스 호르몬인 코르티솔 수치가 눈에 띄게 감소한다고 해요. 사랑하는 사람과 손을 잡거나 포옹하는 따뜻한 스킨십은 옥시토신을 분비시켜 혈압을 낮추고 심장 건강에 도움을 줍니다. 주말이면 함께 등산을 가거나 자전거를 타는 등 활동적인 데이트를 즐기게 되니, 자연스럽게 운동량이 늘어날 수밖에 없죠. 서로의 건강을 챙기며 신선한 재료로 요리를 해주다 보니, 배달 음식 대신 건강한 집밥을 먹는 횟수가 훨씬 늘었고요. 이처럼 최고의 건강 비결은 어쩌면 사랑하는 사람과 함께하는 행복한 시간일지도 모릅니다. 모두 건강한 사랑하세요!",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "최근 부쩍 건강해졌다는 말을 자주 듣습니다. 사실 저에게는 특별한 비결이 생겼거든요. 바로 제 여자친구입니다.",
+            "image_prompt": "A close-up shot of a happy Korean man in his late 20s, smiling warmly at the camera as if sharing a pleasant secret. He looks healthy and full of life. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Korean, realistic skin, realistic eyes, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "여자친구와 마주 보고 웃으며 대화하는 것만으로도 스트레스 호르몬인 코르티솔 수치가 눈에 띄게 감소한다고 해요.",
+            "image_prompt": "A Korean couple in their late 20s sitting opposite each other at a cozy cafe, laughing heartily. The focus is on their genuine, joyful interaction and eye contact. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "사랑하는 사람과 손을 잡거나 포옹하는 따뜻한 스킨십은 옥시토신을 분비시켜 혈압을 낮추고 심장 건강에 도움을 줍니다.",
+            "image_prompt": "A tight, close-up shot focusing on a Korean man's hand gently holding his girlfriend's hand as they walk through a park. The background is softly blurred. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Korean, realistic skin, realistic hands, realistic fingers, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "주말이면 함께 등산을 가거나 자전거를 타는 등 활동적인 데이트를 즐기게 되니, 자연스럽게 운동량이 늘어날 수밖에 없죠.",
+            "image_prompt": "A Korean couple viewed from behind, wearing stylish athletic wear and looking out at a stunning mountain landscape from a summit. They have backpacks on and look accomplished. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Korean, realistic skin, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "서로의 건강을 챙기며 신선한 재료로 요리를 해주다 보니, 배달 음식 대신 건강한 집밥을 먹는 횟수가 훨씬 늘었고요.",
+            "image_prompt": "An over-the-shoulder shot of a Korean woman placing a beautifully prepared, colorful bibimbap bowl on a wooden table. Her boyfriend is sitting at the table, looking at the food with a happy and appreciative expression. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Korean, realistic skin, realistic eyes, realistic hands, realistic fingers, Fresh food, Premium food photography, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "이처럼 최고의 건강 비결은 어쩌면 사랑하는 사람과 함께하는 행복한 시간일지도 모릅니다. 모두 건강한 사랑하세요!",
+            "image_prompt": "A silhouette of a Korean couple hugging and watching a beautiful, warm-toned sunset over the sea. The atmosphere is peaceful, romantic, and content. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Shallow depth of field, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI."
+        }
+    ]
+}
