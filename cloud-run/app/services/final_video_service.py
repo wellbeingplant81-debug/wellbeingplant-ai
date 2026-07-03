@@ -1,6 +1,5 @@
 import os
-
-from moviepy import VideoFileClip, AudioFileClip
+import subprocess
 
 
 def merge_video_audio(project_path: str):
@@ -8,38 +7,60 @@ def merge_video_audio(project_path: str):
     video_path = os.path.join(
         project_path,
         "video",
-        "short.mp4"
+        "short.mp4",
     )
 
     audio_path = os.path.join(
         project_path,
         "audio",
-        "voice.mp3"
+        "voice.mp3",
     )
 
-    video = VideoFileClip(video_path)
-    audio = AudioFileClip(audio_path)
-
-    if audio.duration > video.duration:
-        audio = audio.subclipped(0, video.duration)
-
-    final = video.with_audio(audio)
+    subtitle_path = os.path.join(
+        project_path,
+        "subtitle",
+        "subtitle.srt",
+    )
 
     output_path = os.path.join(
         project_path,
         "video",
-        "final_short.mp4"
+        "final_short.mp4",
     )
 
-    final.write_videofile(
+    # Windows용 경로 변환
+    subtitle_path = subtitle_path.replace("\\", "/").replace(":", "\\:")
+
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_path,
+        "-i",
+        audio_path,
+        "-vf",
+        f"subtitles='{subtitle_path}'",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        "-shortest",
         output_path,
-        codec="libx264",
-        audio_codec="aac",
-        fps=30,
+    ]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
     )
 
-    video.close()
-    audio.close()
-    final.close()
+    print("========== FFMPEG STDOUT ==========")
+    print(result.stdout)
+
+    print("========== FFMPEG STDERR ==========")
+    print(result.stderr)
+
+    if result.returncode != 0:
+        raise Exception(result.stderr)
 
     return output_path

@@ -1,0 +1,37 @@
+{
+    "title": "우리 강아지, 이거 먹고 10년 더 살아요",
+    "hook": "절대 강아지에게 사람 음식 주지 말라고요?",
+    "script": "우리 강아지, 내가 먹는 거 한 입만 줄까? 잠깐! 그 전에 꼭 확인해야 할 것이 있습니다. 사람에겐 보약이지만 강아지에겐 독이 되는 음식들이 생각보다 정말 많습니다. 무심코 준 간식이 아이를 아프게 할 수 있어요. 하지만 이건 괜찮아요! 첫 번째는 바로 블루베리입니다. 강력한 항산화 성분이 노화 방지와 면역력 강화에 도움을 주죠. 두 번째는 아삭아삭한 당근입니다. 비타민 A가 풍부해 눈 건강에 좋고, 씹는 행위 자체가 치석 제거에도 효과적이에요. 세 번째는 어떤 첨가물도 없이 푹 삶은 닭가슴살입니다. 훌륭한 단백질 공급원으로, 근육 건강과 에너지 생성에 필수적이죠. 이제 안심하고 나눠주세요. 건강한 특식은 강아지에게 최고의 사랑 표현이자, 더 오랜 시간을 함께할 수 있는 비결입니다.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "우리 강아지, 내가 먹는 거 한 입만 줄까? 잠깐! 그 전에 꼭 확인해야 할 것이 있습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean woman holding a small piece of fruit, looking down lovingly at her small golden retriever who is looking up with hopeful eyes. The scene is in a modern, sunlit living room. Warm natural lighting, shallow depth of field, highly detailed, photorealistic, 8K quality. Documentary style, professional photography. Natural facial expression, correct human anatomy, realistic skin, realistic eyes. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "사람에겐 보약이지만 강아지에겐 독이 되는 음식들이 생각보다 정말 많습니다. 무심코 준 간식이 아이를 아프게 할 수 있어요.",
+            "image_prompt": "Ultra realistic, documentary style shot. A variety of foods toxic to dogs (grapes, an onion, a bar of dark chocolate) are arranged on a dark kitchen counter. In the background, softly out of focus, a cute Maltese dog is playing on the floor, unaware. Cinematic photography, professional photography, warm but slightly moody natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "하지만 이건 괜찮아요! 첫 번째는 바로 블루베리입니다. 강력한 항산화 성분이 노화 방지와 면역력 강화에 도움을 주죠.",
+            "image_prompt": "Ultra realistic, cinematic close-up shot. A Korean person's hand with realistic fingers and skin is gently offering a single fresh blueberry to a curious beagle. The beagle's wet nose is sniffing the blueberry. Premium food photography, Fresh food, highly detailed, photorealistic, 8K quality. Warm natural lighting from a nearby window, shallow depth of field. Professional photography. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "두 번째는 아삭아삭한 당근입니다. 비타민 A가 풍부해 눈 건강에 좋고, 씹는 행위 자체가 치석 제거에도 효과적이에요.",
+            "image_prompt": "Ultra realistic, professional photography of a happy Welsh Corgi lying on a clean wooden floor, enthusiastically chewing on a fresh, whole carrot. The dog has a joyful, natural facial expression. Documentary style, cinematic photography, warm natural lighting, Fresh food, highly detailed, photorealistic, 8K quality, shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "세 번째는 어떤 첨가물도 없이 푹 삶은 닭가슴살입니다. 훌륭한 단백질 공급원으로, 근육 건강과 에너지 생성에 필수적이죠.",
+            "image_prompt": "Ultra realistic, cinematic photography from a top-down perspective. A Korean person's realistic hands are shredding a plain, steamed chicken breast on a wooden cutting board. Steam gently rises from the fresh food. Premium food photography, Fresh food, highly detailed, photorealistic, 8K quality. The kitchen is clean and bright with warm natural lighting. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "이제 안심하고 나눠주세요. 건강한 특식은 강아지에게 최고의 사랑 표현이자, 더 오랜 시간을 함께할 수 있는 비결입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean man in his 30s sitting on the floor, smiling warmly as he watches his Shiba Inu happily eat a small piece of carrot from a bowl. The scene is filled with warm, golden hour sunlight. Documentary style, professional photography. Natural facial expression, realistic skin, realistic eyes, realistic hands. Highly detailed, photorealistic, 8K quality. Shallow depth of field. Vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

@@ -7,13 +7,13 @@ from app.services.image_service import generate_image
 from app.services.video_builder import build_video
 from app.services.tts_service import create_tts
 from app.services.final_video_service import merge_video_audio
+from app.services.subtitle_service import create_subtitle
 
 
 def generate_short_video(topic: str):
 
     # 프로젝트 생성
     project = create_project()
-
     project_path = str(project["path"])
 
     print(f"Project : {project_path}")
@@ -33,7 +33,12 @@ def generate_short_video(topic: str):
         "w",
         encoding="utf-8",
     ) as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(
+            data,
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
 
     # 이미지 생성
     for i, scene in enumerate(data["scenes"], start=1):
@@ -50,10 +55,18 @@ def generate_short_video(topic: str):
         )
 
     # 음성 생성
+    script = " ".join(
+        scene["narration"]
+        for scene in data["scenes"]
+    )
+
     create_tts(
-        data["script"],
+        script,
         project_path,
     )
+
+    # 자막 생성
+    create_subtitle(project_path)
 
     # 영상 생성
     build_video(project_path)

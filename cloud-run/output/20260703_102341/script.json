@@ -1,0 +1,37 @@
+{
+    "title": "강아지 키우면 생기는 놀라운 신체 변화",
+    "hook": "당신의 심장을 뛰게 하는 건 사랑뿐만이 아닙니다.",
+    "script": "당신의 심장을 뛰게 하는 건 사랑뿐만이 아닙니다. 바로 이 작은 친구, 강아지와의 산책이 당신의 심장을 더 건강하게 만들죠. 연구에 따르면 강아지 주인은 그렇지 않은 사람보다 혈압이 낮고, 심장마비 후 생존율도 더 높다고 합니다. 정말 놀랍지 않나요? 강아지와 눈을 맞추기만 해도 스트레스 호르몬인 코르티솔 수치가 감소하고, '행복 호르몬' 옥시토신이 분비됩니다. 매일 아침, 저녁으로 이어지는 산책은 귀찮을 때도 있지만, 꾸준한 유산소 운동으로 면역 체계를 강화하는 최고의 방법입니다. 강아지 공원이나 동네 산책길에서 새로운 이웃을 만나고, 자연스럽게 대화를 나누게 되죠. 사회적 유대감도 쑥쑥 자라납니다. 강아지는 단순한 반려동물을 넘어, 우리의 몸과 마음을 치유하는 최고의 파트너입니다. 오늘, 당신의 파트너와 더 깊이 교감해보는 건 어떨까요?",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "당신의 심장을 뛰게 하는 건 사랑뿐만이 아닙니다. 바로 이 작은 친구, 강아지와의 산책이 당신의 심장을 더 건강하게 만들죠.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A young Korean woman with a natural facial expression of pure joy, walking her happy Golden Retriever in a sun-drenched park. Warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 2,
+            "narration": "연구에 따르면 강아지 주인은 그렇지 않은 사람보다 혈압이 낮고, 심장마비 후 생존율도 더 높다고 합니다. 정말 놀랍지 않나요?",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A close-up shot of an elderly Korean man's hand gently stroking the soft fur of a calm beagle resting on his lap. He has a peaceful natural facial expression. Warm natural lighting fills the cozy living room. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 3,
+            "narration": "강아지와 눈을 맞추기만 해도 스트레스 호르몬인 코르티솔 수치가 감소하고, '행복 호르몬' 옥시토신이 분비됩니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. An intimate, eye-level shot of a Korean woman in her 20s sitting on the floor, making direct and loving eye contact with her small poodle. The woman has a soft, serene smile. Warm natural lighting from a nearby window. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 4,
+            "narration": "매일 아침, 저녁으로 이어지는 산책은 귀찮을 때도 있지만, 꾸준한 유산소 운동으로 면역 체계를 강화하는 최고의 방법입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A dynamic action shot from a slightly low angle of a fit Korean man in his 30s jogging with an energetic Border Collie on a beautiful park trail during sunrise. His natural facial expression shows focused determination. Warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 5,
+            "narration": "강아지 공원이나 동네 산책길에서 새로운 이웃을 만나고, 자연스럽게 대화를 나누게 되죠. 사회적 유대감도 쑥쑥 자라납니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A group of diverse Korean people happily chatting in a sunny dog park, their dogs playing together in the foreground. They all have genuine, happy natural facial expressions. Warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 6,
+            "narration": "강아지는 단순한 반려동물을 넘어, 우리의 몸과 마음을 치유하는 최고의 파트너입니다. 오늘, 당신의 파트너와 더 깊이 교감해보는 건 어떨까요?",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A heartwarming close-up shot of a cute Shiba Inu puppy affectionately licking the cheek of its smiling Korean owner. The owner's eyes are closed in blissful happiness. Warm natural lighting, highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        }
+    ]
+}

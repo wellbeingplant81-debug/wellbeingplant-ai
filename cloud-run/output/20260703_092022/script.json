@@ -1,0 +1,37 @@
+{
+    "title": "의사들이 말하는 '진짜 이쁜 사람'의 비밀",
+    "hook": "성형외과 의사들이 말하는 '진짜 이쁜 사람'의 특징, 뭔지 아세요?",
+    "script": "성형외과 의사들이 말하는 '진짜 이쁜 사람'의 특징, 뭔지 아세요? 놀랍게도 얼굴의 대칭이나 이목구비가 아니었습니다. 핵심은 바로 '표정'이었습니다. 특히 밝고 자신감 있는 미소는 그 어떤 시술보다 강력한 매력을 만들어낸다고 해요. 이런 건강한 표정은 규칙적인 생활 습관에서 시작됩니다. 충분한 수면과 균형 잡힌 식단이 피부 톤부터 밝혀주니까요. 꾸준한 운동은 몸에 활력을 불어넣고 혈액순환을 개선해, 자연스러운 생기와 홍조를 만들어주는 최고의 방법입니다. 마음의 건강도 빼놓을 수 없죠. 스트레스를 관리하고 긍정적으로 생각하는 습관은 인상을 편안하고 온화하게 만듭니다. 결국 진짜 '이쁨'은 외모가 아닌 건강한 몸과 마음에서 나오는 생기 있는 에너지입니다. 오늘부터 그 에너지를 가꿔보세요.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "성형외과 의사들이 말하는 '진짜 이쁜 사람'의 특징, 뭔지 아세요? 놀랍게도 얼굴의 대칭이나 이목구비가 아니었습니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. Close-up of a young Korean woman in her early 20s looking at her reflection in a clean bathroom mirror with a thoughtful and slightly questioning expression. The focus is on her realistic eyes. Warm natural lighting from the side. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 2,
+            "narration": "핵심은 바로 '표정'이었습니다. 특히 밝고 자신감 있는 미소는 그 어떤 시술보다 강력한 매력을 만들어낸다고 해요.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A beautiful Korean woman in her late 20s with a genuine, bright, confident smile. She is outdoors in a city park during the golden hour. The warm natural lighting gently illuminates her face and creates a beautiful bokeh background. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Natural facial expression. Korean, realistic skin, realistic eyes. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 3,
+            "narration": "이런 건강한 표정은 규칙적인 생활 습관에서 시작됩니다. 충분한 수면과 균형 잡힌 식단이 피부 톤부터 밝혀주니까요.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A Korean woman in her early 30s sits at a minimalist wooden table by a large window. She is drinking a glass of clear water, and next to it is a beautiful bowl of fresh, colorful salad. Premium food photography. Warm natural lighting streams through the window. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Natural facial expression. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy. Fresh food."
+        },
+        {
+            "scene": 4,
+            "narration": "꾸준한 운동은 몸에 활력을 불어넣고 혈액순환을 개선해, 자연스러운 생기와 홍조를 만들어주는 최고의 방법입니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A fit Korean woman in stylish, comfortable activewear is doing a gentle stretching pose on a yoga mat in a sunlit, minimalist living room with green plants. Her expression is serene and focused. Warm natural lighting. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Natural facial expression. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 5,
+            "narration": "마음의 건강도 빼놓을 수 없죠. 스트레스를 관리하고 긍정적으로 생각하는 습관은 인상을 편안하고 온화하게 만듭니다.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A Korean woman in her 30s is sitting comfortably on a cozy sofa, engrossed in a book. A steaming cup of tea rests on a small side table. Her face shows a calm, content, and gentle expression. Warm natural lighting from a nearby lamp. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Korean, realistic skin, realistic eyes, realistic hands, realistic fingers. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        },
+        {
+            "scene": 6,
+            "narration": "결국 진짜 '이쁨'은 외모가 아닌 건강한 몸과 마음에서 나오는 생기 있는 에너지입니다. 오늘부터 그 에너지를 가꿔보세요.",
+            "image_prompt": "Ultra realistic, cinematic photography, documentary style, professional photography. A candid shot of a radiant Korean woman in her late 20s laughing genuinely with a friend at a bright, outdoor cafe. The focus is on her joyful, uninhibited laugh and sparkling eyes, capturing a moment of pure happiness. Warm natural lighting. Highly detailed, photorealistic, 8K quality, shallow depth of field, vertical composition 9:16. Natural facial expression. Korean people, realistic skin, realistic eyes. No text, no watermark, no logo, no illustration, no cartoon, no CGI. Correct human anatomy."
+        }
+    ]
+}
