@@ -4,7 +4,7 @@ import subprocess
 
 def merge_video_audio(project_path: str):
 
-    ffmpeg = r"C:\Users\baeku\Downloads\ffmpeg-8.1.2-essentials_build\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe"
+    ffmpeg = "ffmpeg"
 
     video_path = os.path.join(
         project_path,
@@ -30,41 +30,64 @@ def merge_video_audio(project_path: str):
         "final_short.mp4",
     )
 
-    # Windows FFmpeg용 경로 변환
     subtitle_path = subtitle_path.replace("\\", "/")
     subtitle_path = subtitle_path.replace(":", "\\:")
 
     style = (
         "FontName=Malgun Gothic,"
-        "FontSize=20,"
+        "FontSize=22,"
         "PrimaryColour=&HFFFFFF&,"
         "OutlineColour=&H000000&,"
         "BorderStyle=1,"
-        "Outline=3,"
+        "Outline=4,"
         "Shadow=0,"
         "Bold=1,"
         "Alignment=2,"
-        "MarginV=80"
+        "MarginV=90"
     )
 
     command = [
         ffmpeg,
         "-y",
+
         "-i",
         video_path,
+
         "-i",
         audio_path,
+
         "-vf",
         f"subtitles='{subtitle_path}':force_style='{style}'",
+
         "-map",
         "0:v:0",
+
         "-map",
         "1:a:0",
+
         "-c:v",
         "libx264",
+
+        "-preset",
+        "slow",
+
+        "-crf",
+        "18",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        "-movflags",
+        "+faststart",
+
         "-c:a",
         "aac",
+
+        "-b:a",
+        "192k",
+
         "-shortest",
+
         output_path,
     ]
 

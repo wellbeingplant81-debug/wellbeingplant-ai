@@ -4,8 +4,8 @@ import subprocess
 
 def mix_audio(project_path: str):
 
-    ffmpeg = r"C:\Users\baeku\Downloads\ffmpeg-8.1.2-essentials_build\ffmpeg-8.1.2-essentials_build\bin\ffmpeg.exe"
-
+    ffmpeg = "ffmpeg"
+    
     voice = os.path.join(
         project_path,
         "audio",

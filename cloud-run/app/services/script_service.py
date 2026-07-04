@@ -24,6 +24,12 @@ def generate_script(
         scene_count=scene_count,
     )
 
+    print("\n" + "=" * 80)
+    print("SCRIPT PROMPT")
+    print("=" * 80)
+    print(prompt)
+    print("=" * 80)
+
     response = client.models.generate_content(
         model="gemini-2.5-pro",
         contents=prompt,
@@ -38,7 +44,19 @@ def generate_script(
             .strip()
         )
 
+    print("\n" + "=" * 80)
+    print("RAW GEMINI RESPONSE")
+    print("=" * 80)
+    print(text)
+    print("=" * 80)
+
     data = json.loads(text)
+
+    print("\n" + "=" * 80)
+    print("SCENE 1 KEYS")
+    print("=" * 80)
+    print(data["scenes"][0].keys())
+    print("=" * 80)
 
     return {
         "success": True,

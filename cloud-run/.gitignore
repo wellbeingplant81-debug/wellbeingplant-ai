@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+
+# VS Code
+.vscode/
+
+# IDE
+.idea/
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
+
+# Output
+output/
+temp/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# FFmpeg logs
+*.log
+
+# Generated media
+*.mp4
+*.mp3
+*.wav

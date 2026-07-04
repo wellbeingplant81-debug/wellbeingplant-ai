@@ -13,13 +13,11 @@ def build_video(project_path: str):
         "images",
     )
 
-    audio_path = os.path.join(
+    scene_audio_folder = os.path.join(
         project_path,
         "audio",
-        "voice.mp3",
+        "scenes",
     )
-
-    audio = AudioFileClip(audio_path)
 
     images = sorted(
         glob.glob(
@@ -30,23 +28,46 @@ def build_video(project_path: str):
         )
     )
 
+    scene_audios = sorted(
+        glob.glob(
+            os.path.join(
+                scene_audio_folder,
+                "*.mp3",
+            )
+        )
+    )
+
     if not images:
         raise Exception("이미지가 없습니다.")
 
-    image_duration = audio.duration / len(images)
+    if len(images) != len(scene_audios):
+        raise Exception(
+            "이미지 개수와 Scene MP3 개수가 다릅니다."
+        )
 
     clips = []
 
-    for image in images:
+    for image, scene_audio in zip(
+        images,
+        scene_audios,
+    ):
+
+        audio = AudioFileClip(scene_audio)
+
+        duration = audio.duration
+
+        audio.close()
 
         clip = build_kenburns_clip(
             image,
-            image_duration,
+            duration,
         )
 
         clip = clip.with_fps(30)
 
-        clips.append(clip)
+        clips.append(
+            clip
+        )
 
     final = concatenate_videoclips(
         clips,
@@ -75,7 +96,6 @@ def build_video(project_path: str):
         preset="medium",
     )
 
-    audio.close()
     final.close()
 
     return output_path
