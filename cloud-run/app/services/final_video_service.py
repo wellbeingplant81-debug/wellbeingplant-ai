@@ -36,15 +36,15 @@ def merge_video_audio(project_path: str):
 
     style = (
         "FontName=Malgun Gothic,"
-        "FontSize=18,"
+        "FontSize=20,"
         "PrimaryColour=&HFFFFFF&,"
         "OutlineColour=&H000000&,"
         "BorderStyle=1,"
-        "Outline=2,"
-        "Shadow=1,"
+        "Outline=3,"
+        "Shadow=0,"
         "Bold=1,"
         "Alignment=2,"
-        "MarginV=220"
+        "MarginV=80"
     )
 
     command = [

@@ -1,114 +1,77 @@
 import json
+import math
 import os
 from datetime import timedelta
 
-
-TOTAL_DURATION = 45.0
-MIN_DURATION = 2.0
-MAX_DURATION = 8.0
-MAX_CHARS = 14
+from moviepy import AudioFileClip
 
 
-def format_srt_time(seconds: float) -> str:
+def format_srt_time(seconds: float):
 
     td = timedelta(seconds=seconds)
 
-    total_seconds = int(td.total_seconds())
+    total = int(td.total_seconds())
 
-    hours = total_seconds // 3600
-    minutes = (total_seconds % 3600) // 60
-    secs = total_seconds % 60
-    millis = int((seconds - total_seconds) * 1000)
+    h = total // 3600
+    m = (total % 3600) // 60
+    s = total % 60
 
-    return f"{hours:02}:{minutes:02}:{secs:02},{millis:03}"
+    ms = int((seconds - total) * 1000)
 
-
-def split_subtitle(text: str):
-
-    if len(text) <= MAX_CHARS:
-        return text
-
-    # 문장 부호 우선 분리
-    for token in [", ", ". ", " 그리고 ", " 하지만 ", " 그래서 ", " 때문에 "]:
-
-        if token in text:
-            left, right = text.split(token, 1)
-
-            if len(left) <= MAX_CHARS:
-                return left + token.strip() + "\n" + right
-
-    # 가운데 기준 분리
-    mid = len(text) // 2
-
-    left = text[:mid]
-    right = text[mid:]
-
-    idx = left.rfind(" ")
-
-    if idx != -1:
-        return left[:idx] + "\n" + left[idx + 1:] + right
-
-    return left + "\n" + right
+    return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
 def create_subtitle(project_path: str):
 
-    json_path = os.path.join(
+    script_path = os.path.join(
         project_path,
         "script.json",
     )
 
     with open(
-        json_path,
+        script_path,
         "r",
         encoding="utf-8",
     ) as f:
+
         data = json.load(f)
 
     scenes = data["scenes"]
 
-    subtitle_folder = os.path.join(
+    audio_path = os.path.join(
+        project_path,
+        "audio",
+        "voice.mp3",
+    )
+
+    audio = AudioFileClip(audio_path)
+
+    total_duration = audio.duration
+
+    audio.close()
+
+    subtitle_dir = os.path.join(
         project_path,
         "subtitle",
     )
 
     os.makedirs(
-        subtitle_folder,
+        subtitle_dir,
         exist_ok=True,
     )
 
     srt_path = os.path.join(
-        subtitle_folder,
+        subtitle_dir,
         "subtitle.srt",
     )
 
-    lengths = [
+    total_chars = sum(
         len(scene["narration"])
         for scene in scenes
-    ]
-
-    total_length = sum(lengths)
-
-    durations = []
-
-    for length in lengths:
-
-        duration = TOTAL_DURATION * (length / total_length)
-
-        duration = max(MIN_DURATION, duration)
-        duration = min(MAX_DURATION, duration)
-
-        durations.append(duration)
-
-    # 총 시간이 45초가 되도록 비율 보정
-    scale = TOTAL_DURATION / sum(durations)
-
-    durations = [
-        d * scale
-        for d in durations
-    ]
+    )
 
     current = 0
+    index = 1
 
     with open(
         srt_path,
@@ -116,24 +79,42 @@ def create_subtitle(project_path: str):
         encoding="utf-8",
     ) as srt:
 
-        for idx, scene in enumerate(scenes, start=1):
+        for scene in scenes:
 
-            start = current
-            end = current + durations[idx - 1]
-
-            srt.write(f"{idx}\n")
-            srt.write(
-                f"{format_srt_time(start)} --> {format_srt_time(end)}\n"
+            scene_duration = (
+                total_duration
+                * len(scene["narration"])
+                / total_chars
             )
 
-            srt.write(
-                split_subtitle(
-                    scene["narration"]
+            subtitles = scene.get(
+                "subtitles",
+                [scene["narration"]],
+            )
+
+            part_duration = (
+                scene_duration
+                / len(subtitles)
+            )
+
+            for subtitle in subtitles:
+
+                start = current
+                end = current + part_duration
+
+                srt.write(f"{index}\n")
+
+                srt.write(
+                    f"{format_srt_time(start)} --> {format_srt_time(end)}\n"
                 )
-            )
 
-            srt.write("\n\n")
+                srt.write(
+                    subtitle.strip()
+                )
 
-            current = end
+                srt.write("\n\n")
+
+                current = end
+                index += 1
 
     return srt_path

@@ -1,0 +1,72 @@
+{
+    "title": "장난으로 한 '똥침', 평생 후회할 수 있습니다",
+    "hook": "장난으로 한 똥침, 절대 가볍게 생각하면 안 됩니다.",
+    "script": "SCENE 1\n(의사 가운을 입은 남성이 심각한 표정으로 말한다)\n장난으로 한 똥침, 절대 가볍게 생각하면 안 됩니다.\n\nSCENE 2\n(복도를 걷는 사람 뒤로 다른 사람이 몰래 다가가는 모습)\n특히 뾰족한 손가락으로 항문 부위를 강하게 찌르는 이 장난,\n\nSCENE 3\n(환자가 진료실에서 의사와 상담하며 걱정스러운 표정을 짓는다)\n자칫하면 '항문주위 농양'이라는 심각한 질환으로 이어질 수 있습니다.\n\nSCENE 4\n(의사가 손 제스처를 하며 설명하는 모습, 손에 집중된 구도)\n항문 주위의 약한 피부와 점막이 손가락에 의해 찢어지면서 세균이 침투하는 건데요.\n\nSCENE 5\n(환자가 병원 침대에 누워 고통스러운 표정으로 배를 만지고 있다)\n염증과 고름이 차오르면서 극심한 통증을 유발하고, 심하면 수술이 필요할 수 있습니다.\n\nSCENE 6\n(다시 의사가 등장해 카메라를 보며 단호하게 말한다)\n똥침은 절대 유쾌한 장난이 아닙니다. 서로의 건강을 위해 절대 하지 마세요.",
+    "scenes": [
+        {
+            "scene": "SCENE 1",
+            "narration": "장난으로 한 똥침, 절대 가볍게 생각하면 안 됩니다.",
+            "subtitles": [
+                "장난으로 한 똥침,",
+                "절대 가볍게",
+                "생각하면 안 됩니다."
+            ],
+            "image_prompt": "A middle-aged Korean male doctor in a white coat, looking directly into the camera with a very serious and concerned facial expression. He is in a modern, brightly lit doctor's office. Ultra realistic, cinematic photography, documentary style, professional photography, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 2",
+            "narration": "특히 뾰족한 손가락으로 항문 부위를 강하게 찌르는 이 장난,",
+            "subtitles": [
+                "뾰족한 손가락으로",
+                "항문 부위를",
+                "강하게 찌르는",
+                "위험한 장난"
+            ],
+            "image_prompt": "A low-angle shot from behind, showing a young Korean person's hands forming a pointed shape, sneakily approaching another person who is walking down a school hallway. The focus is on the hands and the intent. The person being approached is unaware. Correct human anatomy, natural facial expression, ultra realistic, cinematic photography, documentary style, professional photography, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 3",
+            "narration": "자칫하면 '항문주위 농양'이라는 심각한 질환으로 이어질 수 있습니다.",
+            "subtitles": [
+                "자칫하면",
+                "항문주위 농양이라는",
+                "심각한 질환으로",
+                "이어질 수 있습니다."
+            ],
+            "image_prompt": "A Korean patient in their 20s sits in a doctor's examination room, looking worried and listening intently to an out-of-frame doctor. The patient's face shows anxiety and concern. Ultra realistic, documentary style, cinematic photography, professional photography, Korean people, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 4",
+            "narration": "항문 주위의 약한 피부와 점막이 손가락에 의해 찢어지면서 세균이 침투하는 건데요.",
+            "subtitles": [
+                "약한 피부와 점막이",
+                "손가락에 의해",
+                "찢어지면서",
+                "세균이 침투합니다."
+            ],
+            "image_prompt": "A close-up shot of a Korean doctor's hands, gesturing to explain a medical concept. The hands are clean and professional. The background is a blurry, nondescript medical office. The focus is solely on the expressive hands. Ultra realistic, cinematic photography, professional photography, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 5",
+            "narration": "염증과 고름이 차오르면서 극심한 통증을 유발하고, 심하면 수술이 필요할 수 있습니다.",
+            "subtitles": [
+                "염증과 고름이 차고",
+                "극심한 통증을",
+                "유발하며 심하면",
+                "수술이 필요합니다."
+            ],
+            "image_prompt": "A young Korean patient lies in a hospital bed, grimacing in pain. They are holding their lower abdomen. The lighting is slightly dim, creating a somber atmosphere. The scene conveys discomfort and suffering. Ultra realistic, documentary style, cinematic photography, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 6",
+            "narration": "똥침은 절대 유쾌한 장난이 아닙니다. 서로의 건강을 위해 절대 하지 마세요.",
+            "subtitles": [
+                "똥침은 절대",
+                "유쾌한 장난이",
+                "아닙니다. 건강을 위해",
+                "절대 하지 마세요."
+            ],
+            "image_prompt": "The same middle-aged Korean male doctor from the first scene, looking directly at the camera with a firm, resolute, and authoritative expression. He is giving a final warning. Ultra realistic, cinematic photography, documentary style, professional photography, Korean people, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

@@ -1,0 +1,72 @@
+{
+    "title": "똥침, 절대 장난이 아닙니다. (의사 경고)",
+    "hook": "어릴 적 한 번쯤 해봤던 똥침, 이게 얼마나 위험한지 아시나요?",
+    "script": "어릴 적 한 번쯤 해봤던 똥침, 이 장난이 꼬리뼈에 얼마나 위험한지 아시나요? 우리 몸의 꼬리뼈는 여러 신경이 모여있는 아주 중요한 부위입니다. 강한 충격이 가해지면 꼬리뼈에 금이 가거나 골절, 심하면 신경 손상까지 이어질 수 있습니다. 또한, 항문 주변의 예민한 부위를 찔러 심각한 감염이나 상처를 유발할 수도 있는 매우 위험한 행동입니다. 더 이상 똥침은 추억의 장난이 아닙니다. 서로의 건강을 위협하는 명백한 폭력입니다.",
+    "scenes": [
+        {
+            "scene": "한 아이가 다른 아이에게 장난으로 똥침을 하려는 순간을 슬로우 모션으로 보여준다. 손가락 끝에 포커스가 맞춰져 있다.",
+            "narration": "어릴 적 한 번쯤 해봤던 똥침,",
+            "subtitles": [
+                "어릴 적 추억의 장난",
+                "바로 '똥침'인데요,",
+                "이 장난이 사실은",
+                "매우 위험합니다."
+            ],
+            "image_prompt": "A close-up shot of two Korean children playing in a sunny park, one child's clasped hands moving in slow motion towards the other's backside as a prank. Focus on the hands. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": "화면이 전환되며 꼬리뼈 부분만 빨갛게 빛나는 척추 X-ray 이미지가 나타난다.",
+            "narration": "이 장난이 꼬리뼈에 얼마나 위험한지 아시나요?",
+            "subtitles": [
+                "이 장난이 꼬리뼈에",
+                "얼마나 치명적인지",
+                "알고 계셨나요?"
+            ],
+            "image_prompt": "A doctor's hand pointing at a glowing red area on a human spine X-ray, highlighting the coccyx (tailbone). The background is a dark, modern medical office. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Correct human anatomy, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": "의사 가운을 입은 전문가가 척추 모형의 꼬리뼈 부분을 가리키며 심각한 표정으로 설명한다.",
+            "narration": "우리 몸의 꼬리뼈는 여러 신경이 모여있는 아주 중요한 부위입니다.",
+            "subtitles": [
+                "꼬리뼈는 척추의 끝으로",
+                "여러 신경 다발이",
+                "지나가는 중요한",
+                "곳이기 때문입니다."
+            ],
+            "image_prompt": "A middle-aged Korean male doctor in a white coat, looking concerned, pointing to a detailed anatomical model of the human pelvis and spine in his office. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": "한 젊은 남성이 허리를 부여잡고 의자에 힘겹게 앉으며 고통스러운 표정을 짓는다.",
+            "narration": "강한 충격이 가해지면 꼬리뼈에 금이 가거나 골절, 심하면 신경 손상까지 이어질 수 있습니다.",
+            "subtitles": [
+                "강한 충격이 가해지면",
+                "꼬리뼈 골절은 물론",
+                "심각한 신경 손상까지",
+                "유발할 수 있습니다."
+            ],
+            "image_prompt": "A young Korean man sitting on the edge of a chair, wincing in pain and holding his lower back area. The room lighting suggests discomfort and pain. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": "세균이 번식하는 모습을 현미경으로 보는 듯한 추상적이고 그래픽적인 이미지. 붉고 푸른 색감으로 위험성을 강조한다.",
+            "narration": "또한, 항문 주변의 예민한 부위를 찔러 심각한 감염이나 상처를 유발할 수도 있는 매우 위험한 행동입니다.",
+            "subtitles": [
+                "특히 항문 주위는",
+                "세균 감염 위험이",
+                "매우 높은 부위라",
+                "더욱 위험합니다."
+            ],
+            "image_prompt": "A dramatic, stylized close-up view of a medical slide under a microscope, showing abstract representations of bacteria. The colors are alarming, like red and purple, to convey the danger of infection. Ultra realistic, Cinematic photography, Documentary style, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        },
+        {
+            "scene": "다시 의사가 등장하여 카메라를 정면으로 응시하며 단호하고 진중한 표정으로 말한다.",
+            "narration": "더 이상 똥침은 추억의 장난이 아닙니다. 서로의 건강을 위협하는 명백한 폭력입니다.",
+            "subtitles": [
+                "똥침은 더 이상",
+                "추억의 장난이 아닌",
+                "서로를 위협하는",
+                "명백한 폭력입니다."
+            ],
+            "image_prompt": "The same Korean male doctor from scene 3, now looking directly and seriously into the camera with a compassionate but firm expression. He has his hands clasped in front of him. Ultra realistic, Cinematic photography, Documentary style, Professional photography, Korean people, Natural facial expression, Correct human anatomy, Warm natural lighting, Highly detailed, Photorealistic, 8K quality, Vertical composition 9:16, No text, No watermark, No logo, No illustration, No cartoon, No CGI"
+        }
+    ]
+}

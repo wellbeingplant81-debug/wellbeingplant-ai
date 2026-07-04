@@ -1,7 +1,9 @@
 import json
 
 from google import genai
+
 from app.prompts.script_prompt import SCRIPT_PROMPT
+
 
 client = genai.Client(
     vertexai=True,
@@ -16,7 +18,7 @@ def generate_script(
     scene_count: int = 6,
 ):
 
-    prompt = SCRIPT_PROMPT.format(
+    prompt = SCRIPT_PROMPT.substitute(
         topic=topic,
         target_duration=target_duration,
         scene_count=scene_count,

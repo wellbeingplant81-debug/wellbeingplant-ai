@@ -1,0 +1,82 @@
+{
+    "title": "장난으로 한 '똥침', 평생 못 고치는 병이 될 수 있습니다",
+    "hook": "장난으로 한 똥침, 평생 후회할 수 있습니다.",
+    "script": "장난으로 한 똥침, 평생 후회할 수 있습니다. 항문 주변에는 수많은 신경과 혈관이 밀집해 있어 매우 민감한 부위인데요. 강한 충격이 가해지면 괄약근이 파열되거나 주변 조직이 손상될 수 있습니다. 심각한 경우, 상처를 통해 세균이 침투해 항문 농양이나 치루 같은 2차 감염으로 이어질 수 있죠. 이는 극심한 고통과 함께 수술이 필요한 상황을 만들 수 있습니다. 또한, 이는 명백한 신체 접촉으로 성추행이나 폭행죄가 성립될 수 있는 범죄입니다. 신체적, 정신적 후유증을 남기는 똥침, 더 이상 가벼운 장난이 아닙니다. 서로를 존중하는 문화를 만들어주세요.",
+    "scenes": [
+        {
+            "scene": "#1",
+            "narration": "장난으로 한 똥침, 평생 후회할 수 있습니다.",
+            "subtitles": [
+                "장난으로 시작한 똥침,",
+                "가볍게 생각했다면",
+                "정말 큰일 날 수 있습니다.",
+                "평생을 후회하게 될",
+                "끔찍한 결과를",
+                "부를 수 있습니다."
+            ],
+            "image_prompt": "Documentary-style, ultra-realistic photo of a young Korean man in his 20s, outdoors in a park, suddenly doubling over and grabbing his lower back in extreme pain. His face is contorted in shock and agony. Cinematic photography, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "#2",
+            "narration": "항문 주변에는 수많은 신경과 혈관이 밀집해 있어 매우 민감한 부위인데요.",
+            "subtitles": [
+                "우리 몸의 항문은",
+                "수많은 신경과 혈관이",
+                "밀집해 있는",
+                "매우 민감하고",
+                "중요한 부위입니다."
+            ],
+            "image_prompt": "Ultra realistic, cinematic close-up shot of a male Korean doctor in his 40s, pointing to a detailed (but not graphic) anatomical model of the pelvic region, explaining a point with a serious expression. The focus is on his concerned face and hands. Documentary style, professional photography, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "#3",
+            "narration": "강한 충격이 가해지면 괄약근이 파열되거나 주변 조직이 손상될 수 있습니다.",
+            "subtitles": [
+                "강한 외부 충격은",
+                "항문 괄약근 파열이나",
+                "주변 조직의 심각한",
+                "손상을 유발할 수",
+                "있습니다."
+            ],
+            "image_prompt": "Photorealistic image of a Korean man sitting on the edge of a hospital bed, hunched over with a pained expression. He is wearing a patient gown. The lighting is sterile and slightly cold, emphasizing the clinical environment. Cinematic photography, documentary style, natural facial expression, correct human anatomy, highly detailed, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "#4",
+            "narration": "심각한 경우, 상처를 통해 세균이 침투해 항문 농양이나 치루 같은 2차 감염으로 이어질 수 있죠. 이는 극심한 고통과 함께 수술이 필요한 상황을 만들 수 있습니다.",
+            "subtitles": [
+                "상처를 통한 세균 감염은",
+                "항문 농양이나 치루 등",
+                "2차 감염으로",
+                "이어질 수 있습니다.",
+                "결국 수술이 필요한",
+                "상황까지 갈 수 있죠."
+            ],
+            "image_prompt": "Documentary style photo of a surgeon's gloved hands, carefully arranging surgical tools on a sterile tray. The focus is on the metallic, sharp instruments, implying an impending serious operation. The background is a blurry operating room. Professional photography, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "#5",
+            "narration": "또한, 이는 명백한 신체 접촉으로 성추행이나 폭행죄가 성립될 수 있는 범죄입니다.",
+            "subtitles": [
+                "이것은 단순 장난이 아닌",
+                "엄연한 범죄 행위입니다.",
+                "성추행 또는 폭행죄로",
+                "처벌받을 수 있는",
+                "심각한 문제입니다."
+            ],
+            "image_prompt": "Ultra realistic, cinematic shot of a young Korean person sitting across from a lawyer in a consultation office, looking distressed and anxious. The lawyer listens with a grave and serious expression. The focus is on the emotional weight of the situation. Professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "#6",
+            "narration": "신체적, 정신적 후유증을 남기는 똥침, 더 이상 가벼운 장난이 아닙니다. 서로를 존중하는 문화를 만들어주세요.",
+            "subtitles": [
+                "몸과 마음에",
+                "깊은 상처를 남기는 똥침.",
+                "더는 장난이 아닙니다.",
+                "서로를 존중하는",
+                "성숙한 문화가",
+                "필요합니다."
+            ],
+            "image_prompt": "Ultra realistic, heartwarming photo of two young Korean friends in a cafe. One friend gently pats the other on the shoulder with a supportive smile. Both have warm, friendly expressions, showing mutual respect and care. Cinematic photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16. No text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

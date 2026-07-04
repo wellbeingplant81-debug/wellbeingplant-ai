@@ -2,12 +2,16 @@ import glob
 import os
 
 from moviepy import AudioFileClip, concatenate_videoclips
+
 from app.services.kenburns import build_kenburns_clip
 
 
 def build_video(project_path: str):
 
-    image_folder = os.path.join(project_path, "images")
+    image_folder = os.path.join(
+        project_path,
+        "images",
+    )
 
     audio_path = os.path.join(
         project_path,
@@ -19,7 +23,10 @@ def build_video(project_path: str):
 
     images = sorted(
         glob.glob(
-            os.path.join(image_folder, "*.png")
+            os.path.join(
+                image_folder,
+                "*.png",
+            )
         )
     )
 
@@ -37,12 +44,24 @@ def build_video(project_path: str):
             image_duration,
         )
 
+        clip = clip.with_fps(30)
+
         clips.append(clip)
 
-    final = concatenate_videoclips(clips)
+    final = concatenate_videoclips(
+        clips,
+        method="compose",
+    )
 
-    video_folder = os.path.join(project_path, "video")
-    os.makedirs(video_folder, exist_ok=True)
+    video_folder = os.path.join(
+        project_path,
+        "video",
+    )
+
+    os.makedirs(
+        video_folder,
+        exist_ok=True,
+    )
 
     output_path = os.path.join(
         video_folder,
@@ -51,7 +70,9 @@ def build_video(project_path: str):
 
     final.write_videofile(
         output_path,
+        codec="libx264",
         fps=30,
+        preset="medium",
     )
 
     audio.close()

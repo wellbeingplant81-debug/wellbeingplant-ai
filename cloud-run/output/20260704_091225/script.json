@@ -1,0 +1,77 @@
+{
+    "title": "장난으로 한 똥침, 평생 후회할 수 있습니다",
+    "hook": "친구에게 했던 이 장난, 하반신 마비를 부를 수 있습니다.",
+    "script": "어릴 적 친구들과 장난으로 하던 똥침. 가볍게 생각하셨나요? 사실 이 장난은 우리 몸의 급소, 꼬리뼈를 직접 가격하는 행위입니다. 꼬리뼈 주변에는 척수로 이어지는 중요한 신경들이 밀집해 있습니다. 강한 충격이 가해지면 꼬리뼈에 금이 가거나 부러질 수 있고, 신경이 손상될 수 있습니다. 최악의 경우 하반신 마비로 이어지거나 대소변 장애와 같은 평생 가는 후유증을 앓을 수 있습니다. 똥침은 장난이 아닙니다. 상대방에게 평생의 상처를 줄 수 있는 명백한 폭행입니다. 절대 하지 마세요.",
+    "scenes": [
+        {
+            "scene": 1,
+            "narration": "어릴 적 친구들과 장난으로 하던 똥침. 가볍게 생각하셨나요?",
+            "subtitles": [
+                "어릴 적 친구들과 하던",
+                "장난 '똥침'",
+                "가볍게 생각하셨나요?",
+                "사실 이건 매우",
+                "위험한 행동입니다"
+            ],
+            "image_prompt": "A group of Korean teenagers in a school hallway, one is playfully about to poke another from behind, capturing the moment just before contact. The atmosphere is lighthearted. Ultra realistic, cinematic photography, documentary style, Korean people, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 2,
+            "narration": "사실 이 장난은 우리 몸의 급소, 꼬리뼈를 직접 가격하는 행위입니다.",
+            "subtitles": [
+                "이 장난은 사실",
+                "우리 몸의 급소인",
+                "'꼬리뼈'를 직접",
+                "가격하는 행위입니다"
+            ],
+            "image_prompt": "A close-up shot focusing on a medical anatomical model of the human pelvis, with a light source specifically highlighting the coccyx (tailbone) to emphasize its location and fragility. Ultra realistic, cinematic photography, documentary style, professional photography, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 3,
+            "narration": "꼬리뼈 주변에는 척수로 이어지는 중요한 신경들이 밀집해 있습니다.",
+            "subtitles": [
+                "꼬리뼈 주변에는",
+                "척수로 이어지는",
+                "중요한 신경들이",
+                "빽빽하게 모여있습니다"
+            ],
+            "image_prompt": "A hyper-realistic medical visualization showing the nerve bundles around the human coccyx. The nerves are subtly glowing to indicate their sensitivity and importance, set against the backdrop of the pelvic bones. Ultra realistic, cinematic photography, professional photography, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 4,
+            "narration": "강한 충격이 가해지면 꼬리뼈에 금이 가거나 부러질 수 있고, 신경이 손상될 수 있습니다.",
+            "subtitles": [
+                "강한 충격이 가해지면",
+                "꼬리뼈가 부러지거나",
+                "주변 신경이 손상돼",
+                "심각한 후유증을",
+                "남길 수 있습니다"
+            ],
+            "image_prompt": "A young Korean adult sitting on the edge of a hospital examination table, wincing in pain while holding their lower back area. The lighting is clinical but soft. Ultra realistic, cinematic photography, documentary style, Korean people, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 5,
+            "narration": "최악의 경우 하반신 마비로 이어지거나 대소변 장애와 같은 평생 가는 후유증을 앓을 수 있습니다.",
+            "subtitles": [
+                "최악의 경우에는",
+                "하반신 마비는 물론,",
+                "대소변 기능 장애 등",
+                "평생 지속되는 후유증을",
+                "앓을 수도 있습니다"
+            ],
+            "image_prompt": "A somber shot of a Korean person in a wheelchair, seen from the back, looking out a large window at a rainy city street. The mood is melancholic and reflective. Ultra realistic, cinematic photography, documentary style, Korean people, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": 6,
+            "narration": "똥침은 장난이 아닙니다. 상대방에게 평생의 상처를 줄 수 있는 명백한 폭행입니다. 절대 하지 마세요.",
+            "subtitles": [
+                "똥침은 장난이 아닌",
+                "명백한 폭행입니다",
+                "상대에게 평생의",
+                "상처를 줄 수 있습니다",
+                "절대 하지 마세요"
+            ],
+            "image_prompt": "A close-up, serious portrait of a middle-aged Korean male doctor in a white coat. He is looking directly and sternly into the camera, as if giving a personal, serious warning to the viewer. Ultra realistic, cinematic photography, documentary style, professional photography, Korean people, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

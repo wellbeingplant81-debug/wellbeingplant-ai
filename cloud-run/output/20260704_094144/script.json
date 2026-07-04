@@ -1,0 +1,75 @@
+{
+    "title": "장난으로 한 똥침, 평생 후회합니다",
+    "hook": "친구가 똥침을 했다고요? 당장 손절하세요. 단순한 장난이 아닙니다.",
+    "script": "SCENE 1\n친구가 똥침을 했다고요? 당장 손절하세요. 단순한 장난이 아닙니다.\n\nSCENE 2\n우리가 똥침하는 부위는 바로 '꼬리뼈'입니다. 척추의 마지막 부분이죠.\n\nSCENE 3\n이 꼬리뼈는 보호하는 근육이 거의 없어 외부 충격에 매우 취약합니다.\n\nSCENE 4\n잘못 맞으면 극심한 통증은 물론, 앉거나 걷는 것조차 힘들어집니다.\n\nSCENE 5\n심하면 꼬리뼈가 휘거나 골절되어 만성 통증, 신경 손상까지 유발할 수 있습니다.\n\nSCENE 6\n이제 똥침이 얼마나 위험한 장난인지 아셨죠? 애정 표현은 다른 방법으로 해주세요.",
+    "scenes": [
+        {
+            "scene": "SCENE 1",
+            "narration": "친구가 똥침을 했다고요? 당장 손절하세요. 단순한 장난이 아닙니다.",
+            "subtitles": [
+                "친구가 똥침을 했다고요?",
+                "당장 손절하세요",
+                "단순한 장난이",
+                "절대 아닙니다"
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of two young Korean friends in a park, one playfully about to poke the other from behind in a 'ddong-chim' prank gesture, the other person turning around with a surprised face. Documentary style, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 2",
+            "narration": "우리가 똥침하는 부위는 바로 '꼬리뼈'입니다. 척추의 마지막 부분이죠.",
+            "subtitles": [
+                "우리가 똥침하는 부위",
+                "바로 '꼬리뼈'입니다",
+                "우리 척추의",
+                "가장 마지막 부분이죠"
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean doctor in a white lab coat pointing to the coccyx on an anatomical model of the human spine. The background is a clean, modern clinic. Documentary style, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 3",
+            "narration": "이 꼬리뼈는 보호하는 근육이 거의 없어 외부 충격에 매우 취약합니다.",
+            "subtitles": [
+                "이 꼬리뼈는",
+                "보호하는 근육이 없어",
+                "외부 충격에",
+                "매우 취약합니다"
+            ],
+            "image_prompt": "Ultra realistic, a medically accurate 3D render shown on a screen, focusing on the human coccyx area. The image highlights the lack of muscle protection with a subtle red glow indicating vulnerability. Documentary style, cinematic photography, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon."
+        },
+        {
+            "scene": "SCENE 4",
+            "narration": "잘못 맞으면 극심한 통증은 물론, 앉거나 걷는 것조차 힘들어집니다.",
+            "subtitles": [
+                "잘못 맞게 되면",
+                "극심한 통증은 물론",
+                "앉거나 걷기조차",
+                "힘들어집니다"
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean man wincing in pain as he tries to sit down on a wooden chair. He is holding his lower back area with a pained expression. Documentary style, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 5",
+            "narration": "심하면 꼬리뼈가 휘거나 골절되어 만성 통증, 신경 손상까지 유발할 수 있습니다.",
+            "subtitles": [
+                "심하면 꼬리뼈가",
+                "휘거나 골절되어",
+                "만성 통증이나",
+                "신경 손상을",
+                "유발할 수 있습니다"
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of a Korean woman in her 30s, sitting on the edge of her bed looking distressed. She is holding her lower back, conveying a sense of chronic pain. Documentary style, professional photography, natural facial expression, correct human anatomy, warm natural lighting from a window, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "SCENE 6",
+            "narration": "이제 똥침이 얼마나 위험한 장난인지 아셨죠? 애정 표현은 다른 방법으로 해주세요.",
+            "subtitles": [
+                "이제 얼마나",
+                "위험한지 아셨죠?",
+                "애정 표현은",
+                "다른 방법으로",
+                "해주세요"
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of two happy Korean friends giving each other a friendly pat on the shoulder in a bright, modern cafe. They are smiling warmly. Documentary style, professional photography, natural facial expression, correct human anatomy, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}

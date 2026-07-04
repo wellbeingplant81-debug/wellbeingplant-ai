@@ -1,0 +1,72 @@
+{
+    "title": "장난으로 한 똥침, 평생 후회할 수 있습니다",
+    "hook": "단 1초의 장난으로 당신의 인생이 망가질 수 있습니다.",
+    "script": "장난으로 시작한 똥침, 평생 후회할 수 있습니다. 항문 주변에는 중요한 신경과 혈관이 모여있어 매우 민감한 부위입니다. 일종의 급소라고 할 수 있죠. 가벼운 충격만으로도 괄약근이 손상되거나 주변 조직에 염증이 생길 수 있습니다. 심하면 괄약근이 파열돼 변실금이 생길 수 있고, 꼬리뼈가 골절될 경우 극심한 통증을 겪습니다. 신체적 고통뿐 아니라 성적 수치심과 함께 정신적 트라우마를 남기는 명백한 폭력입니다. 똥침은 절대 장난이 아니라는 것을 기억하고, 주변 사람들에게도 그 위험성을 알려주세요.",
+    "scenes": [
+        {
+            "scene": "Scene 1",
+            "narration": "장난으로 시작한 똥침, 평생 후회할 수 있습니다.",
+            "subtitles": [
+                "장난으로 시작한 똥침,",
+                "가볍게 생각했다간",
+                "평생 후회할 수 있습니다."
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of two young Korean students in a hallway. One student is sneaking up behind the other, hands clasped together in a poking gesture, with a mischievous look. The background is slightly blurred to focus on the action. Documentary style, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "Scene 2",
+            "narration": "항문 주변에는 중요한 신경과 혈관이 모여있어 매우 민감한 부위입니다. 일종의 급소라고 할 수 있죠.",
+            "subtitles": [
+                "항문 주변에는 중요한",
+                "신경과 혈관이 모여있어",
+                "매우 민감한 부위입니다.",
+                "일종의 급소라고 할 수 있죠."
+            ],
+            "image_prompt": "Ultra realistic, documentary style close-up of a Korean doctor in a white coat pointing to an anatomical model of the human pelvic region. The focus is on the coccyx (tailbone) and the surrounding nerve clusters. The doctor has a serious, professional expression. Professional photography, warm natural lighting, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "Scene 3",
+            "narration": "가벼운 충격만으로도 괄약근이 손상되거나 주변 조직에 염증이 생길 수 있습니다.",
+            "subtitles": [
+                "가벼운 충격만으로도",
+                "괄약근이 손상되거나",
+                "주변 조직에 염증이",
+                "생길 수가 있습니다."
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of a young Korean person sitting uncomfortably on a chair, wincing in pain. They are holding their lower back. The lighting is soft, coming from a window, highlighting their pained but natural facial expression. Correct human anatomy, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "Scene 4",
+            "narration": "심하면 괄약근이 파열돼 변실금이 생길 수 있고, 꼬리뼈가 골절될 경우 극심한 통증을 겪습니다.",
+            "subtitles": [
+                "심하면 괄약근이 파열돼",
+                "변실금이 생길 수 있고",
+                "꼬리뼈가 골절될 경우",
+                "극심한 통증을 겪습니다."
+            ],
+            "image_prompt": "Ultra realistic, documentary style photo inside a hospital. A Korean patient is seen from the side, sitting on an examination table, looking down with a distressed expression. In the foreground, an X-ray of a fractured coccyx is visible on a light box, slightly out of focus. Warm natural lighting, professional photography, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "Scene 5",
+            "narration": "신체적 고통뿐 아니라 성적 수치심과 함께 정신적 트라우마를 남기는 명백한 폭력입니다.",
+            "subtitles": [
+                "신체적 고통뿐 아니라",
+                "성적 수치심과 함께",
+                "정신적 트라우마를 남기는",
+                "명백한 폭력입니다."
+            ],
+            "image_prompt": "Ultra realistic, cinematic photography of a lone Korean teenager sitting on their bed in a dimly lit room. Their face is partially obscured by shadows, conveying a sense of shame and sadness. The atmosphere is somber and introspective. Natural facial expression, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        },
+        {
+            "scene": "Scene 6",
+            "narration": "똥침은 절대 장난이 아니라는 것을 기억하고, 주변 사람들에게도 그 위험성을 알려주세요.",
+            "subtitles": [
+                "똥침은 절대 장난이",
+                "아니라는 것을 기억하고",
+                "주변 사람들에게도",
+                "그 위험성을 알려주세요."
+            ],
+            "image_prompt": "Ultra realistic, professional photography of a friendly but serious-looking middle-aged Korean doctor looking directly into the camera. He is raising one hand in a clear 'stop' gesture. He is in a brightly lit clinic office. Natural facial expression, highly detailed, photorealistic, 8K quality, vertical composition 9:16, no text, no watermark, no logo, no illustration, no cartoon, no CGI."
+        }
+    ]
+}
