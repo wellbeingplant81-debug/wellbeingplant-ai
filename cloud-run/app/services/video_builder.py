@@ -2,8 +2,13 @@ import glob
 import os
 
 from moviepy import AudioFileClip, concatenate_videoclips
+from moviepy.video.fx.FadeIn import FadeIn
+from moviepy.video.fx.FadeOut import FadeOut
 
 from app.services.kenburns import build_kenburns_clip
+
+
+FADE_DURATION = 0.25
 
 
 def build_video(project_path: str):
@@ -65,6 +70,13 @@ def build_video(project_path: str):
 
         clip = clip.with_fps(30)
 
+        clip = clip.with_effects(
+            [
+                FadeIn(FADE_DURATION),
+                FadeOut(FADE_DURATION),
+            ]
+        )
+
         clips.append(
             clip
         )
@@ -93,7 +105,10 @@ def build_video(project_path: str):
         output_path,
         codec="libx264",
         fps=30,
-        preset="medium",
+        preset="slow",
+        audio=False,
+        threads=4,
+        logger="bar",
     )
 
     final.close()

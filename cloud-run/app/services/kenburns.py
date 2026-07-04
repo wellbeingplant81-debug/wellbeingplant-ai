@@ -16,22 +16,14 @@ def build_kenburns_clip(
         [
             "zoom_in",
             "zoom_out",
-            "pan_left",
-            "pan_right",
-            "pan_up",
-            "pan_down",
+            "left",
+            "right",
+            "up",
+            "down",
         ]
     )
 
-    base_scale = random.uniform(
-        1.15,
-        1.25,
-    )
-
-    zoom_amount = random.uniform(
-        0.06,
-        0.12,
-    )
+    base_scale = 1.15
 
     clip = (
         ImageClip(image_path)
@@ -39,73 +31,79 @@ def build_kenburns_clip(
         .with_duration(duration)
     )
 
-    img_w, img_h = clip.size
-
-    max_x = max(
-        0,
-        img_w - VIDEO_WIDTH,
-    )
-
-    max_y = max(
-        0,
-        img_h - VIDEO_HEIGHT,
-    )
+    # -------------------------
+    # ZOOM IN
+    # -------------------------
 
     if motion == "zoom_in":
 
-        clip = (
-            clip
-            .resized(
-                lambda t: base_scale
-                + zoom_amount * (t / duration)
-            )
-            .with_position("center")
+        clip = clip.resized(
+            lambda t: base_scale + (0.12 * (t / duration))
         )
+
+        clip = clip.with_position("center")
+
+    # -------------------------
+    # ZOOM OUT
+    # -------------------------
 
     elif motion == "zoom_out":
 
-        clip = (
-            clip
-            .resized(
-                lambda t: (base_scale + zoom_amount)
-                - zoom_amount * (t / duration)
-            )
-            .with_position("center")
+        clip = clip.resized(
+            lambda t: (base_scale + 0.12) - (0.12 * (t / duration))
         )
 
-    elif motion == "pan_left":
+        clip = clip.with_position("center")
+
+    # -------------------------
+    # PAN LEFT
+    # -------------------------
+
+    elif motion == "left":
 
         clip = clip.with_position(
             lambda t: (
-                -(max_x * (t / duration)),
+                -120 * (t / duration),
                 "center",
             )
         )
 
-    elif motion == "pan_right":
+    # -------------------------
+    # PAN RIGHT
+    # -------------------------
+
+    elif motion == "right":
 
         clip = clip.with_position(
             lambda t: (
-                -(max_x * (1 - t / duration)),
+                120 * (t / duration),
                 "center",
             )
         )
 
-    elif motion == "pan_up":
+    # -------------------------
+    # PAN UP
+    # -------------------------
+
+    elif motion == "up":
 
         clip = clip.with_position(
             lambda t: (
                 "center",
-                -(max_y * (t / duration)),
+                -120 * (t / duration),
             )
         )
 
-    else:
+    # -------------------------
+    # PAN DOWN
+    # -------------------------
+
+    elif motion == "down":
 
         clip = clip.with_position(
             lambda t: (
                 "center",
-                -(max_y * (1 - t / duration)),
+                120 * (t / duration),
             )
         )
 
