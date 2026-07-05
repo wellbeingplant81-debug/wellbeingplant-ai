@@ -1,12 +1,37 @@
+import json
+import os
 import time
 
 from app.steps import step01_script
-from app.steps import step02_image
+from app.steps import step02_assets
 from app.steps import step03_tts
 from app.steps import step04_subtitle
 from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
+from app.services import regeneration_service
+from app.services import visual_consistency_engine
+
+
+def _save_script(project_path, data):
+
+    script_path = os.path.join(
+        project_path,
+        "script.json",
+    )
+
+    with open(
+        script_path,
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        json.dump(
+            data,
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
 
 
 def run_pipeline(
@@ -31,12 +56,18 @@ def run_pipeline(
     )
     timings["script_generation"] = time.perf_counter() - t0
 
+    data["scenes"] = visual_consistency_engine.apply_visual_consistency(
+        data["scenes"],
+        channel,
+    )
+
     t0 = time.perf_counter()
-    step02_image.run(
+    data["scenes"] = step02_assets.collect_assets(
         data["scenes"],
         project_path,
         channel,
     )
+    _save_script(project_path, data)
     timings["image_generation"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
@@ -80,5 +111,10 @@ def run_pipeline(
         )
     except Exception as exc:
         print(f"Quality evaluation step failed: {exc}")
+    else:
+        try:
+            regeneration_service.run(project_path)
+        except Exception as exc:
+            print(f"Regeneration step failed: {exc}")
 
     return data

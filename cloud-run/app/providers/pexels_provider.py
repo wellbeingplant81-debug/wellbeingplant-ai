@@ -8,6 +8,12 @@ VIDEO_SEARCH_URL = "https://api.pexels.com/videos/search"
 REQUEST_TIMEOUT_SECONDS = 10
 
 
+def has_api_key() -> bool:
+    """PEXELS_API_KEY가 환경변수에 설정되어 있는지만 확인합니다 (호출 없음)."""
+
+    return bool(os.getenv("PEXELS_API_KEY"))
+
+
 def _api_key() -> str:
 
     api_key = os.getenv("PEXELS_API_KEY")

@@ -8,6 +8,7 @@ from moviepy import AudioFileClip
 
 
 MAX_CHARS = 18
+MIN_CHARS = 4
 
 
 def format_srt_time(seconds: float):
@@ -25,7 +26,54 @@ def format_srt_time(seconds: float):
     return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
 
+def _split_sentence_by_words(sentence: str, max_chars: int):
+    """
+    문장 하나를 공백(단어/어절) 단위로만 묶어 max_chars 이하의
+    자연스러운 조각으로 나눕니다. 쉼표를 우선 분리 기준으로 쓰지
+    않으므로 "한 잔," 같은 쉼표 앞의 짧은 절이 단독 조각으로 남지
+    않고 다음 단어들과 함께 묶입니다. 글자(음절) 단위 분할은 절대
+    하지 않습니다 - 한 단어가 max_chars보다 길어도 그 단어를 쪼개지
+    않고 그대로 한 조각으로 둡니다.
+    """
+
+    words = sentence.split()
+
+    if not words:
+        return []
+
+    groups = []
+    current = []
+    current_len = 0
+
+    for word in words:
+
+        extra = len(word) + (1 if current else 0)
+
+        if current and current_len + extra > max_chars:
+            groups.append(" ".join(current))
+            current = [word]
+            current_len = len(word)
+        else:
+            current.append(word)
+            current_len += extra
+
+    if current:
+        groups.append(" ".join(current))
+
+    # 마지막 조각이 너무 짧은 자투리(예: 쉼표 하나짜리 절)면 바로
+    # 앞 조각과 합쳐 의미 있는 단위로 유지한다.
+    while len(groups) >= 2 and len(groups[-1]) < MIN_CHARS:
+        groups[-2:] = [f"{groups[-2]} {groups[-1]}"]
+
+    return groups
+
+
 def split_subtitle(text: str):
+    """
+    narration을 자막 조각으로 나눕니다. 항상 "문장 -> (너무 길면)
+    단어 단위 묶음" 순서로만 나누고, 글자(음절) 단위 분할은 하지
+    않습니다.
+    """
 
     text = text.strip()
 
@@ -34,7 +82,7 @@ def split_subtitle(text: str):
 
     result = []
 
-    # 문장 단위 우선 분리
+    # 문장 단위 우선 분리 (마침표/물음표/느낌표 기준)
     sentences = re.split(
         r"(?<=[.!?])\s+",
         text,
@@ -47,52 +95,12 @@ def split_subtitle(text: str):
         if not sentence:
             continue
 
-        # 짧으면 그대로 사용
+        # 짧으면 문장을 그대로 유지한다.
         if len(sentence) <= MAX_CHARS:
             result.append(sentence)
             continue
 
-        # 쉼표 기준 분리
-        comma_parts = re.split(
-            r"(?<=,)\s*",
-            sentence,
-        )
-
-        for part in comma_parts:
-
-            part = part.strip()
-
-            if not part:
-                continue
-
-            if len(part) <= MAX_CHARS:
-                result.append(part)
-                continue
-
-            # 너무 길면 공백 기준 분리
-            words = part.split()
-
-            current = ""
-
-            for word in words:
-
-                candidate = (
-                    word
-                    if not current
-                    else current + " " + word
-                )
-
-                if len(candidate) <= MAX_CHARS:
-                    current = candidate
-                else:
-
-                    if current:
-                        result.append(current)
-
-                    current = word
-
-            if current:
-                result.append(current)
+        result.extend(_split_sentence_by_words(sentence, MAX_CHARS))
 
     return result
 

@@ -27,6 +27,9 @@ output/
 temp/
 logs/
 
+# Asset cache / feedback (Sprint28/31)
+.cache/
+
 # OS
 .DS_Store
 Thumbs.db

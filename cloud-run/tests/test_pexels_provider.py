@@ -19,6 +19,17 @@ def _fake_response(status_code=200, json_data=None, text=""):
     return response
 
 
+class TestHasApiKey(unittest.TestCase):
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_returns_false_when_not_set(self):
+        self.assertFalse(pexels_provider.has_api_key())
+
+    @patch.dict(os.environ, {"PEXELS_API_KEY": "test-key"})
+    def test_returns_true_when_set(self):
+        self.assertTrue(pexels_provider.has_api_key())
+
+
 class TestPexelsProvider(unittest.TestCase):
 
     @patch.dict(os.environ, {}, clear=True)
