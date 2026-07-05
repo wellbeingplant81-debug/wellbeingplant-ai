@@ -8,7 +8,16 @@ from moviepy.video.fx.FadeOut import FadeOut
 from app.services.kenburns import build_kenburns_clip
 
 
-FADE_DURATION = 0.25
+MAX_FADE_DURATION = 0.35
+FADE_DURATION_RATIO = 0.15
+MIN_FADE_DURATION = 0.08
+
+
+def _fade_duration(duration):
+    return max(
+        MIN_FADE_DURATION,
+        min(MAX_FADE_DURATION, duration * FADE_DURATION_RATIO),
+    )
 
 
 def build_video(project_path: str):
@@ -70,10 +79,12 @@ def build_video(project_path: str):
 
         clip = clip.with_fps(30)
 
+        fade = _fade_duration(duration)
+
         clip = clip.with_effects(
             [
-                FadeIn(FADE_DURATION),
-                FadeOut(FADE_DURATION),
+                FadeIn(fade),
+                FadeOut(fade),
             ]
         )
 

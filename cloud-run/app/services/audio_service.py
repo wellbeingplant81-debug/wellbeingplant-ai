@@ -2,6 +2,56 @@ import os
 import subprocess
 
 
+def concat_scene_audio(scene_audio_paths, output_file):
+
+    ffmpeg = "ffmpeg"
+
+    list_file = os.path.join(
+        os.path.dirname(output_file),
+        "scene_audio_list.txt",
+    )
+
+    with open(
+        list_file,
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        for path in scene_audio_paths:
+            escaped = os.path.abspath(path).replace("'", "'\\''")
+            f.write(f"file '{escaped}'\n")
+
+    command = [
+        ffmpeg,
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        list_file,
+        "-c:a",
+        "libmp3lame",
+        output_file,
+    ]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+
+    print(result.stdout)
+    print(result.stderr)
+
+    os.remove(list_file)
+
+    if result.returncode != 0:
+        raise Exception(result.stderr)
+
+    return output_file
+
+
 def mix_audio(project_path: str):
 
     ffmpeg = "ffmpeg"
