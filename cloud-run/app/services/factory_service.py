@@ -1,3 +1,5 @@
+import time
+
 from app.pipeline.pipeline import run_pipeline
 from app.services.project_service import create_project
 
@@ -7,7 +9,11 @@ def generate_short_video(
     channel: str = "wellbeing",
 ):
 
+    pipeline_start = time.perf_counter()
+
+    t0 = time.perf_counter()
     project = create_project()
+    project_creation_time = time.perf_counter() - t0
 
     project_path = str(
         project["path"]
@@ -21,6 +27,8 @@ def generate_short_video(
         topic=topic,
         project_path=project_path,
         channel=channel,
+        project_creation_time=project_creation_time,
+        pipeline_start=pipeline_start,
     )
 
     return {
