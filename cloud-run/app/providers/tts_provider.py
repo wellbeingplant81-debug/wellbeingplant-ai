@@ -1,32 +1,14 @@
 import os
 
-from google.cloud import texttospeech
+from app.providers import elevenlabs_provider
+from app.providers import google_tts_provider
 
 
 def generate_voice(text: str, output_file: str):
 
-    client = texttospeech.TextToSpeechClient()
+    provider = os.getenv("TTS_PROVIDER", "google").lower()
 
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    if provider == "elevenlabs":
+        return elevenlabs_provider.generate_voice(text, output_file)
 
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="ko-KR",
-        name="ko-KR-Chirp3-HD-Aoede",
-    )
-
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
-    )
-
-    response = client.synthesize_speech(
-        input=synthesis_input,
-        voice=voice,
-        audio_config=audio_config,
-    )
-
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-
-    with open(output_file, "wb") as out:
-        out.write(response.audio_content)
-
-    return output_file
+    return google_tts_provider.generate_voice(text, output_file)
