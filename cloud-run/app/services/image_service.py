@@ -7,11 +7,19 @@ from PIL import (
 )
 
 from google import genai
+from google.genai import types
 
 from app.prompts.image_style import (
     WELLBEING_STYLE,
     FOODBEAT_STYLE,
     MINDTAIL_STYLE,
+    THUMBNAIL_STYLE,
+    HOOK_SCENE_STYLE_BOOST,
+    WELLBEING_NEGATIVE_PROMPT,
+    FOODBEAT_NEGATIVE_PROMPT,
+    MINDTAIL_NEGATIVE_PROMPT,
+    THUMBNAIL_NEGATIVE_PROMPT,
+    HOOK_SCENE_NEGATIVE_PROMPT,
 )
 
 
@@ -26,6 +34,12 @@ STYLE_MAP = {
     "wellbeing": WELLBEING_STYLE,
     "foodbeat": FOODBEAT_STYLE,
     "mindtail": MINDTAIL_STYLE,
+}
+
+NEGATIVE_PROMPT_MAP = {
+    "wellbeing": WELLBEING_NEGATIVE_PROMPT,
+    "foodbeat": FOODBEAT_NEGATIVE_PROMPT,
+    "mindtail": MINDTAIL_NEGATIVE_PROMPT,
 }
 
 
@@ -67,12 +81,31 @@ def generate_image(
     prompt: str,
     output_file: str,
     channel: str = "wellbeing",
+    is_thumbnail: bool = False,
+    is_hook_scene: bool = False,
 ):
 
-    style_prompt = STYLE_MAP.get(
-        channel,
-        WELLBEING_STYLE,
-    )
+    if is_thumbnail:
+        style_prompt = THUMBNAIL_STYLE
+        negative_prompt = THUMBNAIL_NEGATIVE_PROMPT
+    elif is_hook_scene:
+        base_style = STYLE_MAP.get(
+            channel,
+            WELLBEING_STYLE,
+        )
+
+        style_prompt = base_style + "\n" + HOOK_SCENE_STYLE_BOOST
+        negative_prompt = HOOK_SCENE_NEGATIVE_PROMPT
+    else:
+        style_prompt = STYLE_MAP.get(
+            channel,
+            WELLBEING_STYLE,
+        )
+
+        negative_prompt = NEGATIVE_PROMPT_MAP.get(
+            channel,
+            WELLBEING_NEGATIVE_PROMPT,
+        )
 
     final_prompt = f"""
 {style_prompt}
@@ -83,6 +116,11 @@ def generate_image(
     response = client.models.generate_images(
         model="imagen-4.0-generate-001",
         prompt=final_prompt,
+        config=types.GenerateImagesConfig(
+            aspect_ratio="9:16",
+            negative_prompt=negative_prompt,
+            add_watermark=False,
+        ),
     )
 
     if not response.generated_images:

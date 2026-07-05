@@ -24,6 +24,7 @@ def _generate(
         prompt=scene["image_prompt"],
         output_file=output_file,
         channel=channel,
+        is_hook_scene=(index == 1),
     )
 
     return output_file

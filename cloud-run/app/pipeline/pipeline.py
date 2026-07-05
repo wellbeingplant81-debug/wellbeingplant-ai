@@ -36,10 +36,15 @@ def run_pipeline(
         project_path,
     )
 
+    scene1 = data["scenes"][0]
+
     step06_thumbnail.run(
         data["title"],
         topic,
         project_path,
+        channel,
+        scene1["narration"],
+        scene1["image_prompt"],
     )
 
     return data

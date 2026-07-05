@@ -1,6 +1,8 @@
 import json
 from google import genai
 
+from app.prompts.image_prompt_rules import IMAGE_PROMPT_RULES
+
 client = genai.Client(
     vertexai=True,
     project="wellbeingplant-ai",
@@ -41,42 +43,9 @@ def generate_short(topic: str):
 - image_prompt
   반드시 영어로 작성
 
-image_prompt 작성 규칙
+image_prompt 작성 시 다음 규칙을 반드시 따르세요.
 
-- Ultra realistic
-- Cinematic photography
-- Documentary style
-- Professional photography
-- Korean people
-- Natural facial expression
-- Correct human anatomy
-- Warm natural lighting
-- Highly detailed
-- Photorealistic
-- 8K quality
-- Shallow depth of field
-- Vertical composition 9:16
-- No text
-- No watermark
-- No logo
-- No illustration
-- No cartoon
-- No CGI
-
-사람이 등장하면
-
-- Korean
-- realistic skin
-- realistic eyes
-- realistic hands
-- realistic fingers
-
-를 반드시 포함하세요.
-
-음식이 등장하면
-
-매우 신선하고
-광고 사진 수준의 퀄리티로 표현하세요.
+{IMAGE_PROMPT_RULES}
 
 JSON 형식은 반드시 아래처럼 출력하세요.
 

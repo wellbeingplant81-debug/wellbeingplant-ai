@@ -1,6 +1,8 @@
 import json
 from google import genai
 
+from app.prompts.image_prompt_rules import IMAGE_PROMPT_RULES
+
 client = genai.Client(
     vertexai=True,
     project="wellbeingplant-ai",
@@ -29,6 +31,10 @@ def generate_scenes(script: str):
     }}
   ]
 }}
+
+image_prompt 작성 시 다음 규칙을 반드시 따르세요.
+
+{IMAGE_PROMPT_RULES}
 
 대본
 

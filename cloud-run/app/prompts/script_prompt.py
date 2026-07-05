@@ -1,6 +1,9 @@
 from string import Template
 
-SCRIPT_PROMPT = Template("""
+from app.prompts.image_prompt_rules import IMAGE_PROMPT_RULES
+
+SCRIPT_PROMPT = Template(
+    """
 당신은 대한민국 최고의 건강 유튜브 쇼츠 기획자이며,
 세계 최고 수준의 이미지 프롬프트 엔지니어입니다.
 
@@ -64,144 +67,23 @@ Narration 규칙
 - 쇼츠에 맞는 템포 유지
 
 ===========================
-Image Prompt 규칙
+Scene 1 선택 규칙
 ===========================
 
-반드시 영어만 사용.
+Scene 1은 영상의 썸네일 역할도 겸하므로, 도입부 중에서도
+가장 시각적으로 강렬하고 감정이 분명한 순간을 선택한다.
 
-한 문장으로 작성.
+단조롭거나 어둡고 무기력한 장면보다,
+놀람, 호기심, 기대감 등 강한 감정을 보여줄 수 있는 순간을 우선한다.
 
-Scene 내용을 실제 사진처럼 묘사한다.
+단, 전체 스토리 흐름은 자연스럽게 유지한다.
 
-다음 스타일을 자연스럽게 포함한다.
-
-Authentic documentary photography,
-Editorial photography,
-National Geographic style,
-Premium commercial photography,
-Ultra realistic,
-Hyper realistic,
-Photorealistic,
-Magazine quality,
-Extremely detailed,
-Ultra sharp focus,
-Natural lighting,
-Soft cinematic lighting,
-Golden hour lighting,
-High dynamic range,
-Professional composition,
-Rule of thirds,
-Shallow depth of field,
-85mm portrait lens,
-Natural skin texture,
-Realistic eyes,
-Correct human anatomy,
-Correct hands,
-Correct fingers,
-Natural facial expression,
-Korean people,
-Vertical composition 9:16
-
-===========================
-Scene 구성 규칙
-===========================
-
-각 Scene은 반드시
-
-- 다른 카메라 앵글
-- 다른 거리
-- 다른 구도
-- 다른 표정
-- 다른 조명
-- 다른 배경
-
-을 사용한다.
-
-예시
-
-Close-up
-
-Medium shot
-
-Wide shot
-
-Over shoulder
-
-Low angle
-
-High angle
-
-Top view
-
-Eye level
-
-등을 적절히 섞는다.
-
-===========================
-상황별 규칙
-===========================
-
-의료 장면
-
-실제 병원 다큐멘터리처럼.
-
-건강 장면
-
-실제 건강 프로그램 촬영처럼.
-
-음식 장면
-
-프리미엄 음식 광고처럼.
-
-운동 장면
-
-실제 스포츠 광고처럼.
-
-인물
-
-실제 한국인처럼.
-
-===========================
-절대 포함 금지
-===========================
-
-text
-
-subtitle
-
-caption
-
-watermark
-
-logo
-
-illustration
-
-cartoon
-
-anime
-
-CGI
-
-3D render
-
-plastic skin
-
-low quality
-
-blurry
-
-extra fingers
-
-deformed hands
-
-duplicate person
-
-cropped face
-
-bad anatomy
+"""
+    + IMAGE_PROMPT_RULES
+    + """
 
 ===========================
 
 JSON 외에는 아무것도 출력하지 마세요.
-""")
+"""
+)
