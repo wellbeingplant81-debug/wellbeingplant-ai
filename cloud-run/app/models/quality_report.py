@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RequiredFilesCheck(BaseModel):
@@ -125,8 +125,27 @@ class QualityReportMetadata(BaseModel):
     ai_evaluation_skipped_reason: Optional[str] = None
 
 
+class RetryAttempt(BaseModel):
+    attempt: int
+    outcome: str  # "success" | "error"
+    reason: Optional[str] = None
+    timestamp: str
+
+
+class RegenerationState(BaseModel):
+    retry_count: int = 0
+    retry_history: List[RetryAttempt] = Field(default_factory=list)
+    final_status: Optional[str] = None  # "passed" | "failed_max_retry"
+
+
+class SceneRegenerationEntry(BaseModel):
+    scene: int
+    regeneration: RegenerationState = Field(default_factory=RegenerationState)
+
+
 class QualityReport(BaseModel):
     project_id: str
     technical_validation: TechnicalValidation
     ai_quality_evaluation: Optional[AIQualityEvaluation] = None
+    regeneration: List[SceneRegenerationEntry] = Field(default_factory=list)
     metadata: QualityReportMetadata

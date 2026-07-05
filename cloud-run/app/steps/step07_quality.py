@@ -16,6 +16,62 @@ from app.services import technical_validation_service
 SCHEMA_VERSION = "sprint23"
 
 
+def _report_path(project_path):
+    return os.path.join(project_path, "quality_report.json")
+
+
+def load(project_path):
+    """
+    Read the current quality_report.json, if any. Used by Step08 to read
+    evaluation results without duplicating this module's parsing logic.
+    """
+
+    path = _report_path(project_path)
+
+    if not os.path.exists(path):
+        return None
+
+    with open(path, "r", encoding="utf-8") as f:
+        return QualityReport.model_validate(json.load(f))
+
+
+def _load_prior_regeneration(project_path):
+    """
+    Carry forward the "regeneration" block Step08 owns. Step07 never
+    reads or interprets its contents - only preserves them across
+    re-evaluations so a regeneration cycle isn't lost when Step07 rewrites
+    quality_report.json.
+    """
+
+    prior = load(project_path)
+
+    return prior.regeneration if prior is not None else []
+
+
+def _load_script(project_path):
+    script_path = os.path.join(project_path, "script.json")
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def evaluate(project_path):
+    """
+    Stable public entry point for re-running quality evaluation outside
+    the step01-06 pipeline sequence (e.g. Step08's regeneration cycle).
+    Loads script.json itself and supplies fresh timing bookkeeping, so
+    callers outside a full pipeline run never need to know about run()'s
+    pipeline-internal `timings`/`pipeline_start` parameters.
+    """
+
+    return run(
+        project_path,
+        _load_script(project_path),
+        timings={},
+        pipeline_start=time.perf_counter(),
+    )
+
+
 def run(
     project_path,
     data,
@@ -90,6 +146,7 @@ def run(
         project_id=project_id,
         technical_validation=technical_validation,
         ai_quality_evaluation=ai_quality_evaluation,
+        regeneration=_load_prior_regeneration(project_path),
         metadata=QualityReportMetadata(
             evaluated_at=datetime.now(timezone.utc).isoformat(),
             schema_version=SCHEMA_VERSION,

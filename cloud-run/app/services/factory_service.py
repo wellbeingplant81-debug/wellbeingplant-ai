@@ -12,7 +12,7 @@ def generate_short_video(
     pipeline_start = time.perf_counter()
 
     t0 = time.perf_counter()
-    project = create_project()
+    project = create_project(topic, channel)
     project_creation_time = time.perf_counter() - t0
 
     project_path = str(
