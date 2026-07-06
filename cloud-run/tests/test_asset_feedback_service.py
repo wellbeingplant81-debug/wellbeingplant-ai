@@ -92,5 +92,57 @@ class TestAssetFeedbackService(unittest.TestCase):
         self.assertEqual(len(records), 1)
 
 
+class TestSummarizeUsage(unittest.TestCase):
+
+    def _record(self, provider):
+        return {"provider": provider}
+
+    def test_empty_records_returns_zeroed_summary(self):
+        summary = asset_feedback_service.summarize_usage([])
+
+        self.assertEqual(summary["total"], 0)
+        self.assertEqual(summary["by_provider"], {})
+        self.assertEqual(summary["stock_rate"], 0.0)
+        self.assertEqual(summary["fallback_rate"], 0.0)
+
+    def test_counts_and_rates_per_provider(self):
+        records = (
+            [self._record("pexels_video")] * 2
+            + [self._record("pexels_image")] * 3
+            + [self._record("ai_image")] * 5
+        )
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertEqual(summary["total"], 10)
+        self.assertEqual(summary["by_provider"]["pexels_video"]["count"], 2)
+        self.assertEqual(summary["by_provider"]["pexels_video"]["rate"], 0.2)
+        self.assertEqual(summary["by_provider"]["pexels_image"]["count"], 3)
+        self.assertEqual(summary["by_provider"]["ai_image"]["count"], 5)
+
+    def test_stock_and_fallback_rate_are_complementary(self):
+        records = (
+            [self._record("pexels_image")] * 7
+            + [self._record("ai_image")] * 3
+        )
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertAlmostEqual(summary["stock_rate"], 0.7)
+        self.assertAlmostEqual(summary["fallback_rate"], 0.3)
+        self.assertAlmostEqual(
+            summary["stock_rate"] + summary["fallback_rate"], 1.0,
+        )
+
+    def test_no_fallback_records_gives_full_stock_rate(self):
+        records = [self._record("pixabay_video")] * 4
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertEqual(summary["stock_rate"], 1.0)
+        self.assertEqual(summary["fallback_rate"], 0.0)
+        self.assertNotIn("ai_image", summary["by_provider"])
+
+
 if __name__ == "__main__":
     unittest.main()

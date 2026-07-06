@@ -80,6 +80,36 @@ class TestTtsProviderRouting(unittest.TestCase):
 
         mock_google.generate_voice.assert_not_called()
 
+    def test_elevenlabs_path_applies_voice_quality_pause_markup(
+        self, mock_elevenlabs, mock_google,
+    ):
+        # Sprint27 Voice Quality Engine(optimize_for_tts)이 실제로
+        # ElevenLabs 호출 경로에 연결되어 있는지 확인한다 - narration
+        # 원문이 아니라 pause 마크업이 삽입된 텍스트가 전달돼야 한다.
+        os.environ["TTS_PROVIDER"] = "elevenlabs"
+
+        generate_voice("좋은 아침입니다. 시작해볼까요?", "out.mp3")
+
+        called_text = mock_elevenlabs.generate_voice.call_args[0][0]
+
+        self.assertIn('<break time="0.4s" />', called_text)
+        self.assertNotEqual(called_text, "좋은 아침입니다. 시작해볼까요?")
+        mock_google.generate_voice.assert_not_called()
+
+    def test_google_path_never_receives_pause_markup(
+        self, mock_elevenlabs, mock_google,
+    ):
+        # Google TTS는 <break> 마크업을 해석하지 않고 그대로 읽어버리므로
+        # (SynthesisInput(text=...)), 이 마크업이 절대 섞여 들어가면 안 된다.
+        os.environ["TTS_PROVIDER"] = "google"
+
+        generate_voice("좋은 아침입니다. 시작해볼까요?", "out.mp3")
+
+        mock_google.generate_voice.assert_called_once_with(
+            "좋은 아침입니다. 시작해볼까요?", "out.mp3",
+        )
+        mock_elevenlabs.generate_voice.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

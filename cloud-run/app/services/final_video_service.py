@@ -43,7 +43,11 @@ def merge_video_audio(project_path: str):
         "Shadow=0,"
         "Bold=1,"
         "Alignment=2,"
-        "MarginV=90"
+        "MarginV=90,"
+        # subtitle_service.py가 이미 한 줄에 맞춰 자막을 나눠두므로,
+        # libass가 자체 판단으로 재줄바꿈(단어 중간에서 줄이 꺾이는
+        # 현상)하지 않도록 자동 줄바꿈을 끈다.
+        "WrapStyle=2"
     )
 
     command = [

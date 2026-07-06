@@ -63,3 +63,51 @@ def load_all(feedback_path: str = DEFAULT_FEEDBACK_PATH) -> list:
     """저장된 전체 feedback 이력을 반환합니다."""
 
     return _load_records(feedback_path)
+
+
+def summarize_usage(records: list) -> dict:
+    """
+    feedback 이력을 provider별 실제 사용률로 집계합니다. 순수 함수입니다
+    (파일 접근 없음 - load_all()의 결과를 입력으로 받습니다).
+
+    반환값: {
+        "total": int,
+        "by_provider": {provider: {"count": int, "rate": float}, ...},
+        "stock_rate": float,   # ai_image가 아닌(Pexels/Pixabay) 비율
+        "fallback_rate": float,  # ai_image(AI 생성 폴백) 비율
+    }
+
+    records가 비어 있으면 total=0과 함께 빈 by_provider, rate 0.0을
+    반환합니다 - 호출자가 "이력 없음"과 "0%"를 구분해야 하는 경우
+    total로 판단하면 됩니다.
+    """
+
+    total = len(records)
+
+    if total == 0:
+        return {
+            "total": 0,
+            "by_provider": {},
+            "stock_rate": 0.0,
+            "fallback_rate": 0.0,
+        }
+
+    by_provider = {}
+
+    for record in records:
+        provider = record.get("provider", "unknown")
+        by_provider[provider] = by_provider.get(provider, 0) + 1
+
+    by_provider = {
+        provider: {"count": count, "rate": count / total}
+        for provider, count in by_provider.items()
+    }
+
+    fallback_count = by_provider.get("ai_image", {}).get("count", 0)
+
+    return {
+        "total": total,
+        "by_provider": by_provider,
+        "stock_rate": (total - fallback_count) / total,
+        "fallback_rate": fallback_count / total,
+    }
