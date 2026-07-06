@@ -32,9 +32,25 @@ def print_report(summary: dict):
         )
         return
 
+    outcome_counts = summary.get("outcome_counts", {})
+    ai_image_count = summary["by_provider"].get("ai_image", {}).get("count", 0)
+    pexels_image_count = summary["by_provider"].get("pexels_image", {}).get("count", 0)
+    pexels_video_count = summary["by_provider"].get("pexels_video", {}).get("count", 0)
+
     print(f"전체 scene 수 : {total}")
     print(f"스톡(Pexels/Pixabay) 사용률 : {summary['stock_rate']:.1%}")
-    print(f"AI Image 폴백률            : {summary['fallback_rate']:.1%}")
+    print(f"AI Image 사용률            : {summary['fallback_rate']:.1%}")
+    print()
+    print(f"AI Image 개수    : {ai_image_count}")
+    print(f"Pexels Image 개수 : {pexels_image_count}")
+    print(f"Pexels Video 개수 : {pexels_video_count}")
+    print(f"Fallback 개수    : {outcome_counts.get('fallback', 0)} "
+          f"(AI 우선 품질 게이트 통과: {outcome_counts.get('ai_priority', 0)})")
+    print(
+        "예상 AI 생성 비용 절감률 : "
+        f"{summary['estimated_ai_cost_savings_rate']:.1%} "
+        "(전량 AI 생성 대비)"
+    )
     print()
 
     headers = ["Provider", "Count", "Rate"]

@@ -11,6 +11,14 @@ from app.steps import step07_quality
 from app.utils.atomic_write import atomic_write_json
 
 
+# Sprint40 - Hybrid Asset Engine 연동. Pexels/Pixabay 실사진은 서로 다른
+# 실존 인물이라 구조적으로 "장면 간 동일 인물" 일관성 평가를 통과할 수
+# 없다 - 이 provider들로 선택된 scene은 Gemini가 regenerate=True를
+# 매겨도 AI로 재생성하지 않는다(비용 절감 효과 보존). script.json에
+# provider 필드가 없는(구버전) scene은 기존과 동일하게 AI로 취급한다.
+STOCK_PROVIDERS = {"pexels_image", "pexels_video", "pixabay_image", "pixabay_video"}
+
+
 def _load_json(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -84,6 +92,8 @@ def run(project_path: str):
                 scene.scene,
                 SceneRegenerationEntry(scene=scene.scene),
             ).regeneration.retry_count < QUALITY_MAX_RETRY
+            and scenes_by_number.get(scene.scene, {}).get("provider")
+            not in STOCK_PROVIDERS
         ]
 
         if not eligible:

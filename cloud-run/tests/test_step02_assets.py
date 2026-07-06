@@ -19,7 +19,7 @@ SAMPLE_SCENES = [
 ]
 
 
-def _fake_integrate_asset(scene, project_path, channel="wellbeing"):
+def _fake_integrate_asset(scene, project_path, channel="wellbeing", prefer_ai=False):
     # scene 번호가 클수록 늦게 끝나도록 지연을 줘서 as_completed 순서가
     # 입력 순서와 다를 수 있음을 시뮬레이션한다.
     time.sleep(0.01 * (len(SAMPLE_SCENES) - scene["scene"]))
@@ -83,6 +83,31 @@ class TestStep02Assets(unittest.TestCase):
 
         with self.assertRaises(Exception):
             collect_assets(SAMPLE_SCENES, "output/proj")
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_prefer_ai_threaded_through_for_ai_priority_scene(self, mock_integrate):
+        # Sprint38 - Hybrid Asset Engine: 명확한 의료/인물 키워드가 있는
+        # scene만 prefer_ai=True로 넘어가야 하고, 나머지는 False여야 한다.
+        scenes = [
+            {
+                "scene": 1,
+                "narration": "혈관과 세포 이야기",
+                "image_prompt": "diagram of blood vessel anatomy",
+            },
+            {"scene": 2, "narration": "n2", "image_prompt": "p2"},
+            {"scene": 3, "narration": "n3", "image_prompt": "p3"},
+        ]
+
+        collect_assets(scenes, "output/proj")
+
+        prefer_ai_by_scene = {
+            call.args[0]["scene"]: call.kwargs["prefer_ai"]
+            for call in mock_integrate.call_args_list
+        }
+
+        self.assertTrue(prefer_ai_by_scene[1])
+        self.assertFalse(prefer_ai_by_scene[2])
+        self.assertFalse(prefer_ai_by_scene[3])
 
 
 if __name__ == "__main__":

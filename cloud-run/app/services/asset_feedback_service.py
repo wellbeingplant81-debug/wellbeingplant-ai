@@ -75,7 +75,16 @@ def summarize_usage(records: list) -> dict:
         "by_provider": {provider: {"count": int, "rate": float}, ...},
         "stock_rate": float,   # ai_image가 아닌(Pexels/Pixabay) 비율
         "fallback_rate": float,  # ai_image(AI 생성 폴백) 비율
+        "outcome_counts": {"success": int, "fallback": int, "ai_priority": int, ...},
+        "estimated_ai_cost_savings_rate": float,
     }
+
+    Sprint38 - Hybrid Asset Engine: outcome_counts는 "success"(스톡
+    채택)/"fallback"(스톡 검색 실패로 AI 대체)/"ai_priority"(스톡
+    후보는 있었지만 품질 게이트 미달로 AI 선택)를 구분합니다.
+    estimated_ai_cost_savings_rate는 "전량 AI 생성" 대비 실제로 AI를
+    아낀 비율(1 - ai_image 사용률)입니다 - 스톡 검색/다운로드가 AI
+    생성보다 훨씬 저렴하다는 전제입니다.
 
     records가 비어 있으면 total=0과 함께 빈 by_provider, rate 0.0을
     반환합니다 - 호출자가 "이력 없음"과 "0%"를 구분해야 하는 경우
@@ -90,6 +99,8 @@ def summarize_usage(records: list) -> dict:
             "by_provider": {},
             "stock_rate": 0.0,
             "fallback_rate": 0.0,
+            "outcome_counts": {},
+            "estimated_ai_cost_savings_rate": 0.0,
         }
 
     by_provider = {}
@@ -103,11 +114,19 @@ def summarize_usage(records: list) -> dict:
         for provider, count in by_provider.items()
     }
 
-    fallback_count = by_provider.get("ai_image", {}).get("count", 0)
+    ai_image_count = by_provider.get("ai_image", {}).get("count", 0)
+
+    outcome_counts = {}
+
+    for record in records:
+        outcome = record.get("outcome", "unknown")
+        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
 
     return {
         "total": total,
         "by_provider": by_provider,
-        "stock_rate": (total - fallback_count) / total,
-        "fallback_rate": fallback_count / total,
+        "stock_rate": (total - ai_image_count) / total,
+        "fallback_rate": ai_image_count / total,
+        "outcome_counts": outcome_counts,
+        "estimated_ai_cost_savings_rate": 1 - (ai_image_count / total),
     }

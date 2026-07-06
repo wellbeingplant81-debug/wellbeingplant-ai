@@ -8,7 +8,7 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
-from app.services.asset_ranking_service import select_best
+from app.services.asset_ranking_service import select_best, select_best_with_score
 
 
 class TestSelectBest(unittest.TestCase):
@@ -52,6 +52,30 @@ class TestSelectBest(unittest.TestCase):
 
         result = select_best([low, high], is_hook_scene=True)
         self.assertEqual(result, high)
+
+
+class TestSelectBestWithScore(unittest.TestCase):
+
+    def setUp(self):
+        patcher = patch(
+            "app.services.asset_ranking_service.load_all",
+            return_value=[],
+        )
+        self.addCleanup(patcher.stop)
+        patcher.start()
+
+    def test_empty_candidates_returns_none_none(self):
+        self.assertEqual(select_best_with_score([]), (None, None))
+
+    def test_returns_same_winner_as_select_best_plus_its_score(self):
+        low = {"source": "pixabay_image", "width": 1920, "height": 1080}
+        high = {"source": "pexels_image", "width": 1080, "height": 1920}
+
+        candidate, score = select_best_with_score([low, high])
+
+        self.assertEqual(candidate, high)
+        # pexels_image portrait: 0.85(base) + 0.05(relevance) + 0.02(provider)
+        self.assertAlmostEqual(score, 0.92)
 
 
 class TestSelectBestWithLearning(unittest.TestCase):

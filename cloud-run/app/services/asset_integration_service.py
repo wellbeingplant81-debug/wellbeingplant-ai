@@ -2,7 +2,9 @@ import os
 import subprocess
 
 from app.services import asset_feedback_service
-from app.services.asset_ranking_service import select_best
+from app.services.asset_mode_config import get_pexels_quality_threshold
+from app.services.asset_priority_classifier import effective_pexels_threshold
+from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
@@ -40,15 +42,25 @@ def integrate_asset(
     scene: dict,
     project_path: str,
     channel: str = "wellbeing",
+    prefer_ai: bool = False,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
+    Sprint38 - Hybrid Asset Engine: prefer_ai 품질 게이트.
 
     Scene 하나에 대해 후보 자산을 모두 수집(get_candidates)하고,
     Asset Ranking Service로 최고 점수 후보를 선택한 뒤 그 결과를
     반영한 새 scene dict를 반환합니다. 입력 scene dict는 변경하지
     않습니다. 후보가 하나도 없으면(모든 provider 실패/결과 없음)
     기존 AI Image Generator로 폴백합니다.
+
+    prefer_ai=True(인물/의료 등 정확도가 중요한 scene - 호출자가 배치
+    단위로 판단해 전달)여도 Pexels/Pixabay 검색 자체는 그대로
+    수행합니다 - 비용보다 품질을 우선하므로, 검색된 최고 후보의 점수가
+    ASSET_MODE의 pexels_quality_threshold 이상이면 그대로 그 스톡
+    자산을 채택합니다. 임계값 미만일 때만 AI로 생성합니다. prefer_ai가
+    아닌 scene(기본값 False)은 기존 Sprint30 동작과 완전히 동일하게
+    후보가 하나라도 있으면 그대로 채택합니다.
 
     AssetSelector가 비디오(asset_type == "video")를 선택한 경우,
     ffmpeg로 첫 프레임을 추출해 이미지로 저장합니다 - Video Builder는
@@ -79,10 +91,20 @@ def integrate_asset(
     final_image_path = os.path.join(images_dir, f"scene{scene_number}.png")
     staging_path = os.path.join(images_dir, f"scene{scene_number}.raw")
 
-    candidates = get_candidates(image_prompt, allow_video=True)
-    best_candidate = select_best(candidates, is_hook_scene=is_hook_scene)
+    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    best_candidate, best_score = select_best_with_score(
+        stock_candidates, is_hook_scene=is_hook_scene,
+    )
 
-    if best_candidate is not None:
+    quality_override = (
+        prefer_ai
+        and best_candidate is not None
+        and best_score < effective_pexels_threshold(
+            scene, get_pexels_quality_threshold(),
+        )
+    )
+
+    if best_candidate is not None and not quality_override:
         result = download_candidate(best_candidate, staging_path)
     else:
         ai_path = generate_image(
@@ -111,13 +133,23 @@ def integrate_asset(
 
     confidence = 1.0 if source == "ai_image" else 0.8
 
+    if source != "ai_image":
+        outcome = "success"
+    elif quality_override:
+        # 스톡 후보가 실제로 있었지만 품질 게이트(pexels_quality_
+        # threshold)를 통과하지 못해 AI를 선택한 경우 - 스톡 검색
+        # 자체가 실패한 "fallback"과는 구분되는 의도적 선택이다.
+        outcome = "ai_priority"
+    else:
+        outcome = "fallback"
+
     try:
         asset_feedback_service.record(
             scene_id=scene_number,
             provider=source,
             asset_type=asset_type,
             selected_asset=final_image_path,
-            outcome=("fallback" if source == "ai_image" else "success"),
+            outcome=outcome,
         )
     except Exception as exc:
         # Learning Layer는 optional overlay이므로, 기록 실패가 asset

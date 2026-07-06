@@ -346,6 +346,83 @@ class TestRegenerationService(unittest.TestCase):
         self.assertEqual(entry.regeneration.retry_count, 2)
         self.assertEqual(entry.regeneration.final_status, "passed")
 
+    # --- Sprint40: Hybrid Asset Engine 연동 (stock scene은 재생성 skip) ---
+
+    def _write_script_with_providers(self, providers_by_scene):
+        with open(
+            os.path.join(self.project_path, "script.json"), "w", encoding="utf-8",
+        ) as f:
+            json.dump(
+                {
+                    "scenes": [
+                        {
+                            "scene": scene,
+                            "image_prompt": f"prompt{scene}",
+                            "provider": provider,
+                        }
+                        for scene, provider in providers_by_scene.items()
+                    ]
+                },
+                f,
+            )
+
+    def test_pexels_sourced_scene_is_never_regenerated_even_when_flagged(
+        self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
+    ):
+        self._write_script_with_providers({3: "pexels_image"})
+
+        report = _report(
+            ai_evaluation=_ai_evaluation([(3, True, "인물 불일치")]),
+        )
+        mock_step07.load.return_value = report
+
+        result = regeneration_service.run(self.project_path)
+
+        self.assertIs(result, report)
+        mock_generate_image.assert_not_called()
+        mock_build_video.assert_not_called()
+
+    def test_ai_sourced_scene_still_regenerates_when_mixed_with_stock_scene(
+        self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
+    ):
+        self._write_script_with_providers({1: "ai_image", 3: "pexels_video"})
+
+        initial_report = _report(
+            ai_evaluation=_ai_evaluation([(1, True, "손 기형"), (3, True, "인물 불일치")]),
+        )
+        post_cycle_report = _report(
+            ai_evaluation=_ai_evaluation([(1, False, None), (3, True, "인물 불일치")]),
+        )
+        mock_step07.load.return_value = initial_report
+        mock_step07.evaluate.return_value = post_cycle_report
+
+        result = regeneration_service.run(self.project_path)
+
+        mock_generate_image.assert_called_once_with(
+            "prompt1",
+            os.path.join(self.project_path, "images", "scene1.png"),
+            channel="wellbeing",
+            is_hook_scene=True,
+        )
+
+        entries = {e.scene: e for e in result.regeneration}
+        self.assertEqual(entries[1].regeneration.final_status, "passed")
+        self.assertNotIn(3, entries)
+
+    def test_missing_provider_field_defaults_to_ai_behavior(
+        self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
+    ):
+        # 구버전 script.json(provider 필드 없음)은 기존과 동일하게
+        # AI scene으로 취급해 정상적으로 재생성돼야 한다.
+        initial_report = _report(ai_evaluation=_ai_evaluation([(3, True, "bad")]))
+        post_cycle_report = _report(ai_evaluation=_ai_evaluation([(3, False, None)]))
+        mock_step07.load.return_value = initial_report
+        mock_step07.evaluate.return_value = post_cycle_report
+
+        regeneration_service.run(self.project_path)
+
+        mock_generate_image.assert_called_once()
+
     def test_total_failure_cycle_stops_without_a_second_attempt(
         self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
     ):

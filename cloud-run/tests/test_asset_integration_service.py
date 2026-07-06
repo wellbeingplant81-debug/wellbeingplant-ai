@@ -167,35 +167,35 @@ class TestAssetIntegrationService(unittest.TestCase):
 
     # --- is_hook_scene wiring into ranking ---
 
-    @patch("app.services.asset_integration_service.select_best")
+    @patch("app.services.asset_integration_service.select_best_with_score")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_is_hook_scene_true_for_scene_one(
-        self, mock_get_candidates, mock_download, mock_select_best,
+        self, mock_get_candidates, mock_download, mock_select_best_with_score,
     ):
         mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
-        mock_select_best.return_value = PEXELS_IMAGE_CANDIDATE
+        mock_select_best_with_score.return_value = (PEXELS_IMAGE_CANDIDATE, 0.92)
         mock_download.side_effect = _download_candidate_side_effect()
 
         hook_scene = {**SAMPLE_SCENE, "scene": 1}
         integrate_asset(hook_scene, self.project_path)
 
-        _, kwargs = mock_select_best.call_args
+        _, kwargs = mock_select_best_with_score.call_args
         self.assertTrue(kwargs["is_hook_scene"])
 
-    @patch("app.services.asset_integration_service.select_best")
+    @patch("app.services.asset_integration_service.select_best_with_score")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_is_hook_scene_false_for_non_first_scene(
-        self, mock_get_candidates, mock_download, mock_select_best,
+        self, mock_get_candidates, mock_download, mock_select_best_with_score,
     ):
         mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
-        mock_select_best.return_value = PEXELS_IMAGE_CANDIDATE
+        mock_select_best_with_score.return_value = (PEXELS_IMAGE_CANDIDATE, 0.92)
         mock_download.side_effect = _download_candidate_side_effect()
 
         integrate_asset(SAMPLE_SCENE, self.project_path)
 
-        _, kwargs = mock_select_best.call_args
+        _, kwargs = mock_select_best_with_score.call_args
         self.assertFalse(kwargs["is_hook_scene"])
 
     # --- basic invariants ---
@@ -274,6 +274,102 @@ class TestAssetIntegrationService(unittest.TestCase):
         result = integrate_asset(SAMPLE_SCENE, self.project_path)
 
         self.assertEqual(result["provider"], "pexels_image")
+
+    # --- Sprint38: Hybrid Asset Engine (prefer_ai quality gate) ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_prefer_ai_false_behaves_exactly_like_before(
+        self, mock_get_candidates, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path, prefer_ai=False)
+
+        self.assertEqual(result["provider"], "pexels_image")
+        self.mock_record.assert_called_once_with(
+            scene_id=2,
+            provider="pexels_image",
+            asset_type="image",
+            selected_asset=result["asset_path"],
+            outcome="success",
+        )
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_prefer_ai_true_still_uses_pexels_when_quality_is_high_enough(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        # PEXELS_IMAGE_CANDIDATE는 portrait라 0.92점 - balanced 모드의
+        # pexels_quality_threshold(0.90)를 넘으므로, AI 우선 scene이어도
+        # 비용보다 품질을 우선해 Pexels가 그대로 채택돼야 한다.
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path, prefer_ai=True)
+
+        self.assertEqual(result["provider"], "pexels_image")
+        mock_generate_image.assert_not_called()
+        self.mock_record.assert_called_once_with(
+            scene_id=2,
+            provider="pexels_image",
+            asset_type="image",
+            selected_asset=result["asset_path"],
+            outcome="success",
+        )
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_prefer_ai_true_uses_ai_when_pexels_quality_is_too_low(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        # landscape(비-portrait) pixabay_image는 0.85점 - balanced 모드의
+        # 0.90 문턱을 못 넘으므로 AI로 생성돼야 한다.
+        low_quality_candidate = {
+            "source": "pixabay_image", "download_url": "img.jpg", "source_url": "u",
+            "width": 1920, "height": 1080, "query": "tired woman office",
+        }
+        mock_get_candidates.return_value = [low_quality_candidate]
+
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path, prefer_ai=True)
+
+        self.assertEqual(result["provider"], "ai_image")
+        mock_download.assert_not_called()
+
+        _, kwargs = self.mock_record.call_args
+        self.assertEqual(kwargs["outcome"], "ai_priority")
+        self.assertEqual(kwargs["provider"], "ai_image")
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_prefer_ai_true_with_no_candidates_is_still_reported_as_fallback(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        # 진짜 후보가 아예 없었으면(품질 비교 대상 자체가 없음) 의도적
+        # 선택("ai_priority")이 아니라 기존과 같은 "fallback"이어야 한다.
+        mock_get_candidates.return_value = []
+
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        integrate_asset(SAMPLE_SCENE, self.project_path, prefer_ai=True)
+
+        _, kwargs = self.mock_record.call_args
+        self.assertEqual(kwargs["outcome"], "fallback")
 
 
 if __name__ == "__main__":

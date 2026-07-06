@@ -143,6 +143,47 @@ class TestSummarizeUsage(unittest.TestCase):
         self.assertEqual(summary["fallback_rate"], 0.0)
         self.assertNotIn("ai_image", summary["by_provider"])
 
+    # --- Sprint38: Hybrid Asset Engine reporting ---
+
+    def _record_with_outcome(self, provider, outcome):
+        return {"provider": provider, "outcome": outcome}
+
+    def test_empty_records_include_new_sprint38_fields(self):
+        summary = asset_feedback_service.summarize_usage([])
+
+        self.assertEqual(summary["outcome_counts"], {})
+        self.assertEqual(summary["estimated_ai_cost_savings_rate"], 0.0)
+
+    def test_outcome_counts_distinguish_ai_priority_from_fallback(self):
+        records = (
+            [self._record_with_outcome("pexels_image", "success")] * 6
+            + [self._record_with_outcome("ai_image", "ai_priority")] * 1
+            + [self._record_with_outcome("ai_image", "fallback")] * 3
+        )
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertEqual(summary["outcome_counts"]["success"], 6)
+        self.assertEqual(summary["outcome_counts"]["ai_priority"], 1)
+        self.assertEqual(summary["outcome_counts"]["fallback"], 3)
+
+    def test_estimated_cost_savings_rate_is_inverse_of_ai_usage(self):
+        records = (
+            [self._record("pexels_image")] * 7
+            + [self._record("ai_image")] * 3
+        )
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertAlmostEqual(summary["estimated_ai_cost_savings_rate"], 0.7)
+
+    def test_all_stock_gives_full_cost_savings(self):
+        records = [self._record("pexels_video")] * 5
+
+        summary = asset_feedback_service.summarize_usage(records)
+
+        self.assertEqual(summary["estimated_ai_cost_savings_rate"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

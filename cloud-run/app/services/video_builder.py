@@ -15,6 +15,16 @@ MAX_FADE_DURATION = 0.35
 FADE_DURATION_RATIO = 0.15
 MIN_FADE_DURATION = 0.08
 
+# Cross-dissolve 겹침 길이(초). Scene Timeline의 기준은 항상 audio
+# duration이다 - concatenate_videoclips가 겹치는 만큼(padding) 영상
+# 전체 길이를 줄이므로, 마지막 scene을 제외한 모든 clip의 재생 길이에
+# 이 값을 그대로 더해 정확히 상쇄한다(Sprint37-1). 세 곳(clip 길이
+# 연장 / CrossFadeIn·CrossFadeOut 길이 / concatenate_videoclips의
+# padding)이 항상 동일한 이 상수 하나만 참조해야 한다 - 그래야 최종
+# 영상 길이가 audio_service.py/subtitle_service.py가 이미 쓰고 있는
+# 겹침 없는 누적 scene 타임라인과 정확히 일치한다.
+CROSSFADE_DURATION = 0.35
+
 
 def _fade_duration(duration):
     return max(
@@ -103,7 +113,7 @@ def build_video(project_path: str):
         "scenes",
     )
 
-    raw_clips = []
+    asset_paths = []
     durations = []
 
     for scene in scenes:
@@ -127,27 +137,38 @@ def build_video(project_path: str):
 
         audio = AudioFileClip(scene_audio)
 
-        duration = audio.duration
+        durations.append(audio.duration)
 
         audio.close()
 
+        asset_paths.append(asset_path)
+
+    last_index = len(asset_paths) - 1
+    overlap = CROSSFADE_DURATION
+
+    raw_clips = []
+
+    for index, asset_path in enumerate(asset_paths):
+
+        # 마지막 scene을 제외한 모든 clip은 다음 clip과 겹치는(overlap)
+        # cross-dissolve 구간만큼 Ken Burns 재생 길이를 늘린다 - 이래야
+        # concatenate_videoclips가 padding=-overlap으로 줄이는 길이가
+        # 정확히 상쇄되어, 최종 영상 길이가 audio duration(scene
+        # timeline의 기준)과 일치한다.
+        clip_duration = (
+            durations[index]
+            if index == last_index
+            else durations[index] + overlap
+        )
+
         clip = build_kenburns_clip(
             asset_path,
-            duration,
+            clip_duration,
         )
 
         clip = clip.with_fps(30)
 
         raw_clips.append(clip)
-        durations.append(duration)
-
-    # 인접 clip끼리 겹쳐야(overlap) 실제 cross-dissolve가 되는데,
-    # concatenate_videoclips의 padding은 clip 쌍마다가 아니라 전체
-    # concatenation에 적용되는 단일 값이라, 어떤 scene의 안전 fade
-    # 한도도 넘지 않도록 가장 작은 값을 공통 overlap으로 사용한다.
-    overlap = min(_fade_duration(d) for d in durations)
-
-    last_index = len(raw_clips) - 1
 
     clips = []
 
