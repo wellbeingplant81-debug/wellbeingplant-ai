@@ -34,3 +34,11 @@ ENABLE_PROMPT_LEARNING = False
 # decision engine - never modifies data["scenes"] or any other pipeline
 # output, only ever adds data["director_decision"] when enabled.
 ENABLE_AI_DIRECTOR = False
+
+# Sprint51 Phase 1 - Viral Writer Engine. Off by default. Only swaps which
+# prompt template script_service.generate_script() sends to Gemini - the
+# output JSON shape (title/hook/script/scenes[scene,narration,image_prompt])
+# is unchanged either way, so every downstream module (Sprint44-50) keeps
+# working without modification. Flag off means byte-for-byte identical
+# behavior to pre-Sprint51.
+ENABLE_VIRAL_WRITER = False

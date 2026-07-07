@@ -2,7 +2,9 @@ import json
 
 from google import genai
 
+from app import config
 from app.prompts.script_prompt import SCRIPT_PROMPT
+from app.prompts.viral_script_prompt import VIRAL_SCRIPT_PROMPT
 
 
 client = genai.Client(
@@ -18,7 +20,9 @@ def generate_script(
     scene_count: int = 6,
 ):
 
-    prompt = SCRIPT_PROMPT.substitute(
+    template = VIRAL_SCRIPT_PROMPT if config.ENABLE_VIRAL_WRITER else SCRIPT_PROMPT
+
+    prompt = template.substitute(
         topic=topic,
         target_duration=target_duration,
         scene_count=scene_count,
