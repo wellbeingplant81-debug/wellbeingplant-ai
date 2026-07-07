@@ -1,7 +1,10 @@
 import json
+import logging
 import os
 import tempfile
 import time
+
+logger = logging.getLogger(__name__)
 
 
 def atomic_replace(src: str, dst: str, retries: int = 5, initial_delay: float = 0.05):
@@ -21,7 +24,19 @@ def atomic_replace(src: str, dst: str, retries: int = 5, initial_delay: float = 
             return
         except PermissionError:
             if attempt == retries - 1:
+                logger.warning(
+                    "atomic_replace failed after %s retries: %s",
+                    retries,
+                    dst,
+                    exc_info=True,
+                )
                 raise
+            logger.debug(
+                "atomic_replace retry %s/%s: %s",
+                attempt + 1,
+                retries,
+                dst,
+            )
             time.sleep(delay)
             delay *= 2
 

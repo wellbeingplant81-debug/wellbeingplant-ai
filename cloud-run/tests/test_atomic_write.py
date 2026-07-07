@@ -69,6 +69,68 @@ class TestAtomicReplace(unittest.TestCase):
             self.assertEqual(mock_sleep.call_count, 2)
 
 
+class TestAtomicReplaceLogging(unittest.TestCase):
+
+    def test_retry_logs_debug(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            src = os.path.join(tmp_dir, "src.txt")
+            dst = os.path.join(tmp_dir, "dst.txt")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write("hello")
+
+            real_replace = os.replace
+            call_count = {"n": 0}
+
+            def flaky_replace(s, d):
+                call_count["n"] += 1
+                if call_count["n"] < 2:
+                    raise PermissionError("WinError 5")
+                real_replace(s, d)
+
+            with patch("os.replace", side_effect=flaky_replace), \
+                 patch("time.sleep", return_value=None), \
+                 patch.object(atomic_write, "logger") as mock_logger:
+                atomic_write.atomic_replace(src, dst, retries=5, initial_delay=0.01)
+
+            mock_logger.debug.assert_called_once_with(
+                "atomic_replace retry %s/%s: %s", 1, 5, dst,
+            )
+            mock_logger.warning.assert_not_called()
+
+    def test_final_failure_logs_warning(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            src = os.path.join(tmp_dir, "src.txt")
+            dst = os.path.join(tmp_dir, "dst.txt")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write("hello")
+
+            with patch("os.replace", side_effect=PermissionError("WinError 5")), \
+                 patch("time.sleep", return_value=None), \
+                 patch.object(atomic_write, "logger") as mock_logger:
+                with self.assertRaises(PermissionError):
+                    atomic_write.atomic_replace(src, dst, retries=3, initial_delay=0.01)
+
+            mock_logger.warning.assert_called_once_with(
+                "atomic_replace failed after %s retries: %s",
+                3,
+                dst,
+                exc_info=True,
+            )
+
+    def test_success_on_first_try_logs_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            src = os.path.join(tmp_dir, "src.txt")
+            dst = os.path.join(tmp_dir, "dst.txt")
+            with open(src, "w", encoding="utf-8") as f:
+                f.write("hello")
+
+            with patch.object(atomic_write, "logger") as mock_logger:
+                atomic_write.atomic_replace(src, dst)
+
+            mock_logger.debug.assert_not_called()
+            mock_logger.warning.assert_not_called()
+
+
 class TestAtomicWriteJson(unittest.TestCase):
 
     def test_writes_and_reads_back(self):
