@@ -12,6 +12,7 @@ from app.steps import step06_thumbnail
 from app.steps import step07_quality
 from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
+from app.services import prompt_learning_service
 from app.services import prompt_optimization_service
 from app.services import regeneration_service
 from app.services import scene_planner_service
@@ -100,6 +101,14 @@ def run_pipeline(
             )
         except Exception as exc:
             print(f"Prompt optimization step failed: {exc}")
+
+    if config.ENABLE_PROMPT_LEARNING and data.get("prompt_metrics"):
+        try:
+            prompt_learning_service.learn_from_scenes(
+                data["scenes"], data.get("scene_plan"), data["prompt_metrics"],
+            )
+        except Exception as exc:
+            print(f"Prompt learning step failed: {exc}")
 
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(

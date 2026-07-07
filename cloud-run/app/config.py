@@ -22,3 +22,10 @@ ENABLE_PROMPT_EFFECTIVENESS = False
 # prompt_metrics - if Effectiveness is disabled (or failed), image_prompt
 # stays byte-for-byte identical regardless of this flag.
 ENABLE_PROMPT_OPTIMIZATION = False
+
+# Sprint49 - Self-Learning Prompt Engine. Off by default. In-memory only
+# (no file I/O, no DB, no external calls) - never adds keys to
+# project_data and never changes data["scenes"], so this flag cannot
+# affect the pipeline's output either way. Only takes effect when
+# ENABLE_PROMPT_EFFECTIVENESS also produced prompt_metrics to learn from.
+ENABLE_PROMPT_LEARNING = False
