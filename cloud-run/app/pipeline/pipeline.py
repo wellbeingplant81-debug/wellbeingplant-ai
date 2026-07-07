@@ -3,6 +3,7 @@ import os
 import time
 
 from app import config
+from app.services import ai_director_service
 from app.steps import step01_script
 from app.steps import step02_assets
 from app.steps import step03_tts
@@ -91,6 +92,9 @@ def run_pipeline(
         except Exception as exc:
             print(f"Prompt effectiveness step failed: {exc}")
 
+    pre_optimization_scenes = data["scenes"]
+    optimized_scene_ids = set()
+
     if config.ENABLE_PROMPT_OPTIMIZATION and data.get("prompt_metrics"):
         try:
             data["scenes"] = prompt_optimization_service.optimize_scenes(
@@ -99,6 +103,15 @@ def run_pipeline(
                 data["prompt_metrics"],
                 data.get("scene_plan"),
             )
+            before_prompt_by_scene = {
+                scene.get("scene"): scene.get("image_prompt")
+                for scene in pre_optimization_scenes
+            }
+            optimized_scene_ids = {
+                scene.get("scene")
+                for scene in data["scenes"]
+                if before_prompt_by_scene.get(scene.get("scene")) != scene.get("image_prompt")
+            }
         except Exception as exc:
             print(f"Prompt optimization step failed: {exc}")
 
@@ -109,6 +122,23 @@ def run_pipeline(
             )
         except Exception as exc:
             print(f"Prompt learning step failed: {exc}")
+
+    if config.ENABLE_AI_DIRECTOR:
+        try:
+            best_pattern = (
+                prompt_learning_service.get_best_pattern()
+                if config.ENABLE_PROMPT_LEARNING else None
+            )
+            data["director_decision"] = ai_director_service.evaluate_scenes(
+                data["scenes"],
+                data.get("scene_plan"),
+                data.get("prompt_metrics"),
+                data.get("asset_quality_results"),
+                best_pattern,
+                optimized_scene_ids,
+            )
+        except Exception as exc:
+            print(f"AI director step failed: {exc}")
 
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(

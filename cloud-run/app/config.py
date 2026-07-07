@@ -29,3 +29,8 @@ ENABLE_PROMPT_OPTIMIZATION = False
 # affect the pipeline's output either way. Only takes effect when
 # ENABLE_PROMPT_EFFECTIVENESS also produced prompt_metrics to learn from.
 ENABLE_PROMPT_LEARNING = False
+
+# Sprint50 - AI Director v1. Off by default. Pure rule-based read-only
+# decision engine - never modifies data["scenes"] or any other pipeline
+# output, only ever adds data["director_decision"] when enabled.
+ENABLE_AI_DIRECTOR = False
