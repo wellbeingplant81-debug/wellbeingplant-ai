@@ -110,6 +110,34 @@ class TestTtsProviderRouting(unittest.TestCase):
         )
         mock_elevenlabs.generate_voice.assert_not_called()
 
+    def test_google_path_applies_speech_normalization(
+        self, mock_elevenlabs, mock_google,
+    ):
+        # Sprint52 - Speech Normalization Engine이 실제로 Google TTS
+        # 호출 경로에 연결되어 있는지 확인한다: "2번"이 그대로가 아니라
+        # "두 번"으로 바뀐 텍스트가 전달돼야 한다.
+        os.environ["TTS_PROVIDER"] = "google"
+
+        generate_voice("밤에 2번 이상 화장실 가세요?", "out.mp3")
+
+        mock_google.generate_voice.assert_called_once_with(
+            "밤에 두 번 이상 화장실 가세요?", "out.mp3",
+        )
+        mock_elevenlabs.generate_voice.assert_not_called()
+
+    def test_elevenlabs_path_does_not_apply_speech_normalization(
+        self, mock_elevenlabs, mock_google,
+    ):
+        # Sprint52 범위는 "Google TTS 입력 텍스트만" - ElevenLabs
+        # 경로는 이 스프린트에서 건드리지 않는다.
+        os.environ["TTS_PROVIDER"] = "elevenlabs"
+
+        generate_voice("2번", "out.mp3")
+
+        called_text = mock_elevenlabs.generate_voice.call_args[0][0]
+        self.assertIn("2번", called_text)
+        self.assertNotIn("두 번", called_text)
+
 
 if __name__ == "__main__":
     unittest.main()

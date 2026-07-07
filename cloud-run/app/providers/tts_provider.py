@@ -2,6 +2,7 @@ import os
 
 from app.providers import elevenlabs_provider
 from app.providers import google_tts_provider
+from app.services.speech_normalizer import normalize_for_speech
 from app.services.voice_quality_engine import optimize_for_tts
 
 
@@ -19,4 +20,8 @@ def generate_voice(text: str, output_file: str):
         optimized_text = optimize_for_tts(text)
         return elevenlabs_provider.generate_voice(optimized_text, output_file)
 
-    return google_tts_provider.generate_voice(text, output_file)
+    # Sprint52 - Speech Normalization Engine: "2번" 같은 표기를 실제
+    # 발음("두 번")으로 바꿔 Google TTS에만 전달한다. 자막/narration
+    # 원문은 절대 바꾸지 않는다 - optimize_for_tts()와 동일한 원칙.
+    normalized_text = normalize_for_speech(text)
+    return google_tts_provider.generate_voice(normalized_text, output_file)
