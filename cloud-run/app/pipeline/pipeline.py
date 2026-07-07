@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+from app import config
 from app.steps import step01_script
 from app.steps import step02_assets
 from app.steps import step03_tts
@@ -10,6 +11,7 @@ from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
 from app.services import regeneration_service
+from app.services import scene_planner_service
 from app.services import visual_consistency_engine
 
 
@@ -55,6 +57,12 @@ def run_pipeline(
         project_path,
     )
     timings["script_generation"] = time.perf_counter() - t0
+
+    if config.ENABLE_SCENE_PLANNER:
+        try:
+            data["scene_plan"] = scene_planner_service.plan_scenes(data)
+        except Exception as exc:
+            print(f"Scene planner step failed: {exc}")
 
     data["scenes"] = visual_consistency_engine.apply_visual_consistency(
         data["scenes"],
