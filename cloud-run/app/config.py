@@ -10,3 +10,9 @@ ENABLE_SCENE_PLANNER = False
 # disabled (or failed), image_prompt stays byte-for-byte identical
 # regardless of this flag.
 ENABLE_PROMPT_ENRICHMENT = False
+
+# Sprint47 - Prompt Effectiveness Engine. Off by default. Measurement
+# only - never changes data["scenes"] or any generation output, so
+# leaving this False (or True) never affects the pipeline's rendered
+# result, only whether project_data["prompt_metrics"] is populated.
+ENABLE_PROMPT_EFFECTIVENESS = False

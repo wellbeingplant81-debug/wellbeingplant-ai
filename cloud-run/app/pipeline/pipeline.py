@@ -10,6 +10,7 @@ from app.steps import step04_subtitle
 from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
+from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
 from app.services import regeneration_service
 from app.services import scene_planner_service
@@ -70,6 +71,8 @@ def run_pipeline(
         channel,
     )
 
+    pre_enrichment_scenes = data["scenes"]
+
     if config.ENABLE_PROMPT_ENRICHMENT and data.get("scene_plan"):
         try:
             data["scenes"] = prompt_enrichment_service.apply_prompt_enrichment(
@@ -77,6 +80,14 @@ def run_pipeline(
             )
         except Exception as exc:
             print(f"Prompt enrichment step failed: {exc}")
+
+    if config.ENABLE_PROMPT_EFFECTIVENESS:
+        try:
+            data["prompt_metrics"] = prompt_effectiveness_service.evaluate_scenes(
+                pre_enrichment_scenes, data["scenes"], data.get("scene_plan"),
+            )
+        except Exception as exc:
+            print(f"Prompt effectiveness step failed: {exc}")
 
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(
