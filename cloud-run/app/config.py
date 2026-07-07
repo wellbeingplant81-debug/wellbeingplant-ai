@@ -16,3 +16,9 @@ ENABLE_PROMPT_ENRICHMENT = False
 # leaving this False (or True) never affects the pipeline's rendered
 # result, only whether project_data["prompt_metrics"] is populated.
 ENABLE_PROMPT_EFFECTIVENESS = False
+
+# Sprint48 - Adaptive Prompt Optimization Engine. Off by default. Only
+# takes effect when ENABLE_PROMPT_EFFECTIVENESS also produced
+# prompt_metrics - if Effectiveness is disabled (or failed), image_prompt
+# stays byte-for-byte identical regardless of this flag.
+ENABLE_PROMPT_OPTIMIZATION = False
