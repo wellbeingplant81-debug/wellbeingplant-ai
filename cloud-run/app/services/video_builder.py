@@ -25,6 +25,85 @@ MIN_FADE_DURATION = 0.08
 # 겹침 없는 누적 scene 타임라인과 정확히 일치한다.
 CROSSFADE_DURATION = 0.35
 
+# Sprint55 - Adaptive Scene Timing. 각 scene의 Ken Burns clip 길이는
+# 이미 Sprint37-1부터 그 scene의 실제 narration(mp3) 길이를 그대로
+# 쓴다 - "narration 길이에 맞춘 자동 duration"은 이미 존재한다. 여기서
+# 추가하는 건 그 위에 씌우는 최소/최대 안전장치뿐이다: 너무 짧은
+# scene(예: 한 문장짜리)은 Ken Burns 모션이 부자연스럽게 빨라지고,
+# 너무 긴 scene(예: Duration Optimizer가 무음을 patch 붙인 마지막
+# scene)은 화면이 늘어져 보인다.
+MIN_SCENE_DURATION = 2.0
+MAX_SCENE_DURATION = 14.0
+
+
+def _apply_duration_limits(
+    raw_durations: list,
+    min_duration: float = MIN_SCENE_DURATION,
+    max_duration: float = MAX_SCENE_DURATION,
+) -> list:
+    """
+    각 scene의 실제 narration 길이(raw_durations)를 [min_duration,
+    max_duration] 범위로 눌러 담되, 전체 합(=narration 총 길이)은
+    정확히 보존한다. 범위를 벗어난 scene을 경계값으로 고정하고, 그
+    차이를 아직 고정되지 않은 나머지 scene들에 비율대로 나눠 분배하는
+    것을 반복한다(water-filling). 총합 자체가 [n*min, n*max] 범위
+    밖이라 두 조건을 동시에 만족할 수 없으면, 범위 제한보다 합 보존을
+    우선한다 - "scene duration 합은 narration 길이와 동일"이 하드
+    요구사항이기 때문이다.
+
+    순수 함수입니다 - 입력 리스트를 변경하지 않습니다.
+    """
+
+    n = len(raw_durations)
+
+    if n == 0:
+        return []
+
+    total = sum(raw_durations)
+
+    if total < min_duration * n or total > max_duration * n:
+        # 두 제약을 동시에 만족하는 것 자체가 불가능 - 합 보존을 우선하고
+        # 그대로 반환한다.
+        return list(raw_durations)
+
+    adjusted = list(raw_durations)
+    locked = [False] * n
+
+    for _ in range(n):
+
+        for i in range(n):
+            if locked[i]:
+                continue
+            if adjusted[i] < min_duration:
+                adjusted[i] = min_duration
+                locked[i] = True
+            elif adjusted[i] > max_duration:
+                adjusted[i] = max_duration
+                locked[i] = True
+
+        deficit = total - sum(adjusted)
+
+        if abs(deficit) < 1e-9:
+            break
+
+        free_indices = [i for i in range(n) if not locked[i]]
+
+        if not free_indices:
+            adjusted[-1] += deficit
+            break
+
+        free_total = sum(adjusted[i] for i in free_indices)
+
+        for i in free_indices:
+            share = (
+                adjusted[i] / free_total
+                if free_total > 0
+                else 1 / len(free_indices)
+            )
+            adjusted[i] += deficit * share
+
+    return adjusted
+
 
 def _fade_duration(duration):
     return max(
@@ -142,6 +221,8 @@ def build_video(project_path: str):
         audio.close()
 
         asset_paths.append(asset_path)
+
+    durations = _apply_duration_limits(durations)
 
     last_index = len(asset_paths) - 1
     overlap = CROSSFADE_DURATION
