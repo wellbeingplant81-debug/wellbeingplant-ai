@@ -144,14 +144,20 @@ class RealAudioMixTestCase(unittest.TestCase):
         return self._make_tone(path, seconds, freq=440)
 
     def _mean_volume_db(self, path: str) -> float:
+        return self._volumedetect(path, "mean_volume")
+
+    def _max_volume_db(self, path: str) -> float:
+        return self._volumedetect(path, "max_volume")
+
+    def _volumedetect(self, path: str, key: str) -> float:
         result = subprocess.run(
             ["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
             capture_output=True, text=True,
         )
         for line in result.stderr.splitlines():
-            if "mean_volume" in line:
+            if key in line:
                 return float(line.split(":")[1].strip().split(" ")[0])
-        raise AssertionError(f"mean_volume not found in ffmpeg output: {result.stderr}")
+        raise AssertionError(f"{key} not found in ffmpeg output: {result.stderr}")
 
 
 class TestLoopShortBgm(RealAudioMixTestCase):
@@ -180,6 +186,30 @@ class TestTrimLongBgm(RealAudioMixTestCase):
 
         output = os.path.join(self.project_path, "audio", "final_audio.mp3")
         self.assertAlmostEqual(get_audio_duration(output), 5.0, delta=0.15)
+
+
+class TestNarrationNotAttenuatedByMix(RealAudioMixTestCase):
+    """amix의 기본 normalize=1은 스트림 수로 나눠(2개 입력이면 -6dB)
+    narration까지 조용히 줄여버린다 - "음성이 항상 최우선"이라는
+    Sprint54 원칙과 NARRATION_VOLUME_DB=0의 의미가 깨진다. 실측으로
+    회귀를 잠근다."""
+
+    def test_narration_peak_volume_is_not_attenuated_by_bgm_mix(self):
+        voice_path = self._make_voice(6.0)
+        bgm_path = os.path.join(self.tmp_dir, "bgm.mp3")
+        self._make_tone(bgm_path, 6.0, freq=880)
+
+        voice_alone_max_db = self._max_volume_db(voice_path)
+
+        with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
+            mix_audio(self.project_path)
+
+        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        mix_max_db = self._max_volume_db(output)
+
+        # amix normalize=1이면 약 -6dB 떨어진다 - 1dB 이내로 유지되어야
+        # narration이 실질적으로 그대로 유지된 것이다.
+        self.assertAlmostEqual(mix_max_db, voice_alone_max_db, delta=1.0)
 
 
 class TestMergeContainsBgm(RealAudioMixTestCase):

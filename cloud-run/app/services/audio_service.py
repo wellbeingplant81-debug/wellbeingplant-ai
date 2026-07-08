@@ -103,7 +103,12 @@ def mix_audio(project_path: str, bgm_category: str = None):
             "[bgm];"
             f"[0:a]volume={NARRATION_VOLUME_DB}dB[voice];"
             "[voice][bgm]"
-            "amix=inputs=2:duration=first:dropout_transition=2"
+            # normalize=0 필수: amix의 기본값(normalize=1)은 스트림 수로
+            # 나눠서(2개 입력이면 -6dB) narration까지 조용히 더 줄여버린다 -
+            # "음성이 항상 최우선"이라는 원칙과 NARRATION_VOLUME_DB=0의
+            # 의미가 깨진다. 실측(volumedetect)으로 확인: normalize=0
+            # 없이는 narration max_volume이 -1.5dB -> -7.6dB로 떨어졌다.
+            "amix=inputs=2:duration=first:dropout_transition=2:normalize=0"
         ),
         "-c:a",
         "mp3",
