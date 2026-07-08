@@ -1,6 +1,16 @@
 import os
 import subprocess
 
+from app.services.bgm_service import select_bgm
+from app.services.duration_optimizer import get_audio_duration
+
+# Sprint54-1 - BGM 볼륨/페이드 상수. narration은 그대로(0dB), BGM은
+# 충분히 낮춰서(-28dB) narration을 절대 가리지 않게 한다.
+NARRATION_VOLUME_DB = 0.0
+BGM_VOLUME_DB = -28.0
+BGM_FADE_IN_SECONDS = 0.5
+BGM_FADE_OUT_SECONDS = 1.0
+
 
 def concat_scene_audio(scene_audio_paths, output_file):
 
@@ -52,36 +62,29 @@ def concat_scene_audio(scene_audio_paths, output_file):
     return output_file
 
 
-def mix_audio(project_path: str):
+def mix_audio(project_path: str, bgm_category: str = None):
 
     ffmpeg = "ffmpeg"
-    
+
     voice = os.path.join(
         project_path,
         "audio",
         "voice.mp3",
     )
 
-    project_root = os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-        )
-    )
-
-    bgm = os.path.join(
-        project_root,
-        "assets",
-        "bgm",
-        "relax.mp3",
-    )
+    bgm = select_bgm(bgm_category)
 
     output = os.path.join(
         project_path,
         "audio",
         "final_audio.mp3",
     )
+
+    # Sprint53 Duration Optimizer가 이미 확정한 실제 narration 길이에
+    # 맞춰 BGM fade-out 시작 시점을 계산한다 - 영상 길이가 더 이상
+    # 고정 45초가 아니므로(43~47초) 하드코딩된 값을 쓸 수 없다.
+    voice_duration = get_audio_duration(voice)
+    fade_out_start = max(voice_duration - BGM_FADE_OUT_SECONDS, 0.0)
 
     command = [
         ffmpeg,
@@ -94,12 +97,12 @@ def mix_audio(project_path: str):
         bgm,
         "-filter_complex",
         (
-            "[1:a]"
-            "volume=0.05,"
-            "afade=t=in:st=0:d=2,"
-            "afade=t=out:st=43:d=2"
+            f"[1:a]volume={BGM_VOLUME_DB}dB,"
+            f"afade=t=in:st=0:d={BGM_FADE_IN_SECONDS},"
+            f"afade=t=out:st={fade_out_start:.3f}:d={BGM_FADE_OUT_SECONDS}"
             "[bgm];"
-            "[0:a][bgm]"
+            f"[0:a]volume={NARRATION_VOLUME_DB}dB[voice];"
+            "[voice][bgm]"
             "amix=inputs=2:duration=first:dropout_transition=2"
         ),
         "-c:a",
