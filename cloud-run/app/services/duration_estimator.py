@@ -16,15 +16,22 @@ import re
 
 from app.services.speech_normalizer import normalize_for_speech
 
-# output/ 아래 실제 생성된 프로젝트(Chirp3-HD-Aoede, scene 150개 /
-# 영상 48개)의 mp3 실측 길이 대 정규화된 narration 글자수로 최소자승
-# 회귀(intercept 없음)해서 구한 값. 영상 전체(voice.mp3) 단위로는
-# 평균 절대오차 약 1.56초(중앙값 1.19초, 42초 안팎 영상 기준 약
-# 3.6%) 수준이었다. tests/test_duration_estimator.py의
-# TestCalibrationAgainstRealAudio가 실제 두 프로젝트로 이 값을 검증한다.
-DEFAULT_CHARS_PER_SECOND = 5.3
-SENTENCE_PAUSE_SECONDS = 0.08
-COMMA_PAUSE_SECONDS = 0.02
+# 실제 Google Cloud TTS(ko-KR-Chirp3-HD-Aoede)를 호출해서 얻은 값이다
+# (.env의 TTS_PROVIDER가 한동안 "elevenlabs"로 잘못 설정돼 있던 걸
+# Sprint53-1 도중 발견하고 "google"로 고친 뒤 재측정했다 - 이전에
+# ElevenLabs 오디오로 계산했던 계수는 이 음성엔 맞지 않아 폐기).
+#
+# 실제 대본 3개(scene 18개, output/20260706_164907·20260707_161744·
+# 20260707_155319의 narration을 그대로 재사용) 각각을 Google TTS로
+# 합성해 ffprobe로 실측한 뒤, 정규화된 narration 글자수 대비 최소자승
+# 회귀(intercept 없음)로 구했다. comma_pause는 표본에서 통계적으로
+# 0에 가까워(오히려 살짝 음수) 0으로 고정했다. 영상 전체 단위 평균
+# 절대오차는 약 1.15초(40~43초대 영상 기준 약 2.9%)였다.
+# tests/test_duration_estimator.py의 TestCalibrationAgainstRealAudio가
+# 이 세 대본으로 값을 검증한다.
+DEFAULT_CHARS_PER_SECOND = 5.93
+SENTENCE_PAUSE_SECONDS = 0.53
+COMMA_PAUSE_SECONDS = 0.0
 TARGET_DURATION_SECONDS = 45.0
 
 _NON_SPEECH_PATTERN = re.compile(r"[\s.,!?]+")

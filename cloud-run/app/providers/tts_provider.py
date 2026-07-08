@@ -10,6 +10,8 @@ def generate_voice(text: str, output_file: str):
 
     provider = os.getenv("TTS_PROVIDER", "google").lower()
 
+    print(f"Using TTS Provider: {'ElevenLabs' if provider == 'elevenlabs' else 'Google'}")
+
     if provider == "elevenlabs":
         # optimize_for_tts()는 <break time="Xs" /> 마크업을 text에
         # 직접 삽입한다 - ElevenLabs만 이 마크업을 해석하므로

@@ -146,20 +146,25 @@ class TestDurationDeviation(unittest.TestCase):
 
 class TestCalibrationAgainstRealAudio(unittest.TestCase):
     """
-    Sprint53-1 보정 근거: 실제로 생성된 프로젝트(output/20260707_161744,
-    output/20260706_164907, Google TTS ko-KR-Chirp3-HD-Aoede)의 script.json
-    narration과, 그 결과물 audio/voice.mp3를 ffprobe로 측정한 실제 길이를
-    그대로 하드코딩한 회귀 테스트. output/는 .gitignore 대상이라 CI에서도
-    재현 가능하도록 값을 직접 박아 넣는다.
+    Sprint53-1 보정 근거: 실제 대본 narration(output/20260706_164907,
+    output/20260707_161744, output/20260707_155319의 script.json에서
+    가져옴)을 실제 Google Cloud TTS(ko-KR-Chirp3-HD-Aoede)로 합성한 뒤
+    ffprobe로 측정한 실제 길이를 그대로 하드코딩한 회귀 테스트.
+    output/는 .gitignore 대상이고 매번 실제 API를 호출할 수도 없으므로,
+    한 번 실측한 값을 여기 직접 박아 넣는다.
 
-    개별 scene 150개 표본 기준 평균 절대오차는 약 0.4초(약 6%),
-    영상 전체(48개) 기준 평균 절대오차는 약 1.56초(약 3.6%)였다.
-    두 표본 모두 이보다 넉넉한 허용치인 ±3초 이내여야 한다.
+    (주의: 이 프로젝트들의 audio/voice.mp3 파일 자체는 .env가
+    TTS_PROVIDER=elevenlabs로 잘못 설정돼 있던 시점에 생성된 것이라
+    ElevenLabs 오디오다 - 여기서는 그 script.json의 narration 텍스트만
+    재사용하고, 실제 길이는 Google TTS로 새로 합성해 측정했다.)
+
+    세 대본 모두 실측 대비 오차가 이보다 넉넉한 허용치인 ±3초 이내였다
+    (실측: +2.78s, +0.16s, -0.52s).
     """
 
     TOLERANCE_SECONDS = 3.0
 
-    def test_matches_real_video_20260706_164907(self):
+    def test_matches_real_google_tts_20260706_164907(self):
         scenes = [
             {"narration": "혹시 아침에 일어나자마자 찬물부터 찾으시나요? 당신의 몸이 보내는 경고 신호, 놓치고 있을 수 있습니다."},
             {"narration": "사실 빈속에 마시는 차가운 물은 위장에 큰 부담을 줘서 소화 기능을 떨어뜨릴 수 있어요."},
@@ -168,7 +173,7 @@ class TestCalibrationAgainstRealAudio(unittest.TestCase):
             {"narration": "여기에 비타민C가 풍부한 레몬 한 조각을 더하면, 독소 배출과 피부 미용 효과까지 볼 수 있어요."},
             {"narration": "오늘부터 이 간단한 습관 하나로, 매일 아침을 세상에서 가장 건강하게 시작해 보세요!"},
         ]
-        actual_seconds = 43.65  # ffprobe로 측정한 audio/voice.mp3 실제 길이
+        actual_seconds = 40.58  # 6개 scene을 Google TTS로 합성해 ffprobe로 측정한 실제 합
 
         estimated = estimate_script_duration(scenes)
 
@@ -177,7 +182,7 @@ class TestCalibrationAgainstRealAudio(unittest.TestCase):
             self.TOLERANCE_SECONDS,
         )
 
-    def test_matches_real_video_20260707_161744(self):
+    def test_matches_real_google_tts_20260707_161744(self):
         scenes = [
             {"narration": "밤에 깨서 화장실 가는 진짜 이유, 대부분 '이것' 때문입니다."},
             {"narration": "혹시 밤에 2번 이상 깨신다면, 나이나 물 마시는 습관만 탓하고 계셨나요?"},
@@ -186,7 +191,25 @@ class TestCalibrationAgainstRealAudio(unittest.TestCase):
             {"narration": "해결책은 의외로 간단합니다. 오늘 저녁 국물은 반만 드시고, 짠 반찬 하나만 줄여보세요."},
             {"narration": "이 작은 습관 하나가 통잠의 시작입니다. 도움이 되셨다면 저장하고 꼭 실천해보세요."},
         ]
-        actual_seconds = 35.98  # ffprobe로 측정한 audio/voice.mp3 실제 길이
+        actual_seconds = 35.28  # 6개 scene을 Google TTS로 합성해 ffprobe로 측정한 실제 합
+
+        estimated = estimate_script_duration(scenes)
+
+        self.assertLessEqual(
+            abs(estimated - actual_seconds),
+            self.TOLERANCE_SECONDS,
+        )
+
+    def test_matches_real_google_tts_20260707_155319(self):
+        scenes = [
+            {"narration": "밤에 2번 이상 화장실 가세요? 물 때문이 아닐 수 있습니다."},
+            {"narration": "나이 들면 당연하다 생각했나요? 혹은 자기 전 마신 물을 탓했나요? 사실 많은 분들이 진짜 원인을 놓치고 있거든요."},
+            {"narration": "전문가들이 지목하는 의외의 원인은 바로 저녁 식단, 특히 '소금'입니다."},
+            {"narration": "짠 음식을 먹으면 우리 몸이 나트륨 농도를 맞추려 밤새 수분을 끌어모으고, 이게 전부 소변으로 만들어지는 겁니다."},
+            {"narration": "오늘 저녁부터 국, 찌개 국물은 반만 드셔보세요. 이것만으로도 밤이 정말 편안해질 수 있습니다."},
+            {"narration": "오늘 저녁 식단부터 싱겁게 바꿔보세요. 증상이 계속된다면 전문의와 꼭 상담하시구요."},
+        ]
+        actual_seconds = 42.94  # 6개 scene을 Google TTS로 합성해 ffprobe로 측정한 실제 합
 
         estimated = estimate_script_duration(scenes)
 
