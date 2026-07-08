@@ -11,6 +11,23 @@ BGM_VOLUME_DB = -28.0
 BGM_FADE_IN_SECONDS = 0.5
 BGM_FADE_OUT_SECONDS = 1.0
 
+# Sprint54-2 - BGM Ducking. ffmpeg sidechaincompress로 narration을
+# 사이드체인 삼아 BGM만 실시간으로 누른다 - narration 구간을 텍스트/
+# 타임스탬프로 미리 검출하지 않고, 오디오 레벨 자체가 트리거가 되므로
+# scene 경계나 문장 길이와 무관하게 항상 정확하다.
+#
+# 값은 실제 narration(output/20260708_115613/audio/voice.mp3, 실측
+# mean -21.9dB / max -1.5dB)과 실제 BGM 트랙으로 튜닝했다:
+# threshold=0.15(~-16.5dB)는 조용한 구간(무음에 가까움)에는 반응하지
+# 않고 실제 말하는 구간에서만 켜지며, ratio=8/attack=20ms로 빠르게
+# 눌렀다가 release=400ms로 자연스럽게 복귀한다. makeup=1(추가 부스트
+# 없음 - BGM을 더 키우지 않고 누르기만 한다).
+DUCK_THRESHOLD = 0.15
+DUCK_RATIO = 8
+DUCK_ATTACK_MS = 20
+DUCK_RELEASE_MS = 400
+DUCK_MAKEUP = 1
+
 
 def concat_scene_audio(scene_audio_paths, output_file):
 
@@ -102,7 +119,13 @@ def mix_audio(project_path: str, bgm_category: str = None):
             f"afade=t=out:st={fade_out_start:.3f}:d={BGM_FADE_OUT_SECONDS}"
             "[bgm];"
             f"[0:a]volume={NARRATION_VOLUME_DB}dB[voice];"
-            "[voice][bgm]"
+            # Sprint54-2 - narration을 사이드체인으로 써서 BGM만 누른다.
+            # narration 자체는 이 필터의 대상이 아니므로(사이드체인 입력일
+            # 뿐) 그대로 유지된다.
+            f"[bgm][voice]sidechaincompress=threshold={DUCK_THRESHOLD}:"
+            f"ratio={DUCK_RATIO}:attack={DUCK_ATTACK_MS}:"
+            f"release={DUCK_RELEASE_MS}:makeup={DUCK_MAKEUP}[bgm_ducked];"
+            "[voice][bgm_ducked]"
             # normalize=0 필수: amix의 기본값(normalize=1)은 스트림 수로
             # 나눠서(2개 입력이면 -6dB) narration까지 조용히 더 줄여버린다 -
             # "음성이 항상 최우선"이라는 원칙과 NARRATION_VOLUME_DB=0의
