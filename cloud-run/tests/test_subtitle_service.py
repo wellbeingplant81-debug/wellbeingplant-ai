@@ -1,6 +1,11 @@
+import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(
     0,
@@ -14,9 +19,11 @@ from app.services.subtitle_service import (
     SAFE_AREA_MAX_LINE_WIDTH,
     _display_width,
     _split_sentence_by_words,
+    create_subtitle,
     split_subtitle,
     wrap_to_safe_lines,
 )
+from app.services.subtitle_placement_service import POSITION_BOTTOM, POSITION_TOP
 
 
 class TestSplitSentenceByWords(unittest.TestCase):
@@ -239,6 +246,81 @@ class TestWrapToSafeLines(unittest.TestCase):
 
         rejoined_words = wrapped.replace("\n", " ").split()
         self.assertEqual(rejoined_words, text.split())
+
+
+class TestCreateSubtitlePositionTags(unittest.TestCase):
+    """Sprint57 - Smart Subtitle Placement v1. create_subtitle()가
+    scene별로 choose_subtitle_position() 결과를 SRT 텍스트 맨 앞에
+    ASS override tag({\\an8}=상단, {\\an2}=하단)로 심는지 검증한다.
+    실제 이미지 복잡도 분석(subtitle_placement_service 자체)은 이미
+    별도 테스트로 커버되므로, 여기서는 choose_subtitle_position을
+    mock으로 고정해 배선만 확인한다."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.project_path = os.path.join(self.tmp_dir, "project")
+        os.makedirs(os.path.join(self.project_path, "audio", "scenes"))
+        os.makedirs(os.path.join(self.project_path, "images"))
+
+        scenes = [
+            {"scene": 1, "narration": "안녕하세요.", "image_prompt": "p1"},
+            {"scene": 2, "narration": "반갑습니다.", "image_prompt": "p2"},
+        ]
+
+        with open(os.path.join(self.project_path, "script.json"), "w", encoding="utf-8") as f:
+            json.dump({"scenes": scenes}, f, ensure_ascii=False)
+
+        for i in (1, 2):
+            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.mp3")
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
+                 "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _read_srt(self):
+        with open(
+            os.path.join(self.project_path, "subtitle", "subtitle.srt"),
+            "r", encoding="utf-8",
+        ) as f:
+            return f.read()
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        side_effect=[POSITION_TOP, POSITION_BOTTOM],
+    )
+    def test_scene_positions_are_embedded_as_ass_override_tags(self, mock_choose):
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+
+        self.assertIn(r"{\an8}안녕하세요.", srt_text)
+        self.assertIn(r"{\an2}반갑습니다.", srt_text)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_position_is_resolved_once_per_scene_not_per_cue(self, mock_choose):
+        create_subtitle(self.project_path)
+
+        self.assertEqual(mock_choose.call_count, 2)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_TOP,
+    )
+    def test_existing_srt_structure_is_unchanged_besides_tag(self, mock_choose):
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+
+        self.assertIn("-->", srt_text)
+        self.assertTrue(srt_text.strip().startswith("1"))
 
 
 if __name__ == "__main__":

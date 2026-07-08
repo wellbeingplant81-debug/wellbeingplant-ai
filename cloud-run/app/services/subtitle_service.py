@@ -8,6 +8,21 @@ from datetime import timedelta
 from moviepy import AudioFileClip
 
 from app.services.kenburns import VIDEO_WIDTH
+from app.services.subtitle_placement_service import (
+    POSITION_TOP,
+    choose_subtitle_position,
+)
+from app.services.video_builder import _resolve_asset_path
+
+# Sprint57 - Smart Subtitle Placement v1. choose_subtitle_position()이
+# 고른 "top"/"bottom"을 libass가 SRT 안에서도 그대로 해석하는 ASS
+# override tag로 바꾼다. force_style의 기본 Alignment=2(하단)는
+# final_video_service.py에서 그대로 유지하고, 상단으로 골라진 scene의
+# cue에만 {\an8}을 앞에 붙여 그 cue만 상단으로 덮어쓴다.
+_POSITION_TAGS = {
+    POSITION_TOP: r"{\an8}",
+}
+_DEFAULT_POSITION_TAG = r"{\an2}"
 
 
 MAX_CHARS = 18
@@ -380,6 +395,14 @@ def create_subtitle(project_path: str):
             print("NARRATION")
             print(narration)
 
+            # Sprint57 - scene 이미지 상/하단 복잡도를 비교해 이
+            # scene의 모든 cue에 공통으로 적용할 위치를 한 번만
+            # 정한다(scene 안에서 위치가 cue마다 바뀌면 자막이
+            # 산만해지므로).
+            asset_path = _resolve_asset_path(project_path, scene)
+            position = choose_subtitle_position(asset_path)
+            position_tag = _POSITION_TAGS.get(position, _DEFAULT_POSITION_TAG)
+
             subtitles = split_subtitle(
                 narration
             )
@@ -426,7 +449,7 @@ def create_subtitle(project_path: str):
                 )
 
                 srt.write(
-                    wrap_to_safe_lines(subtitle)
+                    position_tag + wrap_to_safe_lines(subtitle)
                 )
 
                 srt.write("\n\n")
