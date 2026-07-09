@@ -8,9 +8,11 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from app.services import asset_usage_planner
 from app.services.video_builder import (
     _build_scene_clip,
     _resolve_asset_paths,
+    _resolve_cut_durations,
     _split_duration_equally,
 )
 
@@ -165,6 +167,165 @@ class TestBuildSceneClip(unittest.TestCase):
 
         concatenated_clips = mock_concatenate_videoclips.call_args.args[0]
         self.assertEqual(len(concatenated_clips), 2)
+
+
+class TestResolveCutDurations(unittest.TestCase):
+    """
+    Sprint64-4 - role이 있는 asset에 한해 asset_usage_planner의 role
+    가중 duration을 사용하고, 그 외에는 기존 균등 분배
+    (_split_duration_equally)를 그대로 유지한다.
+    """
+
+    def test_all_roles_present_matches_asset_usage_planner(self):
+        assets = [
+            {"path": "a.png", "role": "environment"},
+            {"path": "b.png", "role": "subject"},
+            {"path": "c.png", "role": "detail"},
+            {"path": "d.png", "role": "transition"},
+        ]
+        scene = {"scene": 1, "assets": assets}
+        asset_paths = [asset["path"] for asset in assets]
+
+        result = _resolve_cut_durations(scene, asset_paths, 8.0)
+        expected = [
+            entry["duration"]
+            for entry in asset_usage_planner.plan_asset_usage(assets, 8.0)
+        ]
+
+        self.assertEqual(result, expected)
+        # 균등 분배(2.0씩)와는 달라야 한다 - 실제로 role 가중이 적용됨.
+        self.assertNotEqual(result, _split_duration_equally(8.0, 4))
+
+    def test_no_role_falls_back_to_equal_split(self):
+        assets = [
+            {"path": "a.png"}, {"path": "b.png"},
+            {"path": "c.png"}, {"path": "d.png"},
+        ]
+        scene = {"scene": 1, "assets": assets}
+        asset_paths = [asset["path"] for asset in assets]
+
+        result = _resolve_cut_durations(scene, asset_paths, 8.0)
+
+        self.assertEqual(result, _split_duration_equally(8.0, 4))
+
+    def test_no_assets_key_falls_back_to_equal_split(self):
+        # 구버전 scene(assets 필드 자체가 없음)
+        scene = {"scene": 1, "asset_path": "legacy.png"}
+        asset_paths = ["a.png", "b.png"]
+
+        result = _resolve_cut_durations(scene, asset_paths, 4.0)
+
+        self.assertEqual(result, _split_duration_equally(4.0, 2))
+
+    def test_scene_none_falls_back_to_equal_split(self):
+        result = _resolve_cut_durations(None, ["a.png", "b.png"], 4.0)
+
+        self.assertEqual(result, _split_duration_equally(4.0, 2))
+
+    def test_length_mismatch_falls_back_to_equal_split(self):
+        # 방어적 케이스: assets 개수와 asset_paths 개수가 다름(정상
+        # 흐름에서는 발생하지 않지만 안전망으로 균등 분배를 써야 한다).
+        assets = [
+            {"path": "a.png", "role": "environment"},
+            {"path": "b.png", "role": "subject"},
+        ]
+        scene = {"scene": 1, "assets": assets}
+        asset_paths = ["a.png", "b.png", "c.png"]
+
+        result = _resolve_cut_durations(scene, asset_paths, 6.0)
+
+        self.assertEqual(result, _split_duration_equally(6.0, 3))
+
+    def test_partial_role_still_uses_planner(self):
+        # 일부만 role이 있어도(any) plan_asset_usage가 호출되어야
+        # 한다 - 나머지는 planner 내부의 DEFAULT_ROLE_WEIGHT로 처리.
+        assets = [
+            {"path": "a.png", "role": "environment"},
+            {"path": "b.png"},
+        ]
+        scene = {"scene": 1, "assets": assets}
+        asset_paths = [asset["path"] for asset in assets]
+
+        result = _resolve_cut_durations(scene, asset_paths, 4.0)
+        expected = [
+            entry["duration"]
+            for entry in asset_usage_planner.plan_asset_usage(assets, 4.0)
+        ]
+
+        self.assertEqual(result, expected)
+
+
+class TestBuildSceneClipWithScene(unittest.TestCase):
+    """
+    Sprint64-4 - _build_scene_clip()에 scene을 함께 넘기면 role 가중
+    duration이 build_kenburns_clip에 그대로 전달된다. scene을 넘기지
+    않으면(기본값 None) 기존 Sprint62-3 동작과 완전히 동일하다 -
+    기존 4개 테스트(TestBuildSceneClip)가 이를 그대로 증명한다.
+    """
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_role_weighted_durations_passed_to_kenburns(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+
+        assets = [
+            {"path": "a.png", "role": "environment"},
+            {"path": "b.png", "role": "subject"},
+            {"path": "c.png", "role": "detail"},
+            {"path": "d.png", "role": "transition"},
+        ]
+        scene = {"scene": 1, "assets": assets}
+        asset_paths = [asset["path"] for asset in assets]
+
+        _build_scene_clip(asset_paths, 8.0, scene=scene)
+
+        called_durations = [
+            call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
+        ]
+        expected = [
+            entry["duration"]
+            for entry in asset_usage_planner.plan_asset_usage(assets, 8.0)
+        ]
+
+        self.assertEqual(called_durations, expected)
+        self.assertAlmostEqual(sum(called_durations), 8.0, places=6)
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_no_role_scene_still_splits_equally(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+
+        assets = [{"path": "a.png"}, {"path": "b.png"}]
+        scene = {"scene": 1, "assets": assets}
+
+        _build_scene_clip(["a.png", "b.png"], 4.0, scene=scene)
+
+        called_durations = [
+            call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
+        ]
+
+        self.assertEqual(called_durations, [2.0, 2.0])
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_default_scene_none_behaves_exactly_like_before(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+
+        # scene 인자를 아예 넘기지 않는 기존 호출 방식 - Sprint62-3
+        # 동작과 100% 동일해야 한다.
+        _build_scene_clip(["a.png", "b.png", "c.png", "d.png"], 8.0)
+
+        called_durations = [
+            call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
+        ]
+
+        self.assertEqual(called_durations, [2.0, 2.0, 2.0, 2.0])
 
 
 if __name__ == "__main__":

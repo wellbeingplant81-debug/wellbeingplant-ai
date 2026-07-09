@@ -7,6 +7,7 @@ from moviepy.video.fx.CrossFadeOut import CrossFadeOut
 from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
+from app.services import asset_usage_planner
 from app.services.kenburns import build_kenburns_clip
 from app.services.transition_engine import annotate_scenes_with_transitions
 
@@ -190,20 +191,52 @@ def _split_duration_equally(total_duration, count):
     return [per_cut] * count
 
 
-def _build_scene_clip(asset_paths, clip_duration):
+def _resolve_cut_durations(scene, asset_paths, clip_duration):
+    """
+    Sprint64-4 - scene["assets"] 중 하나라도 role(Sprint64-2)이 있으면
+    asset_usage_planner.plan_asset_usage()의 role 가중 duration을
+    사용합니다. role이 전혀 없거나, assets 자체가 없거나(구버전 scene),
+    assets 개수와 asset_paths 개수가 어긋나는 방어적 상황이면 기존
+    _split_duration_equally()로 그대로 폴백합니다 - 기존 균등 분배
+    동작은 완전히 보존됩니다.
+    """
+
+    assets = scene.get("assets") if scene else None
+
+    if (
+        assets
+        and len(assets) == len(asset_paths)
+        and any(asset.get("role") for asset in assets)
+    ):
+        plan = asset_usage_planner.plan_asset_usage(assets, clip_duration)
+        return [entry["duration"] for entry in plan]
+
+    return _split_duration_equally(clip_duration, len(asset_paths))
+
+
+def _build_scene_clip(asset_paths, clip_duration, scene=None):
     """
     Sprint62-3 - Scene 하나를 구성하는 clip을 만듭니다. asset이 1개면
     기존과 완전히 동일하게 단일 Ken Burns clip을 반환합니다(렌더링
-    경로 무변경). 여러 개면 clip_duration을 균등 분배해 asset마다
+    경로 무변경). 여러 개면 clip_duration을 컷별로 나눠 asset마다
     Ken Burns clip을 만들고 순서대로 이어 붙입니다 - 컷 사이에는 별도
     효과를 적용하지 않습니다(scene 경계의 crossfade/fade는 기존처럼
     이 clip 전체의 앞/뒤에만 적용됩니다).
+
+    Sprint64-4 - scene을 넘기면 _resolve_cut_durations()로 role 가중
+    분배를 시도합니다. scene을 넘기지 않으면(기본값 None) Sprint62-3
+    당시의 균등 분배 동작과 100% 동일합니다 - 기존 호출부/테스트는
+    수정 없이 그대로 유효합니다.
     """
 
     if len(asset_paths) == 1:
         return build_kenburns_clip(asset_paths[0], clip_duration).with_fps(30)
 
-    cut_durations = _split_duration_equally(clip_duration, len(asset_paths))
+    cut_durations = (
+        _resolve_cut_durations(scene, asset_paths, clip_duration)
+        if scene is not None
+        else _split_duration_equally(clip_duration, len(asset_paths))
+    )
 
     cuts = [
         build_kenburns_clip(path, duration).with_fps(30)
@@ -304,7 +337,9 @@ def build_video(project_path: str):
             else durations[index] + overlap
         )
 
-        clip = _build_scene_clip(asset_paths_for_scene, clip_duration)
+        clip = _build_scene_clip(
+            asset_paths_for_scene, clip_duration, scene=scenes[index],
+        )
 
         raw_clips.append(clip)
 
