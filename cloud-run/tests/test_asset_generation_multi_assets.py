@@ -327,5 +327,133 @@ class TestMultiAssetGeneration(unittest.TestCase):
         mock_generate_subprompts.assert_not_called()
 
 
+class TestAssetRoleMetadata(unittest.TestCase):
+    """
+    Sprint64-2 - Asset Role Metadata. AI 4-asset 경로(source ==
+    "ai_image")에서만 각 asset에 role(environment/subject/detail/
+    transition)을 인덱스 순서대로 부여한다. 스톡/비디오프레임 단일
+    asset은 role 없이(Sprint62-1~64-1과 완전히 동일하게) 그대로
+    둔다 - 하위 호환을 위해 role 유무와 무관하게 asset.get("role")로
+    다뤄야 한다.
+    """
+
+    def setUp(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_dir.cleanup)
+        self.project_path = self._tmp_dir.name
+        os.makedirs(os.path.join(self.project_path, "images"), exist_ok=True)
+
+        feedback_patcher = patch(
+            "app.services.asset_integration_service.asset_feedback_service.record",
+        )
+        self.addCleanup(feedback_patcher.stop)
+        feedback_patcher.start()
+
+        ranking_patcher = patch(
+            "app.services.asset_ranking_service.load_all",
+            return_value=[],
+        )
+        self.addCleanup(ranking_patcher.stop)
+        ranking_patcher.start()
+
+        subprompt_patcher = patch(
+            "app.services.asset_integration_service.subprompt_service.generate_subprompts",
+            side_effect=lambda image_prompt, count=4: [image_prompt] * count,
+        )
+        self.addCleanup(subprompt_patcher.stop)
+        subprompt_patcher.start()
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_ai_generated_assets_get_roles_in_order(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        roles = [asset["role"] for asset in result["assets"]]
+        self.assertEqual(roles, ["environment", "subject", "detail", "transition"])
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_ai_fallback_path_also_gets_roles(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        # visual_type 없이(스톡 후보가 아예 없어 AI로 폴백한 경우)도
+        # 최종 source가 ai_image이면 동일하게 role이 붙어야 한다.
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        roles = [asset["role"] for asset in result["assets"]]
+        self.assertEqual(roles, ["environment", "subject", "detail", "transition"])
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_stock_sourced_scene_has_no_role_field(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertEqual(len(result["assets"]), 1)
+        self.assertNotIn("role", result["assets"][0])
+        mock_generate_image.assert_not_called()
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_video_frame_extraction_scene_has_no_role_field(
+        self, mock_get_candidates, mock_download, mock_generate_image, mock_subprocess_run,
+    ):
+        mock_get_candidates.return_value = [PEXELS_VIDEO_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect(
+            content=b"fake video bytes",
+        )
+
+        def _ffmpeg_side_effect(command, capture_output, text):
+            output_path = command[-1]
+            with open(output_path, "wb") as f:
+                f.write(b"fake frame bytes")
+            from unittest.mock import MagicMock
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
+        mock_subprocess_run.side_effect = _ffmpeg_side_effect
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertEqual(result["asset_type"], "video")
+        self.assertNotIn("role", result["assets"][0])
+        mock_generate_image.assert_not_called()
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_role_survives_regardless_of_get_accessor_usage(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        # 하위 호환 확인: role이 있는 asset도 .get("role")로 안전하게
+        # 접근 가능해야 한다(KeyError 없음).
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        for asset in result["assets"]:
+            self.assertIsNotNone(asset.get("role"))
+            self.assertIsNone(asset.get("nonexistent_field"))
+
+
 if __name__ == "__main__":
     unittest.main()

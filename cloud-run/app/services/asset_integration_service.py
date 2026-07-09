@@ -17,6 +17,12 @@ from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 # 스프린트 범위이므로 지금은 상수로 고정한다.
 AI_ASSET_COUNT = 4
 
+# Sprint64-2 - Asset Role Metadata. AI_ASSET_COUNT와 동일 길이이며
+# assets 리스트의 인덱스와 1:1 대응한다. source == "ai_image"인
+# scene(1차+추가 asset 전부)에만 부여하고, 스톡/비디오프레임 단일
+# asset에는 붙이지 않는다(하위 호환 - role 없는 asset도 그대로 유효).
+ASSET_ROLES = ["environment", "subject", "detail", "transition"]
+
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
     ai_path = generate_image(
@@ -167,6 +173,7 @@ def _generate_extra_ai_assets(
             "type": "image",
             "path": output_file,
             "prompt": asset_prompt,
+            "role": ASSET_ROLES[i - 1],
         })
 
     return extra_assets
@@ -310,22 +317,25 @@ def integrate_asset(
 
     # Sprint62-1 - Visual Diversity 기반 구조: scene["assets"][0]은
     # 항상 asset_path와 동일한 1차 이미지다.
-    extra_assets = (
-        _generate_extra_ai_assets(
-            image_prompt, images_dir, scene_number, channel, is_hook_scene,
-            visual_type,
-        )
-        if source == "ai_image"
-        # Sprint62-4 - 1차 asset이 AI로 생성된 scene만 동일 prompt로
-        # 추가 이미지를 생성한다. 스톡(Pexels/Pixabay) 선택 scene은
-        # 이번 스프린트에서 손대지 않는다(assets 1개 그대로 유지).
-        else []
-    )
-
-    enriched["assets"] = [{
+    primary_asset = {
         "type": "image",
         "path": final_image_path,
         "prompt": image_prompt,
-    }] + extra_assets
+    }
+
+    if source == "ai_image":
+        # Sprint62-4 - 1차 asset이 AI로 생성된 scene만 동일 prompt로
+        # 추가 이미지를 생성한다. 스톡(Pexels/Pixabay) 선택 scene은
+        # 이번 스프린트에서 손대지 않는다(assets 1개 그대로 유지).
+        # Sprint64-2 - AI 4-asset 경로에서만 role을 부여한다.
+        primary_asset["role"] = ASSET_ROLES[0]
+        extra_assets = _generate_extra_ai_assets(
+            image_prompt, images_dir, scene_number, channel, is_hook_scene,
+            visual_type,
+        )
+    else:
+        extra_assets = []
+
+    enriched["assets"] = [primary_asset] + extra_assets
 
     return enriched
