@@ -30,6 +30,13 @@ SHOT_TYPES = ["wide shot", "medium shot", "close-up", "detail shot"]
 # (예: 4개 전부 인물 클로즈업 계열)를 방지한다.
 FOCUS_TYPES = ["environment", "subject", "action", "supporting object"]
 
+# Sprint63-3 - Visual Composition 다양성 강화. 위 SHOT_TYPES/FOCUS_TYPES
+# 와 동일하게 1:1로 짝지어, camera angle/composition/subject distance
+# 까지 서로 겹치지 않도록 함께 요청한다.
+CAMERA_ANGLES = ["eye level", "low angle", "high angle", "over-the-shoulder"]
+COMPOSITIONS = ["centered", "rule of thirds", "foreground emphasis", "background emphasis"]
+SUBJECT_DISTANCES = ["full body", "half body", "close detail", "wide environment"]
+
 
 def _shot_type_instruction(count: int) -> str:
 
@@ -40,14 +47,20 @@ def _shot_type_instruction(count: int) -> str:
         )
 
     numbered = "\n".join(
-        f"{i + 1}. {shot_type} - {focus_type} 중심 (shot {i + 1})"
-        for i, (shot_type, focus_type) in enumerate(zip(SHOT_TYPES, FOCUS_TYPES))
+        f"{i + 1}. {shot_type} - {focus_type} 중심 / camera angle: "
+        f"{camera_angle} / composition: {composition} / subject "
+        f"distance: {distance} (shot {i + 1})"
+        for i, (shot_type, focus_type, camera_angle, composition, distance)
+        in enumerate(
+            zip(SHOT_TYPES, FOCUS_TYPES, CAMERA_ANGLES, COMPOSITIONS, SUBJECT_DISTANCES)
+        )
     )
 
     return (
-        "각 서브프롬프트는 아래 순서의 화면 구성(shot type)과 의미적 "
-        "초점(focus)을 정확히 하나씩 함께 사용하세요 - 화면만 다르고 "
-        f"의미(무엇을 보여주는지)까지 겹치면 안 됩니다.\n{numbered}"
+        "각 서브프롬프트는 아래 순서의 화면 구성(shot type), 의미적 "
+        "초점(focus), camera angle, composition, subject distance를 "
+        "정확히 하나씩 함께 사용하세요 - 화면, 의미, 카메라 앵글, 구도, "
+        f"피사체와의 거리 중 어느 하나도 겹치면 안 됩니다.\n{numbered}"
     )
 
 
