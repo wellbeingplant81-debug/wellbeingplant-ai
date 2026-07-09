@@ -25,6 +25,11 @@ SUBPROMPT_COUNT = 4
 # 요청해 중복 프롬프트를 줄인다.
 SHOT_TYPES = ["wide shot", "medium shot", "close-up", "detail shot"]
 
+# Sprint63-2 - Shot Type뿐 아니라 의미적 초점(focus)도 SHOT_TYPES와
+# 1:1로 짝지어 함께 요청한다 - "화면만 다르고 의미는 같은" 서브프롬프트
+# (예: 4개 전부 인물 클로즈업 계열)를 방지한다.
+FOCUS_TYPES = ["environment", "subject", "action", "supporting object"]
+
 
 def _shot_type_instruction(count: int) -> str:
 
@@ -35,13 +40,14 @@ def _shot_type_instruction(count: int) -> str:
         )
 
     numbered = "\n".join(
-        f"{i + 1}. {shot_type} (shot {i + 1})"
-        for i, shot_type in enumerate(SHOT_TYPES)
+        f"{i + 1}. {shot_type} - {focus_type} 중심 (shot {i + 1})"
+        for i, (shot_type, focus_type) in enumerate(zip(SHOT_TYPES, FOCUS_TYPES))
     )
 
     return (
-        "각 서브프롬프트는 아래 순서의 화면 구성(shot type)을 정확히 "
-        f"하나씩 사용하세요.\n{numbered}"
+        "각 서브프롬프트는 아래 순서의 화면 구성(shot type)과 의미적 "
+        "초점(focus)을 정확히 하나씩 함께 사용하세요 - 화면만 다르고 "
+        f"의미(무엇을 보여주는지)까지 겹치면 안 됩니다.\n{numbered}"
     )
 
 
@@ -66,7 +72,8 @@ def generate_subprompts(image_prompt: str, count: int = SUBPROMPT_COUNT) -> list
 {_shot_type_instruction(count)}
 
 절대로 같은 문장을 반복하거나 서로 거의 동일한 프롬프트를 만들지
-마세요 - 중복 없이 반드시 서로 뚜렷하게 구별되어야 합니다.
+마세요 - 중복 없이 반드시 서로 뚜렷하게 구별되어야 합니다. 문장
+표현뿐 아니라 의미(무엇을 보여주는지)도 겹치지 않아야 합니다.
 
 장면 묘사
 {image_prompt}

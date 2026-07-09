@@ -169,5 +169,90 @@ class TestSubpromptShotTypeDiversity(unittest.TestCase):
         self.assertEqual(result, subprompts)
 
 
+class TestSubpromptSemanticFocusDiversity(unittest.TestCase):
+    """
+    Sprint63-2 - Shot Type뿐 아니라 의미적 초점(Environment/Subject/
+    Action/Supporting Object)도 함께 다양화한다. LLM이 지시를
+    무시하고 문자열이 겹치는 서브프롬프트를 반환하면 Sprint63-1의
+    기존 중복 감지 폴백이 그대로 적용된다(새 감지 로직 추가 없음 -
+    프롬프트 강화가 1차 방어선).
+    """
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_requests_four_distinct_focus_types(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["a", "b", "c", "d"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        sent_prompt = mock_client.models.generate_content.call_args.kwargs["contents"].lower()
+        for focus_type in ["environment", "subject", "action", "supporting object"]:
+            self.assertIn(focus_type, sent_prompt)
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_pairs_each_shot_type_with_its_focus_type(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["a", "b", "c", "d"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        sent_prompt = mock_client.models.generate_content.call_args.kwargs["contents"].lower()
+        expected_pairs = [
+            ("wide shot", "environment"),
+            ("medium shot", "subject"),
+            ("close-up", "action"),
+            ("detail shot", "supporting object"),
+        ]
+        for shot_type, focus_type in expected_pairs:
+            # 같은 줄(같은 항목)에 shot type과 focus type이 함께
+            # 나와야 LLM이 둘을 하나의 항목으로 묶어 이해할 수 있다.
+            line = next(
+                (l for l in sent_prompt.splitlines() if shot_type in l), None,
+            )
+            self.assertIsNotNone(line, f"'{shot_type}' 줄을 찾을 수 없습니다")
+            self.assertIn(focus_type, line)
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_instructs_against_semantic_repetition(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["a", "b", "c", "d"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        sent_prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+        self.assertIn("의미", sent_prompt)
+
+    @patch("app.services.subprompt_service.client")
+    def test_still_falls_back_on_duplicate_subprompts(self, mock_client):
+        # Sprint63-1 폴백 안전망이 Sprint63-2 프롬프트 강화 이후에도
+        # 그대로 살아있어야 한다(회귀 금지).
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["same", "same", "other", "another"],
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_accepts_four_semantically_distinct_subprompts(self, mock_client):
+        subprompts = [
+            "Wide shot of the messy office, establishing the environment.",
+            "Medium shot of the tired woman, the main subject, at her desk.",
+            "Close-up on her hand rubbing her tired eyes, capturing the action.",
+            "Detail shot of a cold coffee cup, a supporting object on the desk.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+
 if __name__ == "__main__":
     unittest.main()
