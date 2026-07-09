@@ -12,12 +12,14 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from app.services.duration_optimizer import get_audio_duration
 from app.services.subtitle_service import (
     CUE_GROUPING_MAX_CHARS,
     MAX_CHARS,
     MIN_CHARS,
     SAFE_AREA_MAX_LINE_WIDTH,
     _display_width,
+    _snap_last_cue_to_final_audio_duration,
     _split_sentence_by_words,
     create_subtitle,
     split_subtitle,
@@ -321,6 +323,198 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
 
         self.assertIn("-->", srt_text)
         self.assertTrue(srt_text.strip().startswith("1"))
+
+
+class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
+    """Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.mp3 길이에
+    맞춘다. 중간 cue는 절대 건드리지 않는다."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.project_path = os.path.join(self.tmp_dir, "project")
+        os.makedirs(os.path.join(self.project_path, "audio"))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _make_cues(self):
+        return [
+            {"start": 0.0, "end": 2.0, "text": "one"},
+            {"start": 2.0, "end": 4.0, "text": "two"},
+        ]
+
+    def _touch_final_audio(self):
+        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        with open(final_audio_path, "wb") as f:
+            f.write(b"fake")
+        return final_audio_path
+
+    def test_no_final_audio_file_leaves_cues_unchanged(self):
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(cues, self.project_path)
+        self.assertEqual(cues, self._make_cues())
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_measured_duration_overrides_only_last_cue_end(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.return_value = 4.35
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(cues, self.project_path)
+
+        self.assertEqual(cues[0], {"start": 0.0, "end": 2.0, "text": "one"})
+        self.assertEqual(cues[1]["start"], 2.0)
+        self.assertEqual(cues[1]["end"], 4.35)
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_zero_measured_duration_leaves_cues_unchanged(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.return_value = 0.0
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(cues, self.project_path)
+
+        self.assertEqual(cues, self._make_cues())
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_ffprobe_exception_leaves_cues_unchanged(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.side_effect = RuntimeError("ffprobe not found")
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(cues, self.project_path)
+
+        self.assertEqual(cues, self._make_cues())
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_measured_duration_shorter_than_last_cue_start_is_clamped(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.return_value = 1.0  # last cue starts at 2.0
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(cues, self.project_path)
+
+        self.assertEqual(cues[0], {"start": 0.0, "end": 2.0, "text": "one"})
+        self.assertGreater(cues[1]["end"], cues[1]["start"])
+
+    def test_empty_cue_list_does_not_raise(self):
+        _snap_last_cue_to_final_audio_duration([], self.project_path)
+
+
+class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
+    """Sprint59 - create_subtitle() 전체 파이프라인에서 final_audio.mp3가
+    있으면 마지막 cue만 그 실제 길이에 맞춰지는지 검증한다."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.project_path = os.path.join(self.tmp_dir, "project")
+        os.makedirs(os.path.join(self.project_path, "audio", "scenes"))
+        os.makedirs(os.path.join(self.project_path, "images"))
+
+        scenes = [
+            {"scene": 1, "narration": "안녕하세요.", "image_prompt": "p1"},
+            {"scene": 2, "narration": "반갑습니다.", "image_prompt": "p2"},
+        ]
+
+        with open(os.path.join(self.project_path, "script.json"), "w", encoding="utf-8") as f:
+            json.dump({"scenes": scenes}, f, ensure_ascii=False)
+
+        for i in (1, 2):
+            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.mp3")
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
+                 "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _read_srt(self):
+        with open(
+            os.path.join(self.project_path, "subtitle", "subtitle.srt"),
+            "r", encoding="utf-8",
+        ) as f:
+            return f.read()
+
+    def _make_final_audio(self, duration_seconds):
+        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
+             "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", final_audio_path],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return final_audio_path
+
+    @staticmethod
+    def _srt_time_to_seconds(time_str):
+        h, m, rest = time_str.split(":")
+        s, ms = rest.split(",")
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_last_cue_end_matches_final_audio_duration(self, mock_choose):
+        # 두 씬 mp3 합은 약 4.0s지만, 실제 final_audio.mp3는 BGM 믹스/
+        # 재인코딩 오차로 4.35s라고 가정한다. format_srt_time()의 ms
+        # 절삭(Sprint59와 무관한 기존 동작)에 흔들리지 않도록 문자열이
+        # 아니라 초 단위 수치로 비교한다.
+        self._make_final_audio(4.35)
+
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+        last_cue = srt_text.strip().split("\n\n")[-1]
+        timing_line = last_cue.split("\n")[1]
+        end_time_str = timing_line.split(" --> ")[1]
+        end_seconds = self._srt_time_to_seconds(end_time_str)
+
+        self.assertAlmostEqual(end_seconds, 4.35, delta=0.01)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_first_cue_start_time_is_unaffected_by_snapping(self, mock_choose):
+        self._make_final_audio(4.35)
+
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+        first_cue = srt_text.strip().split("\n\n")[0]
+        timing_line = first_cue.split("\n")[1]
+        start_time_str = timing_line.split(" --> ")[0]
+
+        self.assertEqual(start_time_str, "00:00:00,000")
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_no_final_audio_file_preserves_old_behavior(self, mock_choose):
+        # final_audio.mp3가 없어도(안전장치가 발동하지 않아도) 마지막
+        # cue는 씬 mp3 실측 길이의 합과 일치해야 한다. create_subtitle()
+        # 내부는 (Sprint59 재조사 이후) get_audio_duration()(ffprobe)로
+        # 씬 mp3 길이를 재므로, 여기서도 같은 방식으로 기대값을 구한다.
+        expected_seconds = 0.0
+        for name in ("scene1.mp3", "scene2.mp3"):
+            expected_seconds += get_audio_duration(
+                os.path.join(self.project_path, "audio", "scenes", name)
+            )
+
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+        last_cue = srt_text.strip().split("\n\n")[-1]
+        timing_line = last_cue.split("\n")[1]
+        end_time_str = timing_line.split(" --> ")[1]
+        end_seconds = self._srt_time_to_seconds(end_time_str)
+
+        self.assertAlmostEqual(end_seconds, expected_seconds, delta=0.01)
 
 
 if __name__ == "__main__":

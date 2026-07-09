@@ -5,14 +5,19 @@ import re
 import unicodedata
 from datetime import timedelta
 
-from moviepy import AudioFileClip
-
+from app.services.duration_optimizer import get_audio_duration
 from app.services.kenburns import VIDEO_WIDTH
 from app.services.subtitle_placement_service import (
     POSITION_TOP,
     choose_subtitle_position,
 )
 from app.services.video_builder import _resolve_asset_path
+
+# Sprint59 - Subtitle Timing Precision. 마지막 cue의 종료 시간이
+# 실제 final_audio.mp3보다 짧아지는 극단적인 경우(예: 측정값이 마지막
+# cue의 시작 시간보다도 작게 나오는 경우) end가 start 이하로 붕괴하지
+# 않도록 두는 최소 안전 여유값.
+MIN_LAST_CUE_DURATION_SECONDS = 0.05
 
 # Sprint57 - Smart Subtitle Placement v1. choose_subtitle_position()이
 # 고른 "top"/"bottom"을 libass가 SRT 안에서도 그대로 해석하는 ASS
@@ -322,6 +327,57 @@ def _greedy_two_line_fallback(words: list, max_line_width: int) -> str:
     return " ".join(line1_words) + "\n" + " ".join(line2_words)
 
 
+def _snap_last_cue_to_final_audio_duration(cues: list, project_path: str) -> None:
+    """
+    Sprint59 - Subtitle Timing Precision.
+
+    (재조사 결과) cue 타이밍이 어긋나던 진짜 원인은 concat/BGM
+    믹싱 재인코딩이 아니었다 - concat_scene_audio()로 씬 mp3들을
+    이어 붙인 결과는 각 씬의 ffprobe 실측 길이 합과 소수점까지
+    정확히 일치했다(무손실). 실제 원인은 씬 duration을 측정하던
+    moviepy(AudioFileClip)가 ffprobe/실제 concat 결과와 씬마다 수 ms씩
+    달랐던 것이었고(특히 Duration Optimizer가 후처리하는 마지막 씬은
+    수십 ms까지 벌어짐), 그게 create_subtitle()에서 get_audio_duration()
+    (ffprobe)으로 교체되며 해결됐다.
+
+    이 함수는 그 근본 수정 이후에도 남겨두는 **최종 안전장치**다 -
+    get_audio_duration()이 0.0을 반환하는 극단적 상황이나 향후 다른
+    원인으로 생기는 잔여 오차가 있더라도, 최소한 화면에 보이는 마지막
+    cue의 끝은 실제 final_audio.mp3 길이를 벗어나지 않도록 보장한다.
+    final_audio.mp3가 없거나, ffprobe 측정이 실패하거나(0.0 반환),
+    예외가 나면 아무것도 하지 않고 기존 계산값을 그대로 둔다 - 이
+    보정 하나 때문에 자막 생성 자체가 실패해서는 안 된다.
+    """
+
+    if not cues:
+        return
+
+    final_audio_path = os.path.join(
+        project_path,
+        "audio",
+        "final_audio.mp3",
+    )
+
+    if not os.path.exists(final_audio_path):
+        return
+
+    try:
+        actual_duration = get_audio_duration(final_audio_path)
+    except Exception:
+        return
+
+    if not actual_duration or actual_duration <= 0:
+        return
+
+    last_cue = cues[-1]
+
+    if actual_duration <= last_cue["start"]:
+        last_cue["end"] = last_cue["start"] + MIN_LAST_CUE_DURATION_SECONDS
+        return
+
+    last_cue["end"] = actual_duration
+
+
 def create_subtitle(project_path: str):
 
     script_path = os.path.join(
@@ -376,7 +432,81 @@ def create_subtitle(project_path: str):
     )
 
     current = 0
-    index = 1
+    cues = []
+
+    for scene, audio_path in zip(
+        scenes,
+        scene_audios,
+    ):
+
+        narration = scene["narration"].strip()
+
+        print("\n" + "=" * 60)
+        print("NARRATION")
+        print(narration)
+
+        # Sprint57 - scene 이미지 상/하단 복잡도를 비교해 이
+        # scene의 모든 cue에 공통으로 적용할 위치를 한 번만
+        # 정한다(scene 안에서 위치가 cue마다 바뀌면 자막이
+        # 산만해지므로).
+        asset_path = _resolve_asset_path(project_path, scene)
+        position = choose_subtitle_position(asset_path)
+        position_tag = _POSITION_TAGS.get(position, _DEFAULT_POSITION_TAG)
+
+        subtitles = split_subtitle(
+            narration
+        )
+
+        print("GENERATED SUBTITLES")
+        print(subtitles)
+        print("=" * 60)
+
+        # Sprint59 - moviepy(AudioFileClip)의 duration 추정치는 ffprobe/
+        # 실제 concat 결과와 씬마다 수 ms씩 어긋나고(특히 Duration
+        # Optimizer가 후처리하는 마지막 씬에서 수십 ms까지 벌어짐), 이
+        # 오차가 씬을 거칠수록 누적돼 뒤쪽 cue일수록 실제 음성과
+        # 어긋난다. concat_scene_audio()가 실제로 무손실(각 씬의 ffprobe
+        # 길이 합 == final_audio.mp3 실측 길이)임을 확인했으므로,
+        # get_audio_duration()(ffprobe)로 측정치를 실제 오디오 파이프
+        # 라인과 일치시킨다.
+        scene_duration = get_audio_duration(audio_path)
+
+        lengths = [
+            max(1, len(x))
+            for x in subtitles
+        ]
+
+        total_len = sum(lengths)
+
+        local_time = 0
+
+        for subtitle, length in zip(
+            subtitles,
+            lengths,
+        ):
+
+            part_duration = (
+                scene_duration
+                * length
+                / total_len
+            )
+
+            start = current + local_time
+            end = start + part_duration
+
+            cues.append({
+                "start": start,
+                "end": end,
+                "text": position_tag + wrap_to_safe_lines(subtitle),
+            })
+
+            local_time += part_duration
+
+        current += scene_duration
+
+    # Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.mp3 길이에
+    # 맞춘다(중간 cue는 위에서 계산한 값을 그대로 유지).
+    _snap_last_cue_to_final_audio_duration(cues, project_path)
 
     with open(
         srt_path,
@@ -384,80 +514,17 @@ def create_subtitle(project_path: str):
         encoding="utf-8",
     ) as srt:
 
-        for scene, audio_path in zip(
-            scenes,
-            scene_audios,
-        ):
+        for index, cue in enumerate(cues, start=1):
 
-            narration = scene["narration"].strip()
+            srt.write(f"{index}\n")
 
-            print("\n" + "=" * 60)
-            print("NARRATION")
-            print(narration)
-
-            # Sprint57 - scene 이미지 상/하단 복잡도를 비교해 이
-            # scene의 모든 cue에 공통으로 적용할 위치를 한 번만
-            # 정한다(scene 안에서 위치가 cue마다 바뀌면 자막이
-            # 산만해지므로).
-            asset_path = _resolve_asset_path(project_path, scene)
-            position = choose_subtitle_position(asset_path)
-            position_tag = _POSITION_TAGS.get(position, _DEFAULT_POSITION_TAG)
-
-            subtitles = split_subtitle(
-                narration
+            srt.write(
+                f"{format_srt_time(cue['start'])} --> {format_srt_time(cue['end'])}\n"
             )
 
-            print("GENERATED SUBTITLES")
-            print(subtitles)
-            print("=" * 60)
+            srt.write(cue["text"])
 
-            audio = AudioFileClip(
-                audio_path
-            )
-
-            scene_duration = audio.duration
-
-            audio.close()
-
-            lengths = [
-                max(1, len(x))
-                for x in subtitles
-            ]
-
-            total_len = sum(lengths)
-
-            local_time = 0
-
-            for subtitle, length in zip(
-                subtitles,
-                lengths,
-            ):
-
-                part_duration = (
-                    scene_duration
-                    * length
-                    / total_len
-                )
-
-                start = current + local_time
-                end = start + part_duration
-
-                srt.write(f"{index}\n")
-
-                srt.write(
-                    f"{format_srt_time(start)} --> {format_srt_time(end)}\n"
-                )
-
-                srt.write(
-                    position_tag + wrap_to_safe_lines(subtitle)
-                )
-
-                srt.write("\n\n")
-
-                local_time += part_duration
-                index += 1
-
-            current += scene_duration
+            srt.write("\n\n")
 
     print(f"\nSRT SAVED : {srt_path}")
 
