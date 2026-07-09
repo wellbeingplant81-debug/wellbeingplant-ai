@@ -135,10 +135,18 @@ def _load_scenes(project_path):
 
 def _resolve_asset_path(project_path, scene):
     """
-    scene에 asset_path가 있으면(step02_assets.py 경로) 그대로 사용하고,
+    Sprint62-2 - scene["assets"](Sprint62-1)가 있고 비어있지 않으면
+    첫 번째 asset의 path를 사용합니다. 아직 asset 하나만 순회 없이
+    읽습니다(Visual Diversity 기반 구조 준비 단계). assets가 없으면
+    기존 asset_path(step02_assets.py 경로)를 그대로 사용하고, 그마저도
     없으면 기존 step02_image.py 파이프라인과의 하위호환을 위해 기존
     파일명 규칙(images/sceneN.png)으로 폴백합니다.
     """
+
+    assets = scene.get("assets")
+
+    if assets:
+        return assets[0]["path"]
 
     asset_path = scene.get("asset_path")
 
