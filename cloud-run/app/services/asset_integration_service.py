@@ -255,4 +255,14 @@ def integrate_asset(
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
 
+    # Sprint62-1 - Visual Diversity 기반 구조: 향후 scene당 여러 asset을
+    # 지원하기 위한 준비 단계. 이번 스프린트에서는 기존 asset_path와
+    # 동일한 이미지 하나만 담는다 - 실제 동작(video_builder가 읽는
+    # 경로 등)은 전혀 바뀌지 않는다.
+    enriched["assets"] = [{
+        "type": "image",
+        "path": final_image_path,
+        "prompt": image_prompt,
+    }]
+
     return enriched
