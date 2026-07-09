@@ -15,10 +15,12 @@ sys.path.insert(
 from app.services.duration_optimizer import get_audio_duration
 from app.services.subtitle_service import (
     CUE_GROUPING_MAX_CHARS,
+    DURATION_OPTIMIZATION_METADATA_FILENAME,
     MAX_CHARS,
     MIN_CHARS,
     SAFE_AREA_MAX_LINE_WIDTH,
     _display_width,
+    _load_last_scene_pause_seconds,
     _snap_last_cue_to_final_audio_duration,
     _split_sentence_by_words,
     create_subtitle,
@@ -250,6 +252,42 @@ class TestWrapToSafeLines(unittest.TestCase):
         self.assertEqual(rejoined_words, text.split())
 
 
+class TestSubtitleSafeAreaRegression(unittest.TestCase):
+    """Sprint60 Hotfix - 문제2: 2026-07-09 E2E 실측에서 실제로 화면
+    좌우를 넘어 잘렸던 문장들("프로바이오틱스가"/"질병으로부터" 같은
+    공백 없는 긴 복합명사+조사가 낀 문장)이 split_subtitle() ->
+    wrap_to_safe_lines() 전체 파이프라인을 거친 뒤 모든 줄이 안전
+    영역 안에 들어가는지 검증한다."""
+
+    def _assert_no_line_overflows(self, narration):
+        for chunk in split_subtitle(narration):
+            wrapped = wrap_to_safe_lines(chunk)
+            for line in wrapped.split("\n"):
+                self.assertLessEqual(
+                    _display_width(line),
+                    SAFE_AREA_MAX_LINE_WIDTH,
+                    msg=f"overflow: {line!r} (chunk={chunk!r})",
+                )
+
+    def test_long_compound_noun_with_particle_does_not_overflow(self):
+        # 실제로 "바로\n프로바이오틱스가 풍부한"(23 units, 예산 17)로
+        # 화면 밖까지 잘렸던 문장.
+        narration = (
+            "그렇다면 면역력을 지키는 '아군', 유익균을 어떻게 늘릴 수 "
+            "있을까요? 바로 프로바이오틱스가 풍부한 음식을 통해서입니다."
+        )
+        self._assert_no_line_overflows(narration)
+
+    def test_another_long_compound_noun_does_not_overflow(self):
+        # 실제로 "감염과\n질병으로부터 우리 몸을"(22 units, 예산 17)로
+        # 화면 밖까지 잘렸던 문장.
+        narration = (
+            "유익균이 풍부해진 장은 면역체계를 튼튼하게 만들어, 감염과 "
+            "질병으로부터 우리 몸을 지켜주는 강력한 방패가 되죠."
+        )
+        self._assert_no_line_overflows(narration)
+
+
 class TestCreateSubtitlePositionTags(unittest.TestCase):
     """Sprint57 - Smart Subtitle Placement v1. create_subtitle()가
     scene별로 choose_subtitle_position() 결과를 SRT 텍스트 맨 앞에
@@ -314,6 +352,22 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
 
     @patch(
         "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_is_hook_scene_true_only_for_scene_one(self, mock_choose):
+        # Sprint60 Hotfix - Hook Scene(scene 1)의 큰 얼굴 정책이 실제로
+        # 켜지려면 choose_subtitle_position이 scene 1에는 is_hook_scene=
+        # True, 나머지에는 False로 호출돼야 한다.
+        create_subtitle(self.project_path)
+
+        _, first_kwargs = mock_choose.call_args_list[0]
+        _, second_kwargs = mock_choose.call_args_list[1]
+
+        self.assertTrue(first_kwargs["is_hook_scene"])
+        self.assertFalse(second_kwargs["is_hook_scene"])
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
         return_value=POSITION_TOP,
     )
     def test_existing_srt_structure_is_unchanged_besides_tag(self, mock_choose):
@@ -323,6 +377,95 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
 
         self.assertIn("-->", srt_text)
         self.assertTrue(srt_text.strip().startswith("1"))
+
+
+class TestLoadLastScenePauseSeconds(unittest.TestCase):
+    """Sprint61 - Silence-Aware Subtitle Timing. step03_tts.py가 저장한
+    duration_optimization.json에서 Duration Optimizer가 마지막 scene
+    뒤에 붙인 무음 길이를 읽는다. 메타데이터가 없거나/손상됐거나/
+    비정상이면 예외 없이 None을 반환해 호출자가 기존 로직으로 폴백할
+    수 있게 한다."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.project_path = os.path.join(self.tmp_dir, "project")
+        os.makedirs(os.path.join(self.project_path, "audio"))
+        self.metadata_path = os.path.join(
+            self.project_path, "audio", DURATION_OPTIMIZATION_METADATA_FILENAME,
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _write_metadata(self, content):
+        with open(self.metadata_path, "w", encoding="utf-8") as f:
+            if isinstance(content, str):
+                f.write(content)
+            else:
+                json.dump(content, f)
+
+    def test_missing_file_returns_none(self):
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_valid_expand_metadata_returns_pause_seconds(self):
+        self._write_metadata({
+            "action": "expand", "original_total": 33.96,
+            "final_total": 42.696, "pause_seconds": 3.12,
+        })
+
+        result = _load_last_scene_pause_seconds(self.project_path)
+
+        self.assertEqual(result, 3.12)
+
+    def test_corrupt_json_returns_none(self):
+        self._write_metadata("{not valid json::")
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_action_none_returns_none(self):
+        self._write_metadata({"action": "none", "original_total": 45.0, "final_total": 45.0})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_action_contract_returns_none(self):
+        self._write_metadata({
+            "action": "contract", "original_total": 48.0,
+            "final_total": 45.0, "speaking_rate": 1.02,
+        })
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_missing_pause_seconds_key_returns_none(self):
+        self._write_metadata({"action": "expand"})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_non_numeric_pause_seconds_returns_none(self):
+        self._write_metadata({"action": "expand", "pause_seconds": "three"})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_negative_pause_seconds_returns_none(self):
+        self._write_metadata({"action": "expand", "pause_seconds": -1.0})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_zero_pause_seconds_returns_none(self):
+        self._write_metadata({"action": "expand", "pause_seconds": 0})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_boolean_pause_seconds_returns_none(self):
+        # bool은 Python에서 int의 서브클래스라 isinstance(x, (int, float))가
+        # True를 반환하는 함정이 있다 - 명시적으로 걸러야 한다.
+        self._write_metadata({"action": "expand", "pause_seconds": True})
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
+
+    def test_metadata_not_a_dict_returns_none(self):
+        self._write_metadata([1, 2, 3])
+
+        self.assertIsNone(_load_last_scene_pause_seconds(self.project_path))
 
 
 class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
@@ -399,6 +542,48 @@ class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
 
     def test_empty_cue_list_does_not_raise(self):
         _snap_last_cue_to_final_audio_duration([], self.project_path)
+
+    # --- Sprint61: pause_seconds(무음 보정) 파라미터 ---
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_pause_seconds_is_subtracted_from_target(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.return_value = 42.696
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(
+            cues, self.project_path, pause_seconds=3.12,
+        )
+
+        self.assertAlmostEqual(cues[1]["end"], 39.576, places=3)
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_pause_seconds_none_keeps_old_behavior(self, mock_get_duration):
+        self._touch_final_audio()
+        mock_get_duration.return_value = 42.696
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(
+            cues, self.project_path, pause_seconds=None,
+        )
+
+        self.assertEqual(cues[1]["end"], 42.696)
+
+    @patch("app.services.subtitle_service.get_audio_duration")
+    def test_abnormal_pause_seconds_larger_than_duration_falls_back(
+        self, mock_get_duration,
+    ):
+        # pause_seconds가 전체 길이보다 크면(비정상) 무시하고 기존
+        # 로직(전체 길이 그대로)으로 폴백해야 한다 - 예외를 던지지 않음.
+        self._touch_final_audio()
+        mock_get_duration.return_value = 42.696
+
+        cues = self._make_cues()
+        _snap_last_cue_to_final_audio_duration(
+            cues, self.project_path, pause_seconds=100.0,
+        )
+
+        self.assertEqual(cues[1]["end"], 42.696)
 
 
 class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
@@ -515,6 +700,154 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
         end_seconds = self._srt_time_to_seconds(end_time_str)
 
         self.assertAlmostEqual(end_seconds, expected_seconds, delta=0.01)
+
+
+class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
+    """Sprint61 - Silence-Aware Subtitle Timing. Duration Optimizer가
+    마지막 scene 오디오 뒤에 무음을 붙인 경우(duration_optimization.json
+    에 기록됨), create_subtitle()이 그 무음 구간을 cue 비례배분에서
+    제외해야 한다 - 안 그러면 마지막 cue가 무음 위로 늘어난다."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.project_path = os.path.join(self.tmp_dir, "project")
+        os.makedirs(os.path.join(self.project_path, "audio", "scenes"))
+        os.makedirs(os.path.join(self.project_path, "images"))
+
+        scenes = [
+            {"scene": 1, "narration": "안녕하세요.", "image_prompt": "p1"},
+            {"scene": 2, "narration": "반갑습니다 여러분.", "image_prompt": "p2"},
+        ]
+
+        with open(os.path.join(self.project_path, "script.json"), "w", encoding="utf-8") as f:
+            json.dump({"scenes": scenes}, f, ensure_ascii=False)
+
+        self._make_scene_audio(1, 2.0)
+        self._make_scene_audio(2, 4.0)
+
+        self.scene1_duration = get_audio_duration(
+            os.path.join(self.project_path, "audio", "scenes", "scene1.mp3")
+        )
+        self.scene2_duration = get_audio_duration(
+            os.path.join(self.project_path, "audio", "scenes", "scene2.mp3")
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def _make_scene_audio(self, scene_number, duration_seconds):
+        audio_path = os.path.join(
+            self.project_path, "audio", "scenes", f"scene{scene_number}.mp3",
+        )
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
+             "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def _write_metadata(self, pause_seconds):
+        metadata_path = os.path.join(
+            self.project_path, "audio", DURATION_OPTIMIZATION_METADATA_FILENAME,
+        )
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "action": "expand",
+                "original_total": self.scene1_duration + self.scene2_duration - pause_seconds,
+                "final_total": self.scene1_duration + self.scene2_duration,
+                "pause_seconds": pause_seconds,
+            }, f)
+
+    def _read_srt(self):
+        with open(
+            os.path.join(self.project_path, "subtitle", "subtitle.srt"),
+            "r", encoding="utf-8",
+        ) as f:
+            return f.read()
+
+    @staticmethod
+    def _srt_time_to_seconds(time_str):
+        h, m, rest = time_str.split(":")
+        s, ms = rest.split(",")
+        return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+
+    def _last_cue_end_seconds(self):
+        srt_text = self._read_srt()
+        last_cue = srt_text.strip().split("\n\n")[-1]
+        timing_line = last_cue.split("\n")[1]
+        end_time_str = timing_line.split(" --> ")[1]
+        return self._srt_time_to_seconds(end_time_str)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_last_cue_end_excludes_trailing_silence(self, mock_choose):
+        pause_seconds = 1.5
+        self._write_metadata(pause_seconds=pause_seconds)
+
+        create_subtitle(self.project_path)
+
+        expected = self.scene1_duration + (self.scene2_duration - pause_seconds)
+        self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_no_metadata_file_uses_full_scene_duration(self, mock_choose):
+        # 메타데이터가 없으면(기존 프로젝트) 무음 보정 없이 기존 동작
+        # (전체 scene2 길이를 그대로 씀) 그대로여야 한다.
+        create_subtitle(self.project_path)
+
+        expected = self.scene1_duration + self.scene2_duration
+        self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_corrupt_metadata_falls_back_without_raising(self, mock_choose):
+        metadata_path = os.path.join(
+            self.project_path, "audio", DURATION_OPTIMIZATION_METADATA_FILENAME,
+        )
+        with open(metadata_path, "w", encoding="utf-8") as f:
+            f.write("not valid json {{{")
+
+        create_subtitle(self.project_path)  # 예외 없이 끝나야 함
+
+        expected = self.scene1_duration + self.scene2_duration
+        self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_abnormal_pause_larger_than_scene_falls_back(self, mock_choose):
+        # pause_seconds(100)가 scene2 전체 길이보다 훨씬 크면 비정상
+        # 이므로 무시하고 전체 길이를 그대로 써야 한다.
+        self._write_metadata(pause_seconds=100.0)
+
+        create_subtitle(self.project_path)
+
+        expected = self.scene1_duration + self.scene2_duration
+        self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
+
+    @patch(
+        "app.services.subtitle_service.choose_subtitle_position",
+        return_value=POSITION_BOTTOM,
+    )
+    def test_only_last_scene_is_affected_first_scene_unchanged(self, mock_choose):
+        self._write_metadata(pause_seconds=1.5)
+
+        create_subtitle(self.project_path)
+
+        srt_text = self._read_srt()
+        first_cue = srt_text.strip().split("\n\n")[0]
+        timing_line = first_cue.split("\n")[1]
+        start_time_str = timing_line.split(" --> ")[0]
+
+        self.assertEqual(start_time_str, "00:00:00,000")
 
 
 if __name__ == "__main__":

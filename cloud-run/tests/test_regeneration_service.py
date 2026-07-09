@@ -229,6 +229,7 @@ class TestRegenerationService(unittest.TestCase):
             os.path.join(self.project_path, "images", "scene3.png"),
             channel="wellbeing",
             is_hook_scene=False,
+            visual_type=None,
         )
         mock_build_video.assert_called_once_with(self.project_path)
         mock_merge.assert_called_once_with(self.project_path)
@@ -288,7 +289,7 @@ class TestRegenerationService(unittest.TestCase):
         mock_step07.load.return_value = initial_report
         mock_step07.evaluate.return_value = post_cycle_report
 
-        def _side_effect(prompt, output_file, channel, is_hook_scene):
+        def _side_effect(prompt, output_file, channel, is_hook_scene, visual_type=None):
             if "scene1" in output_file:
                 raise Exception("scene1 failed")
 
@@ -403,6 +404,7 @@ class TestRegenerationService(unittest.TestCase):
             os.path.join(self.project_path, "images", "scene1.png"),
             channel="wellbeing",
             is_hook_scene=True,
+            visual_type=None,
         )
 
         entries = {e.scene: e for e in result.regeneration}
@@ -422,6 +424,56 @@ class TestRegenerationService(unittest.TestCase):
         regeneration_service.run(self.project_path)
 
         mock_generate_image.assert_called_once()
+
+    # --- Sprint60 Hotfix 문제1: 재생성 시에도 visual_type이 그대로
+    # 전달돼야 의료 일러스트 스타일이 유지된다(안 그러면 재생성해도
+    # 계속 같은 "사람 얼굴 + 의료 이미지" 문제가 반복된다) ---
+
+    def test_visual_type_is_passed_through_on_regeneration(
+        self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
+    ):
+        with open(
+            os.path.join(self.project_path, "script.json"), "w", encoding="utf-8",
+        ) as f:
+            json.dump(
+                {
+                    "scenes": [
+                        {"scene": 1, "image_prompt": "prompt1", "visual_type": "real"},
+                        {"scene": 3, "image_prompt": "prompt3", "visual_type": "ai"},
+                    ]
+                },
+                f,
+            )
+
+        initial_report = _report(ai_evaluation=_ai_evaluation([(3, True, "얼굴 합성됨")]))
+        post_cycle_report = _report(ai_evaluation=_ai_evaluation([(3, False, None)]))
+        mock_step07.load.return_value = initial_report
+        mock_step07.evaluate.return_value = post_cycle_report
+
+        regeneration_service.run(self.project_path)
+
+        mock_generate_image.assert_called_once_with(
+            "prompt3",
+            os.path.join(self.project_path, "images", "scene3.png"),
+            channel="wellbeing",
+            is_hook_scene=False,
+            visual_type="ai",
+        )
+
+    def test_visual_type_missing_defaults_to_none(
+        self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
+    ):
+        # visual_type 필드 자체가 없는(구버전) script.json도 KeyError
+        # 없이 동작해야 한다.
+        initial_report = _report(ai_evaluation=_ai_evaluation([(3, True, "bad")]))
+        post_cycle_report = _report(ai_evaluation=_ai_evaluation([(3, False, None)]))
+        mock_step07.load.return_value = initial_report
+        mock_step07.evaluate.return_value = post_cycle_report
+
+        regeneration_service.run(self.project_path)
+
+        _, kwargs = mock_generate_image.call_args
+        self.assertIsNone(kwargs["visual_type"])
 
     def test_total_failure_cycle_stops_without_a_second_attempt(
         self, mock_step07, mock_generate_image, mock_build_video, mock_merge,

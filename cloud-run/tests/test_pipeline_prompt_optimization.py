@@ -101,6 +101,10 @@ def patched_pipeline():
 def _wire_defaults(mocks):
     mocks["step01"].run.return_value = dict(SAMPLE_DATA)
     mocks["visual_consistency"].apply_visual_consistency.return_value = STYLED_SCENES
+    # Sprint60 - apply_visual_type을 항등 함수로 둬서(scenes 그대로
+    # 통과), collect_assets 호출 인자를 검증하는 기존 테스트들이
+    # visual_type 분기 도입과 무관하게 그대로 성립하도록 한다.
+    mocks["scene_planner"].apply_visual_type.side_effect = lambda scenes: scenes
     mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
 
 

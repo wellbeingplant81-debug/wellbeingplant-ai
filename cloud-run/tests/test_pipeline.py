@@ -28,6 +28,14 @@ STYLED_SCENES = [
     {"scene": 2, "narration": "n2", "image_prompt": "p2 styled"},
 ]
 
+# Sprint60 - 이 테스트 파일은 scene_planner_service를 mock하지 않으므로
+# 실제 apply_visual_type()이 실행돼 STYLED_SCENES에 visual_type을 채운
+# 뒤 step02_assets.collect_assets로 넘어간다("n1"/"n2", "p1 styled"/
+# "p2 styled"에는 real/ai 키워드가 없어 기본값인 "real"이 된다).
+VISUAL_TYPED_SCENES = [
+    {**scene, "visual_type": "real"} for scene in STYLED_SCENES
+]
+
 ENRICHED_SCENES = [
     {
         "scene": 1, "narration": "n1", "image_prompt": "p1 styled",
@@ -84,7 +92,7 @@ class TestPipeline(unittest.TestCase):
             SAMPLE_DATA["scenes"], "wellbeing",
         )
         mock_step02_assets.collect_assets.assert_called_once_with(
-            STYLED_SCENES, self.project_path, "wellbeing",
+            VISUAL_TYPED_SCENES, self.project_path, "wellbeing",
         )
         self.assertEqual(result["scenes"], ENRICHED_SCENES)
 

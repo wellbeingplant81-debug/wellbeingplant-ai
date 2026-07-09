@@ -151,7 +151,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -248,7 +248,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -334,7 +334,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         }
         mock_get_candidates.return_value = [low_quality_candidate]
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -359,7 +359,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         # 선택("ai_priority")이 아니라 기존과 같은 "fallback"이어야 한다.
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -370,6 +370,198 @@ class TestAssetIntegrationService(unittest.TestCase):
 
         _, kwargs = self.mock_record.call_args
         self.assertEqual(kwargs["outcome"], "fallback")
+
+    # --- Sprint60: Smart Visual Selection v1 (visual_type hard branch) ---
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_real_uses_pexels_first(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        scene = {**SAMPLE_SCENE, "visual_type": "real"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(result["provider"], "pexels_image")
+        mock_generate_image.assert_not_called()
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_real_falls_back_to_ai_when_no_candidates(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = []
+
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "real"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(result["provider"], "ai_image")
+        _, kwargs = self.mock_record.call_args
+        self.assertEqual(kwargs["outcome"], "fallback")
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_real_falls_back_to_ai_when_download_fails(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = Exception("network error")
+
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "real"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(result["provider"], "ai_image")
+
+    @patch("app.services.asset_integration_service.get_candidates")
+    @patch("app.services.asset_integration_service.generate_image")
+    def test_visual_type_ai_uses_imagen_first(
+        self, mock_generate_image, mock_get_candidates,
+    ):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(result["provider"], "ai_image")
+        mock_get_candidates.assert_not_called()
+        _, kwargs = self.mock_record.call_args
+        self.assertEqual(kwargs["outcome"], "ai_priority")
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    @patch("app.services.asset_integration_service.generate_image")
+    def test_visual_type_ai_falls_back_to_pexels_when_imagen_fails(
+        self, mock_generate_image, mock_get_candidates, mock_download,
+    ):
+        mock_generate_image.side_effect = Exception("imagen quota exceeded")
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(result["provider"], "pexels_image")
+        _, kwargs = self.mock_record.call_args
+        self.assertEqual(kwargs["outcome"], "success")
+
+    @patch("app.services.asset_integration_service.get_candidates")
+    @patch("app.services.asset_integration_service.generate_image")
+    def test_visual_type_ai_raises_when_both_imagen_and_pexels_fail(
+        self, mock_generate_image, mock_get_candidates,
+    ):
+        mock_generate_image.side_effect = Exception("imagen quota exceeded")
+        mock_get_candidates.return_value = []
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+
+        with self.assertRaises(Exception):
+            integrate_asset(scene, self.project_path)
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_absent_preserves_prefer_ai_default_behavior(
+        self, mock_get_candidates, mock_download,
+    ):
+        # visual_type이 없는 기존 scene(SAMPLE_SCENE)은 Sprint38의
+        # prefer_ai 소프트 게이트 경로를 그대로 타야 한다 - visual_type
+        # 필드 자체가 없어도 KeyError 없이 동작함을 명시적으로 확인한다.
+        self.assertNotIn("visual_type", SAMPLE_SCENE)
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertEqual(result["provider"], "pexels_image")
+
+    # --- Sprint60 Hotfix 문제1: generate_image가 visual_type을 받아야
+    # 의료 일러스트 스타일 분기(image_service.py)가 실제로 동작한다 ---
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_ai_passes_visual_type_to_generate_image(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        integrate_asset(scene, self.project_path)
+
+        _, kwargs = mock_generate_image.call_args
+        self.assertEqual(kwargs["visual_type"], "ai")
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_real_fallback_passes_visual_type_to_generate_image(
+        self, mock_get_candidates, mock_generate_image,
+    ):
+        # visual_type="real"인 scene이 Pexels 실패로 AI 폴백을 타도,
+        # generate_image에는 "real"이 그대로 전달돼야 한다(의료 스타일이
+        # 아니라 기존 photorealistic 스타일을 써야 하므로).
+        mock_get_candidates.return_value = []
+
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            with open(output_file, "wb") as f:
+                f.write(b"ai bytes")
+            return output_file
+
+        mock_generate_image.side_effect = _generate_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "real"}
+        integrate_asset(scene, self.project_path)
+
+        _, kwargs = mock_generate_image.call_args
+        self.assertEqual(kwargs["visual_type"], "real")
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_type_absent_passes_none_to_generate_image(
+        self, mock_get_candidates, mock_download,
+    ):
+        mock_get_candidates.return_value = []
+
+        with patch(
+            "app.services.asset_integration_service.generate_image",
+        ) as mock_generate_image:
+
+            def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+                with open(output_file, "wb") as f:
+                    f.write(b"ai bytes")
+                return output_file
+
+            mock_generate_image.side_effect = _generate_side_effect
+
+            integrate_asset(SAMPLE_SCENE, self.project_path)
+
+            _, kwargs = mock_generate_image.call_args
+            self.assertIsNone(kwargs["visual_type"])
 
 
 if __name__ == "__main__":

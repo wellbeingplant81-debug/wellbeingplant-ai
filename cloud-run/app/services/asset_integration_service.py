@@ -8,6 +8,87 @@ from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
+from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
+
+
+def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+    ai_path = generate_image(
+        image_prompt,
+        staging_path,
+        channel=channel,
+        is_hook_scene=is_hook_scene,
+        visual_type=visual_type,
+    )
+
+    return {
+        "source": "ai_image",
+        "local_path": ai_path,
+        "metadata": {"query": extract_search_query(image_prompt)},
+    }
+
+
+def _select_real_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+    """
+    Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
+    폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
+    자체가 실패한 경우(네트워크 오류 등) 둘 다 포함한다.
+    """
+
+    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    best_candidate, _ = select_best_with_score(
+        stock_candidates, is_hook_scene=is_hook_scene,
+    )
+
+    if best_candidate is not None:
+        try:
+            return download_candidate(best_candidate, staging_path), False
+        except Exception as exc:
+            print(
+                f"[AssetIntegration] visual_type=real, Pexels 다운로드 "
+                f"실패, Imagen으로 폴백: {exc}"
+            )
+
+    return (
+        _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type),
+        False,
+    )
+
+
+def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+    """
+    Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
+
+    반환값: (result_dict, ai_was_deliberate_choice). ai_was_deliberate_
+    choice는 Imagen이 첫 시도에서 바로 성공했는지(True) - 스톡 검색
+    실패로 인한 어쩔 수 없는 폴백(False)과 구분해 feedback outcome을
+    정확히 기록하기 위함이다.
+    """
+
+    try:
+        return (
+            _ai_result(
+                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            ),
+            True,
+        )
+    except Exception as exc:
+        print(
+            f"[AssetIntegration] visual_type=ai, Imagen 생성 실패, "
+            f"Pexels로 폴백: {exc}"
+        )
+
+    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    best_candidate, _ = select_best_with_score(
+        stock_candidates, is_hook_scene=is_hook_scene,
+    )
+
+    if best_candidate is None:
+        raise Exception(
+            "visual_type=ai 폴백 실패: Imagen과 Pexels 모두 사용할 수 "
+            "없습니다."
+        )
+
+    return download_candidate(best_candidate, staging_path), False
 
 
 def _extract_first_frame(video_path: str, output_image_path: str) -> str:
@@ -47,6 +128,11 @@ def integrate_asset(
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
     Sprint38 - Hybrid Asset Engine: prefer_ai 품질 게이트.
+    Sprint60 - Smart Visual Selection v1: scene["visual_type"]("real"/
+    "ai", visual_type_classifier.apply_visual_type()이 미리 채워둠)이
+    있으면 소프트 게이트 대신 하드 분기한다 - "real"은 Pexels 우선(실패
+    시 Imagen 폴백), "ai"는 Imagen 우선(실패 시 Pexels 폴백). visual_type
+    이 없는 scene은 기존 prefer_ai 경로를 그대로 탄다(완전 하위 호환).
 
     Scene 하나에 대해 후보 자산을 모두 수집(get_candidates)하고,
     Asset Ranking Service로 최고 점수 후보를 선택한 뒤 그 결과를
@@ -91,33 +177,38 @@ def integrate_asset(
     final_image_path = os.path.join(images_dir, f"scene{scene_number}.png")
     staging_path = os.path.join(images_dir, f"scene{scene_number}.raw")
 
-    stock_candidates = get_candidates(image_prompt, allow_video=True)
-    best_candidate, best_score = select_best_with_score(
-        stock_candidates, is_hook_scene=is_hook_scene,
-    )
+    visual_type = scene.get("visual_type")
 
-    quality_override = (
-        prefer_ai
-        and best_candidate is not None
-        and best_score < effective_pexels_threshold(
-            scene, get_pexels_quality_threshold(),
+    if visual_type == VISUAL_TYPE_REAL:
+        result, ai_priority_choice = _select_real_first(
+            image_prompt, staging_path, channel, is_hook_scene, visual_type,
         )
-    )
-
-    if best_candidate is not None and not quality_override:
-        result = download_candidate(best_candidate, staging_path)
+    elif visual_type == VISUAL_TYPE_AI:
+        result, ai_priority_choice = _select_ai_first(
+            image_prompt, staging_path, channel, is_hook_scene, visual_type,
+        )
     else:
-        ai_path = generate_image(
-            image_prompt,
-            staging_path,
-            channel=channel,
-            is_hook_scene=is_hook_scene,
+        # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
+        # 기존 prefer_ai 소프트 품질 게이트 경로를 그대로 유지한다.
+        stock_candidates = get_candidates(image_prompt, allow_video=True)
+        best_candidate, best_score = select_best_with_score(
+            stock_candidates, is_hook_scene=is_hook_scene,
         )
-        result = {
-            "source": "ai_image",
-            "local_path": ai_path,
-            "metadata": {"query": extract_search_query(image_prompt)},
-        }
+
+        ai_priority_choice = (
+            prefer_ai
+            and best_candidate is not None
+            and best_score < effective_pexels_threshold(
+                scene, get_pexels_quality_threshold(),
+            )
+        )
+
+        if best_candidate is not None and not ai_priority_choice:
+            result = download_candidate(best_candidate, staging_path)
+        else:
+            result = _ai_result(
+                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            )
 
     source = result["source"]
     asset_type = "video" if "video" in source else "image"
@@ -135,10 +226,11 @@ def integrate_asset(
 
     if source != "ai_image":
         outcome = "success"
-    elif quality_override:
-        # 스톡 후보가 실제로 있었지만 품질 게이트(pexels_quality_
-        # threshold)를 통과하지 못해 AI를 선택한 경우 - 스톡 검색
-        # 자체가 실패한 "fallback"과는 구분되는 의도적 선택이다.
+    elif ai_priority_choice:
+        # AI가 의도적으로 선택된 경우 - (a) 기존 prefer_ai 품질 게이트가
+        # Pexels 품질 미달로 AI를 택했거나, (b) visual_type="ai" scene이
+        # Imagen을 첫 시도에서 그대로 성공한 경우. 스톡 검색/다운로드
+        # 자체가 실패해 어쩔 수 없이 AI로 넘어간 "fallback"과는 구분한다.
         outcome = "ai_priority"
     else:
         outcome = "fallback"

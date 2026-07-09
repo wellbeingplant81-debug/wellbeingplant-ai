@@ -127,6 +127,7 @@ def run(project_path: str):
                     output_file,
                     channel=channel,
                     is_hook_scene=(scene_number == 1),
+                    visual_type=scenes_by_number[scene_number].get("visual_type"),
                 )
 
                 entry.regeneration.retry_count += 1

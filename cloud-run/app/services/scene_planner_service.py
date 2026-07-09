@@ -10,11 +10,21 @@ image_prompt가 이미 채워진 script.json 구조)를 분석해 연출 계획
 scene_flow_engine)과 달리, 완전히 별도의 계획 리스트(scene_id 기반)를
 반환합니다 - 기존 Pipeline/Scene 구조는 이 모듈을 호출하지 않아도
 완전히 동일하게 동작해야 한다는 Sprint44 원칙에 따른 것입니다.
+
+Sprint60 - apply_visual_type()은 위 원칙과 무관한 별도 함수입니다.
+plan_scenes()의 반환값에도 "visual_type"이라는 키가 있지만(값은
+"illustrative"/"photo_realistic", ENABLE_SCENE_PLANNER가 꺼져 있으면
+아무데도 쓰이지 않는 선택적 오버레이 메타데이터), apply_visual_type()은
+완전히 다른 필드입니다 - scene dict 자체에 "visual_type"("real"/"ai")을
+채워 넣고, image 선택 파이프라인(asset_integration_service.py)이 항상
+이 값을 읽어 Pexels/Imagen 우선순위를 하드 분기합니다. 두 메커니즘은
+이름만 겹칠 뿐 서로 호출하지 않는 독립적인 기능입니다.
 """
 
 from app.services.asset_priority_classifier import classify_scene_importance
 from app.services.search_query_extractor import extract_search_query
 from app.services.transition_engine import assign_transition
+from app.services.visual_type_classifier import apply_visual_type  # noqa: F401
 
 HOOK_PURPOSE = "hook"
 CTA_PURPOSE = "cta"

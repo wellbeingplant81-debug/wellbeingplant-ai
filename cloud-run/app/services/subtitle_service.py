@@ -19,6 +19,11 @@ from app.services.video_builder import _resolve_asset_path
 # 않도록 두는 최소 안전 여유값.
 MIN_LAST_CUE_DURATION_SECONDS = 0.05
 
+# Sprint61 - Silence-Aware Subtitle Timing. app/steps/step03_tts.py가
+# 저장하는 파일명과 반드시 같아야 한다(두 모듈이 공유하는 암묵적
+# 계약) - step03_tts.DURATION_OPTIMIZATION_METADATA_FILENAME 참고.
+DURATION_OPTIMIZATION_METADATA_FILENAME = "duration_optimization.json"
+
 # Sprint57 - Smart Subtitle Placement v1. choose_subtitle_position()이
 # 고른 "top"/"bottom"을 libass가 SRT 안에서도 그대로 해석하는 ASS
 # override tag로 바꾼다. force_style의 기본 Alignment=2(하단)는
@@ -100,12 +105,23 @@ def format_srt_time(seconds: float):
 
 def _split_sentence_by_words(sentence: str, max_chars: int):
     """
-    문장 하나를 공백(단어/어절) 단위로만 묶어 max_chars 이하의
+    문장 하나를 공백(단어/어절) 단위로만 묶어 max_chars(display-width
+    단위, _display_width() 참고 - 한글 등 전각은 2, 반각은 1) 이하의
     자연스러운 조각으로 나눕니다. 쉼표를 우선 분리 기준으로 쓰지
     않으므로 "한 잔," 같은 쉼표 앞의 짧은 절이 단독 조각으로 남지
     않고 다음 단어들과 함께 묶입니다. 글자(음절) 단위 분할은 절대
     하지 않습니다 - 한 단어가 max_chars보다 길어도 그 단어를 쪼개지
     않고 그대로 한 조각으로 둡니다.
+
+    Sprint60 Hotfix - 문제2: 예전에는 len(word)(순수 문자 수)로 폭을
+    쟀는데, 이 함수를 호출하는 split_subtitle()의 max_chars(=
+    CUE_GROUPING_MAX_CHARS)는 display-width 단위(SAFE_AREA_MAX_LINE_
+    WIDTH*MAX_LINES_PER_CUE에서 유도)라서 단위가 서로 달랐다. 그
+    결과 실제보다 훨씬 넉넉한 예산으로 착각해 조각을 넓게 묶었고,
+    조각 안에 공백 없는 긴 복합명사+조사(예: "프로바이오틱스가")가
+    끼면 wrap_to_safe_lines()가 2줄 안에 안전하게 못 넣어 화면 밖으로
+    잘려나갔다(2026-07-09 E2E 실측). _display_width()로 통일해 실제
+    화면 폭 기준과 그룹핑 기준을 맞춘다.
     """
 
     words = sentence.split()
@@ -119,12 +135,12 @@ def _split_sentence_by_words(sentence: str, max_chars: int):
 
     for word in words:
 
-        extra = len(word) + (1 if current else 0)
+        extra = _display_width(word) + (1 if current else 0)
 
         if current and current_len + extra > max_chars:
             groups.append(" ".join(current))
             current = [word]
-            current_len = len(word)
+            current_len = _display_width(word)
         else:
             current.append(word)
             current_len += extra
@@ -132,10 +148,30 @@ def _split_sentence_by_words(sentence: str, max_chars: int):
     if current:
         groups.append(" ".join(current))
 
-    # 마지막 조각이 너무 짧은 자투리(예: 쉼표 하나짜리 절)면 바로
-    # 앞 조각과 합쳐 의미 있는 단위로 유지한다.
-    while len(groups) >= 2 and len(groups[-1]) < MIN_CHARS:
-        groups[-2:] = [f"{groups[-2]} {groups[-1]}"]
+    # 너무 짧은 자투리 조각(예: 쉼표 하나짜리 절)은 인접 조각과 합쳐
+    # 의미 있는 단위로 유지한다 - 첫 조각이면 다음 조각과, 그 외에는
+    # 이전 조각과 합친다. Sprint60 Hotfix 문제2: display-width 기준
+    # 으로 그룹 예산이 빡빡해지면서(위 참고) 자투리가 맨 앞/중간
+    # 어디에도 생길 수 있게 됐다 - 병합 한 번으로 이웃도 자투리가
+    # 되는 경우까지 대비해 더 합칠 게 없을 때까지 반복한다.
+    merged = True
+
+    while merged and len(groups) >= 2:
+
+        merged = False
+
+        for i, group in enumerate(groups):
+
+            if len(group) >= MIN_CHARS:
+                continue
+
+            if i == 0:
+                groups[0:2] = [f"{groups[0]} {groups[1]}"]
+            else:
+                groups[i - 1:i + 1] = [f"{groups[i - 1]} {groups[i]}"]
+
+            merged = True
+            break
 
     return groups
 
@@ -327,7 +363,63 @@ def _greedy_two_line_fallback(words: list, max_line_width: int) -> str:
     return " ".join(line1_words) + "\n" + " ".join(line2_words)
 
 
-def _snap_last_cue_to_final_audio_duration(cues: list, project_path: str) -> None:
+def _load_last_scene_pause_seconds(project_path: str):
+    """
+    Sprint61 - Silence-Aware Subtitle Timing.
+
+    Duration Optimizer(duration_optimizer.optimize_scene_audio())가
+    43초 미만인 내레이션을 43~47초 목표로 맞추려고 마지막 scene 오디오
+    뒤에 무음을 이어붙이는 경우가 있다(action="expand"). 이 무음은
+    실제 발화가 아니므로, cue 타이밍을 그 길이만큼까지 늘리면 마지막
+    자막이 목소리보다 한참 오래 화면에 남는다(2026-07-09 QA 실측 -
+    최대 3초 이상 어긋남).
+
+    app/steps/step03_tts.py가 optimize_scene_audio()의 반환값을
+    audio/duration_optimization.json에 저장해 두므로, 여기서 그
+    pause_seconds(무음 길이)를 읽어온다. 다음 중 하나라도 해당하면
+    None을 반환하고, 호출자는 무음 보정 없이 기존 로직 그대로
+    진행해야 한다 - 어떤 경우에도 예외를 던지지 않는다:
+
+    - 메타데이터 파일이 없음(과거 프로젝트, 하위 호환)
+    - JSON이 손상됨
+    - 최상위 값이 dict가 아님
+    - action이 "expand"가 아님(무음을 붙이지 않았다는 뜻 - 정상 상태)
+    - pause_seconds가 없거나, 숫자가 아니거나(bool 포함), 0 이하
+    """
+
+    path = os.path.join(
+        project_path, "audio", DURATION_OPTIMIZATION_METADATA_FILENAME,
+    )
+
+    if not os.path.exists(path):
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+    except Exception:
+        return None
+
+    if not isinstance(metadata, dict):
+        return None
+
+    if metadata.get("action") != "expand":
+        return None
+
+    pause_seconds = metadata.get("pause_seconds")
+
+    if isinstance(pause_seconds, bool) or not isinstance(pause_seconds, (int, float)):
+        return None
+
+    if pause_seconds <= 0:
+        return None
+
+    return float(pause_seconds)
+
+
+def _snap_last_cue_to_final_audio_duration(
+    cues: list, project_path: str, pause_seconds: float = None,
+) -> None:
     """
     Sprint59 - Subtitle Timing Precision.
 
@@ -347,6 +439,13 @@ def _snap_last_cue_to_final_audio_duration(cues: list, project_path: str) -> Non
     final_audio.mp3가 없거나, ffprobe 측정이 실패하거나(0.0 반환),
     예외가 나면 아무것도 하지 않고 기존 계산값을 그대로 둔다 - 이
     보정 하나 때문에 자막 생성 자체가 실패해서는 안 된다.
+
+    Sprint61 - pause_seconds(Duration Optimizer가 마지막 scene 뒤에
+    붙인 무음 길이, _load_last_scene_pause_seconds() 참고)가 주어지면
+    목표 시각에서 그만큼을 뺀다 - "파일이 끝나는 시점"이 아니라
+    "실제 발화가 끝나는 시점"에 맞춘다. pause_seconds가 비정상(전체
+    길이보다 크거나 같음)이면 무시하고 기존처럼 전체 길이를 그대로
+    쓴다 - 이 보정도 실패 시 예외 없이 조용히 폴백해야 한다.
     """
 
     if not cues:
@@ -369,13 +468,20 @@ def _snap_last_cue_to_final_audio_duration(cues: list, project_path: str) -> Non
     if not actual_duration or actual_duration <= 0:
         return
 
+    target_duration = actual_duration
+
+    if pause_seconds is not None:
+        candidate = actual_duration - pause_seconds
+        if candidate > 0:
+            target_duration = candidate
+
     last_cue = cues[-1]
 
-    if actual_duration <= last_cue["start"]:
+    if target_duration <= last_cue["start"]:
         last_cue["end"] = last_cue["start"] + MIN_LAST_CUE_DURATION_SECONDS
         return
 
-    last_cue["end"] = actual_duration
+    last_cue["end"] = target_duration
 
 
 def create_subtitle(project_path: str):
@@ -434,10 +540,17 @@ def create_subtitle(project_path: str):
     current = 0
     cues = []
 
-    for scene, audio_path in zip(
+    # Sprint61 - Silence-Aware Subtitle Timing. Duration Optimizer는
+    # 항상 마지막 scene 오디오만 후처리하므로(duration_optimizer.py의
+    # scene_audio_paths[-1]), 여기서도 마지막 scene에만 무음 보정을
+    # 적용한다.
+    last_scene_pause_seconds = _load_last_scene_pause_seconds(project_path)
+    last_scene_index = len(scenes) - 1
+
+    for index, (scene, audio_path) in enumerate(zip(
         scenes,
         scene_audios,
-    ):
+    )):
 
         narration = scene["narration"].strip()
 
@@ -449,8 +562,12 @@ def create_subtitle(project_path: str):
         # scene의 모든 cue에 공통으로 적용할 위치를 한 번만
         # 정한다(scene 안에서 위치가 cue마다 바뀌면 자막이
         # 산만해지므로).
+        # Sprint60 Hotfix - Hook Scene(scene 1)의 큰 얼굴 정책을 켜기
+        # 위해 is_hook_scene을 전달한다.
         asset_path = _resolve_asset_path(project_path, scene)
-        position = choose_subtitle_position(asset_path)
+        position = choose_subtitle_position(
+            asset_path, is_hook_scene=(scene.get("scene") == 1),
+        )
         position_tag = _POSITION_TAGS.get(position, _DEFAULT_POSITION_TAG)
 
         subtitles = split_subtitle(
@@ -470,6 +587,16 @@ def create_subtitle(project_path: str):
         # get_audio_duration()(ffprobe)로 측정치를 실제 오디오 파이프
         # 라인과 일치시킨다.
         scene_duration = get_audio_duration(audio_path)
+
+        # Sprint61 - 마지막 scene이고 유효한 pause_seconds가 있으면,
+        # 무음 패딩을 뺀 "실제 발화 길이"로 이 scene의 cue들을 배분한다
+        # - 안 그러면 cue가 무음 구간까지 늘어난다. pause_seconds가
+        # scene_duration 이상(비정상)이면 무시하고 기존처럼 전체
+        # 길이를 그대로 쓴다.
+        if index == last_scene_index and last_scene_pause_seconds is not None:
+            effective_duration = scene_duration - last_scene_pause_seconds
+            if effective_duration > 0:
+                scene_duration = effective_duration
 
         lengths = [
             max(1, len(x))
@@ -505,8 +632,11 @@ def create_subtitle(project_path: str):
         current += scene_duration
 
     # Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.mp3 길이에
-    # 맞춘다(중간 cue는 위에서 계산한 값을 그대로 유지).
-    _snap_last_cue_to_final_audio_duration(cues, project_path)
+    # 맞춘다(중간 cue는 위에서 계산한 값을 그대로 유지). Sprint61 -
+    # pause_seconds가 있으면 그 길이만큼 뺀 "실제 발화 끝"에 맞춘다.
+    _snap_last_cue_to_final_audio_duration(
+        cues, project_path, pause_seconds=last_scene_pause_seconds,
+    )
 
     with open(
         srt_path,

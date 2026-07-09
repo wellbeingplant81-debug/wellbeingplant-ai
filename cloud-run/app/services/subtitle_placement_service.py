@@ -53,6 +53,23 @@ FACE_SCORE_THRESHOLD = 0.7
 FACE_NMS_THRESHOLD = 0.3
 FACE_TOP_K = 5000
 
+# Sprint60 Hotfix - 문제3: YuNet은 이 파이프라인이 실제로 만드는
+# 초고해상도(2000~7000px대) 이미지에 원본 그대로 setInputSize를 걸면
+# 신뢰도가 급락한다(2026-07-09 실측 - 2333x3500/4480x6720에서 뚜렷한
+# 얼굴을 0건 검출하거나, 3981x5972에서 얼굴 대신 22x26px짜리 엉뚱한
+# blob을 검출함). 긴 변을 이 값 이하로 축소해 검출하면 4장 모두
+# 0.9+ confidence로 정확히 검출된다(실측 확인).
+FACE_DETECTION_MAX_DIMENSION = 640
+
+# Sprint60 Hotfix - Hook Scene(scene 1) 전용 정책: 얼굴 bbox 높이가
+# 이미지 전체 높이의 이 비율을 넘으면 "큰 얼굴"(클로즈업)로 본다.
+# 이 정도 크기의 얼굴은 상/하 25% 스트립 중심점 판정으로는 잡히지
+# 않으면서도(중앙에 걸쳐 있으므로) 자막이 얼굴 중앙(코/입)을 가리는
+# 문제가 실측됐다(2026-07-09 QA). 최초 0.30은 실제 Hook Scene 얼굴
+# (height_ratio=0.299)을 근소하게 놓쳐 같은 문제가 재현됐다(영상
+# 프레임 직접 확인) - 여유를 두고 0.20으로 낮춘다.
+HOOK_LARGE_FACE_HEIGHT_RATIO = 0.20
+
 # 성공했을 때만 채워지는 싱글톤 - 실패는 절대 여기 캐시하지 않는다.
 _face_detector = None
 
@@ -97,6 +114,11 @@ def _detect_faces(image_bgr):
     검출기를 준비할 수 없거나 detect() 자체가 실패하면 None을
     반환한다(= "이번엔 얼굴 검출을 신뢰할 수 없음", 얼굴이 0개인
     것과는 구분된다). 정상적으로 얼굴이 0개면 빈 리스트를 반환한다.
+
+    긴 변이 FACE_DETECTION_MAX_DIMENSION을 넘으면 비율을 유지한 채
+    축소해서 검출하고(YuNet 신뢰도 문제 회피), 반환하는 bbox 좌표는
+    항상 원본 image_bgr 좌표계로 되돌려서 돌려준다 - 호출자
+    (_face_strip_presence)는 축소 여부를 몰라도 된다.
     """
 
     detector = _get_face_detector()
@@ -106,13 +128,28 @@ def _detect_faces(image_bgr):
 
     try:
         height, width = image_bgr.shape[:2]
-        detector.setInputSize((width, height))
-        _, faces = detector.detect(image_bgr)
+        scale = min(1.0, FACE_DETECTION_MAX_DIMENSION / max(height, width))
+
+        if scale < 1.0:
+            detect_image = cv2.resize(
+                image_bgr,
+                (max(1, int(width * scale)), max(1, int(height * scale))),
+            )
+        else:
+            detect_image = image_bgr
+
+        detect_height, detect_width = detect_image.shape[:2]
+        detector.setInputSize((detect_width, detect_height))
+        _, faces = detector.detect(detect_image)
     except Exception:
         return None
 
     if faces is None:
         return []
+
+    if scale < 1.0:
+        faces = faces.copy()
+        faces[:, :14] /= scale
 
     return faces
 
@@ -142,13 +179,58 @@ def _face_strip_presence(faces, height, top_h, bottom_h):
     return face_in_top, face_in_bottom
 
 
-def choose_subtitle_position(image_path: str) -> str:
+def _hook_large_face_position(faces, height, top_h, bottom_h):
+    """
+    Sprint60 Hotfix - Hook Scene에서 큰 얼굴(클로즈업)이 상/하 25%
+    스트립 중심점 판정을 피해가는 문제에 대한 전용 정책. 큰 얼굴이
+    없으면 None(관여하지 않음). 큰 얼굴이 있으면 우선순위대로 실제
+    bbox가 하단/상단 Safe Area와 겹치는지 직접 확인한다:
+
+    1. 하단 Safe Area와 안 겹치면 -> "bottom"
+    2. (하단은 겹치지만) 상단 Safe Area와 안 겹치면 -> "top"
+    3. 둘 다 겹치면 -> None(기존 로직에 맡김)
+    """
+
+    bottom_boundary = height - bottom_h
+
+    large_faces = [
+        face for face in faces
+        if float(face[3]) / height > HOOK_LARGE_FACE_HEIGHT_RATIO
+    ]
+
+    if not large_faces:
+        return None
+
+    overlaps_bottom = any(
+        float(face[1]) + float(face[3]) > bottom_boundary
+        for face in large_faces
+    )
+
+    if not overlaps_bottom:
+        return POSITION_BOTTOM
+
+    overlaps_top = any(
+        float(face[1]) < top_h
+        for face in large_faces
+    )
+
+    if not overlaps_top:
+        return POSITION_TOP
+
+    return None
+
+
+def choose_subtitle_position(image_path: str, is_hook_scene: bool = False) -> str:
     """
     얼굴이 상/하단 25% 스트립 중 한쪽에서만 검출되면 반대쪽에 자막을
     배치한다(얼굴 회피 최우선). 양쪽 다 얼굴이 있거나 둘 다 없으면
     (또는 얼굴 검출이 불가능하면) 상단/하단 중 더 단순한(복잡도가
     낮은) 쪽에 배치하기로 결정한다. 경로가 없거나, 파일이 없거나,
     이미지를 디코딩할 수 없으면 DEFAULT_POSITION을 반환한다.
+
+    is_hook_scene=True이고 큰 얼굴(클로즈업)이 검출되면, 그 판단이
+    이 함수의 다른 모든 판단보다 우선한다 - 자세한 내용은
+    _hook_large_face_position() 참고.
     """
 
     if not image_path or not os.path.exists(image_path):
@@ -178,6 +260,12 @@ def choose_subtitle_position(image_path: str) -> str:
 
     if faces is None:
         return laplacian_position
+
+    if is_hook_scene:
+        hook_position = _hook_large_face_position(faces, height, top_h, bottom_h)
+
+        if hook_position is not None:
+            return hook_position
 
     face_in_top, face_in_bottom = _face_strip_presence(faces, height, top_h, bottom_h)
 

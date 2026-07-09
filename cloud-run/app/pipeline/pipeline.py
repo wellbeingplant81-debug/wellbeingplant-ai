@@ -140,6 +140,14 @@ def run_pipeline(
         except Exception as exc:
             print(f"AI director step failed: {exc}")
 
+    # Sprint60 - Smart Visual Selection v1: 최종 image_prompt(enrichment/
+    # optimization까지 다 반영된 뒤)를 기준으로 scene마다 real/ai를
+    # 정한다. scene_plan(ENABLE_SCENE_PLANNER) 오버레이와 달리 항상
+    # 실행된다 - asset 선택에 직접 쓰이는 필수 분기이기 때문이다.
+    data["scenes"] = scene_planner_service.apply_visual_type(
+        data["scenes"],
+    )
+
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(
         data["scenes"],

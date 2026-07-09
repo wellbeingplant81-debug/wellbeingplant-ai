@@ -15,12 +15,15 @@ from app.prompts.image_style import (
     MINDTAIL_STYLE,
     THUMBNAIL_STYLE,
     HOOK_SCENE_STYLE_BOOST,
+    MEDICAL_ILLUSTRATION_STYLE,
     WELLBEING_NEGATIVE_PROMPT,
     FOODBEAT_NEGATIVE_PROMPT,
     MINDTAIL_NEGATIVE_PROMPT,
     THUMBNAIL_NEGATIVE_PROMPT,
     HOOK_SCENE_NEGATIVE_PROMPT,
+    MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT,
 )
+from app.services.visual_type_classifier import VISUAL_TYPE_AI
 
 
 client = genai.Client(
@@ -83,11 +86,19 @@ def generate_image(
     channel: str = "wellbeing",
     is_thumbnail: bool = False,
     is_hook_scene: bool = False,
+    visual_type: str = None,
 ):
 
     if is_thumbnail:
         style_prompt = THUMBNAIL_STYLE
         negative_prompt = THUMBNAIL_NEGATIVE_PROMPT
+    elif visual_type == VISUAL_TYPE_AI:
+        # Sprint60 Hotfix - 문제1: 혈관/세포/장내세균 등은 사람 사진이
+        # 아니라 의료 일러스트로 생성한다. is_hook_scene이어도(우연히
+        # scene 1이 의료 주제인 경우) 이 분기가 우선한다 - hook scene의
+        # "강한 임팩트"는 사람 얼굴이 아니라 시각적 대비로 만든다.
+        style_prompt = MEDICAL_ILLUSTRATION_STYLE
+        negative_prompt = MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT
     elif is_hook_scene:
         base_style = STYLE_MAP.get(
             channel,
