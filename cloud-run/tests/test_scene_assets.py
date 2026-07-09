@@ -123,7 +123,11 @@ class TestSceneAssetsStructure(unittest.TestCase):
 
         result = integrate_asset(SAMPLE_SCENE, self.project_path)
 
-        self.assertEqual(len(result["assets"]), 1)
+        # Sprint62-4 - AI 경로(source == "ai_image")는 이제 assets를
+        # 4개까지 생성한다(app.services.asset_integration_service의
+        # AI_ASSET_COUNT). Sprint62-1 시점엔 1개였지만, assets[0]가
+        # asset_path와 같다는 핵심 불변식은 그대로 유지된다.
+        self.assertEqual(len(result["assets"]), 4)
         self.assertEqual(result["assets"][0]["path"], result["asset_path"])
 
     @patch("app.services.asset_integration_service.subprocess.run")

@@ -11,6 +11,12 @@ from app.services.search_query_extractor import extract_search_query
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 
 
+# Sprint62-4 - Visual Diversity 첫 단계: AI로 생성된 scene 하나당
+# 만들 asset 총 개수(1차 asset 포함). 프롬프트 다양화는 다음
+# 스프린트 범위이므로 지금은 상수로 고정한다.
+AI_ASSET_COUNT = 4
+
+
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
     ai_path = generate_image(
         image_prompt,
@@ -117,6 +123,38 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
         raise Exception(f"비디오 첫 프레임 추출 실패: {result.stderr}")
 
     return output_image_path
+
+
+def _generate_extra_ai_assets(
+    image_prompt, images_dir, scene_number, channel, is_hook_scene, visual_type,
+):
+    """
+    Sprint62-4 - 1차 asset이 이미 AI(Imagen)로 생성된 scene에 한해,
+    동일한 image_prompt로 추가 이미지를 순차 생성합니다(AI_ASSET_COUNT
+    - 1개). 프롬프트 다양화(장면 분할)는 다음 스프린트 범위입니다.
+    """
+
+    extra_assets = []
+
+    for i in range(2, AI_ASSET_COUNT + 1):
+
+        output_file = os.path.join(images_dir, f"scene{scene_number}_{i}.png")
+
+        generate_image(
+            image_prompt,
+            output_file,
+            channel=channel,
+            is_hook_scene=is_hook_scene,
+            visual_type=visual_type,
+        )
+
+        extra_assets.append({
+            "type": "image",
+            "path": output_file,
+            "prompt": image_prompt,
+        })
+
+    return extra_assets
 
 
 def integrate_asset(
@@ -255,14 +293,24 @@ def integrate_asset(
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
 
-    # Sprint62-1 - Visual Diversity 기반 구조: 향후 scene당 여러 asset을
-    # 지원하기 위한 준비 단계. 이번 스프린트에서는 기존 asset_path와
-    # 동일한 이미지 하나만 담는다 - 실제 동작(video_builder가 읽는
-    # 경로 등)은 전혀 바뀌지 않는다.
+    # Sprint62-1 - Visual Diversity 기반 구조: scene["assets"][0]은
+    # 항상 asset_path와 동일한 1차 이미지다.
+    extra_assets = (
+        _generate_extra_ai_assets(
+            image_prompt, images_dir, scene_number, channel, is_hook_scene,
+            visual_type,
+        )
+        if source == "ai_image"
+        # Sprint62-4 - 1차 asset이 AI로 생성된 scene만 동일 prompt로
+        # 추가 이미지를 생성한다. 스톡(Pexels/Pixabay) 선택 scene은
+        # 이번 스프린트에서 손대지 않는다(assets 1개 그대로 유지).
+        else []
+    )
+
     enriched["assets"] = [{
         "type": "image",
         "path": final_image_path,
         "prompt": image_prompt,
-    }]
+    }] + extra_assets
 
     return enriched
