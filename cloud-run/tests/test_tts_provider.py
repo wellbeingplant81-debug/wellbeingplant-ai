@@ -8,7 +8,7 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
-from app.providers.tts_provider import generate_voice
+from app.providers.tts_provider import generate_voice, list_voices
 
 
 @patch("app.providers.tts_provider.google_tts_provider")
@@ -137,6 +137,40 @@ class TestTtsProviderRouting(unittest.TestCase):
         called_text = mock_elevenlabs.generate_voice.call_args[0][0]
         self.assertIn("2번", called_text)
         self.assertNotIn("두 번", called_text)
+
+
+@patch("app.providers.tts_provider.google_tts_provider")
+@patch("app.providers.tts_provider.elevenlabs_provider")
+class TestTtsProviderListVoicesRouting(unittest.TestCase):
+
+    def setUp(self):
+        self._env_patcher = patch.dict(os.environ, {}, clear=False)
+        self._env_patcher.start()
+        self.addCleanup(self._env_patcher.stop)
+        os.environ.pop("TTS_PROVIDER", None)
+
+    def test_no_env_var_routes_to_google_as_default(
+        self, mock_elevenlabs, mock_google,
+    ):
+        mock_google.list_voices.return_value = ["ko-KR-Chirp3-HD-Aoede"]
+
+        result = list_voices()
+
+        self.assertEqual(result, ["ko-KR-Chirp3-HD-Aoede"])
+        mock_google.list_voices.assert_called_once_with()
+        mock_elevenlabs.list_voices.assert_not_called()
+
+    def test_provider_elevenlabs_routes_to_elevenlabs(
+        self, mock_elevenlabs, mock_google,
+    ):
+        os.environ["TTS_PROVIDER"] = "elevenlabs"
+        mock_elevenlabs.list_voices.return_value = ["Brandon"]
+
+        result = list_voices()
+
+        self.assertEqual(result, ["Brandon"])
+        mock_elevenlabs.list_voices.assert_called_once_with()
+        mock_google.list_voices.assert_not_called()
 
 
 if __name__ == "__main__":

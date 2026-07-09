@@ -180,5 +180,37 @@ class TestGenerateVoice(unittest.TestCase):
         mock_post.assert_not_called()
 
 
+class TestListVoices(unittest.TestCase):
+
+    @patch.dict(os.environ, {"ELEVENLABS_API_KEY": "key"}, clear=True)
+    @patch("app.providers.elevenlabs_provider.requests.get")
+    def test_returns_voice_names(self, mock_get):
+        mock_get.return_value = _fake_response(
+            json_data={"voices": [{"name": "Brandon"}, {"name": "Rachel"}]},
+        )
+
+        voices = elevenlabs_provider.list_voices()
+
+        self.assertEqual(voices, ["Brandon", "Rachel"])
+        mock_get.assert_called_once_with(
+            elevenlabs_provider.VOICES_URL,
+            headers={"xi-api-key": "key"},
+            timeout=elevenlabs_provider.REQUEST_TIMEOUT_SECONDS,
+        )
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_missing_api_key_raises(self):
+        with self.assertRaises(Exception):
+            elevenlabs_provider.list_voices()
+
+    @patch.dict(os.environ, {"ELEVENLABS_API_KEY": "key"}, clear=True)
+    @patch("app.providers.elevenlabs_provider.requests.get")
+    def test_non_200_response_raises(self, mock_get):
+        mock_get.return_value = _fake_response(status_code=401, text="Unauthorized")
+
+        with self.assertRaises(Exception):
+            elevenlabs_provider.list_voices()
+
+
 if __name__ == "__main__":
     unittest.main()

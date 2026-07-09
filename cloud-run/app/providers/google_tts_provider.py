@@ -30,3 +30,12 @@ def generate_voice(text: str, output_file: str):
         out.write(response.audio_content)
 
     return output_file
+
+
+def list_voices(language_code: str = "ko-KR"):
+
+    client = texttospeech.TextToSpeechClient()
+
+    response = client.list_voices(language_code=language_code)
+
+    return [voice.name for voice in response.voices]

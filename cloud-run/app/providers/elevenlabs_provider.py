@@ -108,3 +108,24 @@ def generate_voice(text: str, output_file: str):
         f.write(response.content)
 
     return output_file
+
+
+def list_voices():
+
+    api_key = os.getenv("ELEVENLABS_API_KEY")
+
+    if not api_key:
+        raise Exception("ELEVENLABS_API_KEY 환경변수가 설정되어 있지 않습니다.")
+
+    response = requests.get(
+        VOICES_URL,
+        headers={"xi-api-key": api_key},
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+
+    if response.status_code != 200:
+        raise Exception(
+            f"ElevenLabs Voice 목록 조회 실패 ({response.status_code}): {response.text}"
+        )
+
+    return [voice["name"] for voice in response.json().get("voices", [])]

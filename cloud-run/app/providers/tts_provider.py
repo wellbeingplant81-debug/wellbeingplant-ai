@@ -27,3 +27,13 @@ def generate_voice(text: str, output_file: str):
     # 원문은 절대 바꾸지 않는다 - optimize_for_tts()와 동일한 원칙.
     normalized_text = normalize_for_speech(text)
     return google_tts_provider.generate_voice(normalized_text, output_file)
+
+
+def list_voices():
+
+    provider = os.getenv("TTS_PROVIDER", "google").lower()
+
+    if provider == "elevenlabs":
+        return elevenlabs_provider.list_voices()
+
+    return google_tts_provider.list_voices()
