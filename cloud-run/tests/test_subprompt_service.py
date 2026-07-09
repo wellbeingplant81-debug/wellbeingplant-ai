@@ -99,5 +99,75 @@ class TestGenerateSubprompts(unittest.TestCase):
         self.assertEqual(result, [IMAGE_PROMPT] * 2)
 
 
+class TestSubpromptShotTypeDiversity(unittest.TestCase):
+    """
+    Sprint63-1 - Visual Diversity 품질 향상. count가 기본값(4)일 때는
+    Wide/Medium/Close-up/Detail Shot처럼 서로 다른 화면 구성을 명시적
+    으로 요청해 중복 프롬프트를 줄인다. LLM이 지시를 무시하고 중복된
+    서브프롬프트를 반환하면 안전망으로 image_prompt 반복 폴백을
+    적용한다.
+    """
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_requests_four_distinct_shot_types(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["a", "b", "c", "d"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        sent_prompt = mock_client.models.generate_content.call_args.kwargs["contents"].lower()
+        for shot_type in ["wide shot", "medium shot", "close-up", "detail shot"]:
+            self.assertIn(shot_type, sent_prompt)
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_instructs_against_duplicate_subprompts(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["a", "b", "c", "d"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        sent_prompt = mock_client.models.generate_content.call_args.kwargs["contents"]
+        self.assertIn("중복", sent_prompt)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_subprompts_contain_exact_duplicates(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["same framing", "same framing", "other", "another"],
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_duplicates_differ_only_by_case_and_whitespace(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["Wide shot of a tired woman", "  wide shot of a tired woman  ",
+             "close-up", "detail shot"],
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_accepts_four_distinct_subprompts_unchanged(self, mock_client):
+        subprompts = [
+            "Wide shot establishing the messy office.",
+            "Medium shot of the tired woman at her desk.",
+            "Close-up on her exhausted face.",
+            "Detail shot of her cluttered desk items.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+
 if __name__ == "__main__":
     unittest.main()

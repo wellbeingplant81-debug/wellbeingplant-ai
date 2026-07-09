@@ -20,6 +20,40 @@ client = genai.Client(
 
 SUBPROMPT_COUNT = 4
 
+# Sprint63-1 - Visual Diversity 품질 향상. count가 기본값(4)과 같으면
+# 이 순서대로 서로 다른 화면 구성(shot type)을 하나씩 명시적으로
+# 요청해 중복 프롬프트를 줄인다.
+SHOT_TYPES = ["wide shot", "medium shot", "close-up", "detail shot"]
+
+
+def _shot_type_instruction(count: int) -> str:
+
+    if count != len(SHOT_TYPES):
+        return (
+            f"{count}개 모두 촬영 거리/구도/주목 대상이 서로 뚜렷하게 "
+            f"다른 화면 구성을 사용하세요."
+        )
+
+    numbered = "\n".join(
+        f"{i + 1}. {shot_type} (shot {i + 1})"
+        for i, shot_type in enumerate(SHOT_TYPES)
+    )
+
+    return (
+        "각 서브프롬프트는 아래 순서의 화면 구성(shot type)을 정확히 "
+        f"하나씩 사용하세요.\n{numbered}"
+    )
+
+
+def _has_duplicate_subprompts(subprompts: list) -> bool:
+
+    normalized = [
+        " ".join(subprompt.strip().lower().split())
+        for subprompt in subprompts
+    ]
+
+    return len(set(normalized)) != len(normalized)
+
 
 def generate_subprompts(image_prompt: str, count: int = SUBPROMPT_COUNT) -> list:
 
@@ -27,8 +61,12 @@ def generate_subprompts(image_prompt: str, count: int = SUBPROMPT_COUNT) -> list
         prompt = f"""
 아래 하나의 장면 묘사를 시각적으로 서로 다른 {count}개의 이미지 생성용
 프롬프트로 나눠주세요. 같은 장면, 같은 인물, 같은 상황을 유지하되,
-카메라 각도/구도/디테일에 초점을 다르게 주어 서로 달라 보이도록
-하세요.
+서로 다른 화면이 나오도록 하세요.
+
+{_shot_type_instruction(count)}
+
+절대로 같은 문장을 반복하거나 서로 거의 동일한 프롬프트를 만들지
+마세요 - 중복 없이 반드시 서로 뚜렷하게 구별되어야 합니다.
 
 장면 묘사
 {image_prompt}
@@ -62,6 +100,11 @@ JSON 외의 다른 설명은 절대 출력하지 마세요.
         if not isinstance(subprompts, list) or len(subprompts) != count:
             raise ValueError(
                 f"서브프롬프트 개수가 예상({count})과 다릅니다: {subprompts!r}"
+            )
+
+        if _has_duplicate_subprompts(subprompts):
+            raise ValueError(
+                f"서브프롬프트에 중복이 있습니다: {subprompts!r}"
             )
 
         return subprompts
