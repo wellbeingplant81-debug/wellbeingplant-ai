@@ -160,6 +160,59 @@ def _resolve_asset_path(project_path, scene):
     )
 
 
+def _resolve_asset_paths(project_path, scene):
+    """
+    Sprint62-3 - scene["assets"]의 모든 항목을 순서대로 담은 경로
+    목록을 반환합니다(Scene을 여러 컷으로 순차 재생하기 위함). assets가
+    없거나 비어있으면 기존 _resolve_asset_path()의 단일 결과를 그대로
+    1개짜리 리스트로 반환해 완전히 하위 호환됩니다.
+    """
+
+    assets = scene.get("assets")
+
+    if assets:
+        return [asset["path"] for asset in assets]
+
+    return [_resolve_asset_path(project_path, scene)]
+
+
+def _split_duration_equally(total_duration, count):
+    """
+    Sprint62-3 - Scene duration을 asset 개수로 균등 분배합니다. 합은
+    항상 total_duration과 정확히 일치합니다.
+    """
+
+    if count <= 1:
+        return [total_duration]
+
+    per_cut = total_duration / count
+
+    return [per_cut] * count
+
+
+def _build_scene_clip(asset_paths, clip_duration):
+    """
+    Sprint62-3 - Scene 하나를 구성하는 clip을 만듭니다. asset이 1개면
+    기존과 완전히 동일하게 단일 Ken Burns clip을 반환합니다(렌더링
+    경로 무변경). 여러 개면 clip_duration을 균등 분배해 asset마다
+    Ken Burns clip을 만들고 순서대로 이어 붙입니다 - 컷 사이에는 별도
+    효과를 적용하지 않습니다(scene 경계의 crossfade/fade는 기존처럼
+    이 clip 전체의 앞/뒤에만 적용됩니다).
+    """
+
+    if len(asset_paths) == 1:
+        return build_kenburns_clip(asset_paths[0], clip_duration).with_fps(30)
+
+    cut_durations = _split_duration_equally(clip_duration, len(asset_paths))
+
+    cuts = [
+        build_kenburns_clip(path, duration).with_fps(30)
+        for path, duration in zip(asset_paths, cut_durations)
+    ]
+
+    return concatenate_videoclips(cuts, method="compose").with_fps(30)
+
+
 def _effects_for_clip(index, last_index, scene, duration, overlap):
     """
     scene["transition"](transition_engine.py)에 따라 clip 하나에 적용할
@@ -200,17 +253,18 @@ def build_video(project_path: str):
         "scenes",
     )
 
-    asset_paths = []
+    scene_asset_paths = []
     durations = []
 
     for scene in scenes:
 
-        asset_path = _resolve_asset_path(project_path, scene)
+        asset_paths_for_scene = _resolve_asset_paths(project_path, scene)
 
-        if not os.path.exists(asset_path):
-            raise Exception(
-                f"Scene {scene['scene']}의 asset 파일이 없습니다: {asset_path}"
-            )
+        for asset_path in asset_paths_for_scene:
+            if not os.path.exists(asset_path):
+                raise Exception(
+                    f"Scene {scene['scene']}의 asset 파일이 없습니다: {asset_path}"
+                )
 
         scene_audio = os.path.join(
             scene_audio_folder,
@@ -228,16 +282,16 @@ def build_video(project_path: str):
 
         audio.close()
 
-        asset_paths.append(asset_path)
+        scene_asset_paths.append(asset_paths_for_scene)
 
     durations = _apply_duration_limits(durations)
 
-    last_index = len(asset_paths) - 1
+    last_index = len(scene_asset_paths) - 1
     overlap = CROSSFADE_DURATION
 
     raw_clips = []
 
-    for index, asset_path in enumerate(asset_paths):
+    for index, asset_paths_for_scene in enumerate(scene_asset_paths):
 
         # 마지막 scene을 제외한 모든 clip은 다음 clip과 겹치는(overlap)
         # cross-dissolve 구간만큼 Ken Burns 재생 길이를 늘린다 - 이래야
@@ -250,12 +304,7 @@ def build_video(project_path: str):
             else durations[index] + overlap
         )
 
-        clip = build_kenburns_clip(
-            asset_path,
-            clip_duration,
-        )
-
-        clip = clip.with_fps(30)
+        clip = _build_scene_clip(asset_paths_for_scene, clip_duration)
 
         raw_clips.append(clip)
 
