@@ -12,6 +12,9 @@ import json
 import os
 import re
 
+from app.services import asset_duplicate_detector
+from app.services import asset_usage_planner
+from app.services.asset_integration_service import ASSET_ROLES
 from app.services.duration_optimizer import get_audio_duration
 
 TARGET_MIN_SECONDS = 43.0
@@ -74,10 +77,95 @@ def load_quality_summary(project_path: str):
     }
 
 
+def _validate_roles(roles: list) -> bool:
+    """
+    role이 하나도 없으면(레거시/스톡 - 하위 호환) 위반이 아니라
+    정상으로 취급한다. role이 있다면 asset_integration_service.
+    ASSET_ROLES(environment/subject/detail/transition) 순서와 정확히
+    일치해야 한다. 새로운 판정 규칙이 아니라 기존 ASSET_ROLES 상수를
+    그대로 재사용한 단순 비교다.
+    """
+
+    if all(role is None for role in roles):
+        return True
+
+    return roles == ASSET_ROLES
+
+
+def build_asset_intelligence_summary(project_path: str) -> list:
+    """
+    Sprint64-5 - script.json의 scene별 assets/role을 읽어, 실제
+    이미지 파일의 중복 여부(asset_duplicate_detector.find_duplicate_
+    assets, Sprint64-1)와 role 기반 기대 duration(asset_usage_planner.
+    plan_asset_usage, Sprint64-3)을 읽기 전용으로 리포트한다. 새로운
+    판정 로직은 만들지 않고 기존 함수를 그대로 재사용한다. 파이프라인/
+    렌더링 로직에는 전혀 영향을 주지 않는다.
+
+    script.json이 없으면 빈 리스트를 반환한다. scene["assets"]가 없는
+    레거시 scene, role이 없는 asset(스톡/비디오프레임)도 예외 없이
+    처리된다.
+    """
+
+    script_path = os.path.join(project_path, "script.json")
+
+    if not os.path.exists(script_path):
+        return []
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    scene_audio_durations = {
+        entry["scene"]: entry["duration"]
+        for entry in get_real_durations(project_path)["scenes"]
+    }
+
+    summary = []
+
+    for scene in data.get("scenes", []):
+
+        assets = scene.get("assets") or []
+        roles = [asset.get("role") for asset in assets]
+        asset_paths = [asset["path"] for asset in assets]
+
+        duplicates = (
+            asset_duplicate_detector.find_duplicate_assets(asset_paths)
+            if asset_paths
+            else []
+        )
+
+        scene_duration = scene_audio_durations.get(scene["scene"])
+
+        expected_durations = (
+            [
+                round(entry["duration"], 1)
+                for entry in asset_usage_planner.plan_asset_usage(
+                    assets, scene_duration,
+                )
+            ]
+            if assets and scene_duration is not None
+            else []
+        )
+
+        summary.append({
+            "scene": scene["scene"],
+            "asset_count": len(assets),
+            "roles": roles,
+            "duplicates": duplicates,
+            "expected_durations": expected_durations,
+            "role_validation": _validate_roles(roles),
+        })
+
+    return summary
+
+
 def build_qa_report(project_path: str) -> dict:
     """get_real_durations + load_quality_summary를 합치고,
     Sprint53 Duration Gate/Optimizer의 목표 범위(43~47초) 안에
-    실제 최종 길이가 들어오는지 판정한 값을 더한 종합 리포트."""
+    실제 최종 길이가 들어오는지 판정한 값을 더한 종합 리포트.
+
+    Sprint64-5 - asset_intelligence(멀티에셋/role/중복/기대 duration)
+    를 추가한다. 기존 키(durations/quality/target_range_ok)는 전혀
+    바뀌지 않는다."""
 
     durations = get_real_durations(project_path)
     quality = load_quality_summary(project_path)
@@ -94,6 +182,7 @@ def build_qa_report(project_path: str) -> dict:
         "durations": durations,
         "quality": quality,
         "target_range_ok": target_range_ok,
+        "asset_intelligence": build_asset_intelligence_summary(project_path),
     }
 
 
@@ -128,5 +217,18 @@ def format_report(report: dict) -> str:
         lines.append(f"technical_validation.passed: {quality['passed']}")
         if quality["blocking_failures"]:
             lines.append(f"blocking_failures: {quality['blocking_failures']}")
+
+    asset_intelligence = report.get("asset_intelligence")
+
+    if asset_intelligence:
+        lines.append("")
+        lines.append("Asset Intelligence (Sprint64):")
+        for entry in asset_intelligence:
+            lines.append(
+                f"  scene{entry['scene']}: assets={entry['asset_count']} "
+                f"roles={entry['roles']} role_validation={entry['role_validation']} "
+                f"duplicates={len(entry['duplicates'])} "
+                f"expected_durations={entry['expected_durations']}"
+            )
 
     return "\n".join(lines)
