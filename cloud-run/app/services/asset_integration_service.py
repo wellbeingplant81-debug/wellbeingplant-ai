@@ -8,6 +8,7 @@ from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
+from app.services import subprompt_service
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 
 
@@ -130,18 +131,32 @@ def _generate_extra_ai_assets(
 ):
     """
     Sprint62-4 - 1차 asset이 이미 AI(Imagen)로 생성된 scene에 한해,
-    동일한 image_prompt로 추가 이미지를 순차 생성합니다(AI_ASSET_COUNT
-    - 1개). 프롬프트 다양화(장면 분할)는 다음 스프린트 범위입니다.
+    추가 이미지를 순차 생성합니다(AI_ASSET_COUNT - 1개).
+
+    Sprint62-5 - 동일 prompt를 반복하는 대신, subprompt_service로
+    image_prompt를 시각적으로 다른 AI_ASSET_COUNT개의 서브프롬프트로
+    나눠 각 추가 이미지에 하나씩 사용합니다. subprompts[0]은 1차
+    asset(asset_path)에 대응하는 자리라 이번 스프린트에서는 쓰지
+    않습니다 - 1차 asset은 여전히 원본 image_prompt로 생성됩니다
+    (integrate_asset()의 기존 _ai_result() 경로, 미수정). 서브프롬프트
+    생성이 실패하면 subprompt_service 자체가 image_prompt를 반복한
+    리스트로 폴백하므로, 이 함수는 항상 정상적으로 동작합니다.
     """
+
+    subprompts = subprompt_service.generate_subprompts(
+        image_prompt, count=AI_ASSET_COUNT,
+    )
 
     extra_assets = []
 
     for i in range(2, AI_ASSET_COUNT + 1):
 
+        asset_prompt = subprompts[i - 1]
+
         output_file = os.path.join(images_dir, f"scene{scene_number}_{i}.png")
 
         generate_image(
-            image_prompt,
+            asset_prompt,
             output_file,
             channel=channel,
             is_hook_scene=is_hook_scene,
@@ -151,7 +166,7 @@ def _generate_extra_ai_assets(
         extra_assets.append({
             "type": "image",
             "path": output_file,
-            "prompt": image_prompt,
+            "prompt": asset_prompt,
         })
 
     return extra_assets

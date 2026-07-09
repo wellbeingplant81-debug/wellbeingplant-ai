@@ -71,6 +71,16 @@ class TestSceneAssetsStructure(unittest.TestCase):
         self.addCleanup(ranking_patcher.stop)
         ranking_patcher.start()
 
+        # Sprint62-5: subprompt_service.generate_subprompts()가 실제
+        # Gemini API를 호출하지 않도록, 기본적으로 image_prompt를
+        # count번 반복하는 폴백 동작으로 고정한다.
+        subprompt_patcher = patch(
+            "app.services.asset_integration_service.subprompt_service.generate_subprompts",
+            side_effect=lambda image_prompt, count=4: [image_prompt] * count,
+        )
+        self.addCleanup(subprompt_patcher.stop)
+        subprompt_patcher.start()
+
     # --- 기존 Scene 데이터 로드 가능 ---
 
     @patch("app.services.asset_integration_service.download_candidate")

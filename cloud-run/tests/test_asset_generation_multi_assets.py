@@ -75,6 +75,17 @@ class TestMultiAssetGeneration(unittest.TestCase):
         self.addCleanup(ranking_patcher.stop)
         ranking_patcher.start()
 
+        # Sprint62-5: 기본적으로 subprompt_service.generate_subprompts()가
+        # 실제 Gemini API를 호출하지 않도록 image_prompt를 count번
+        # 반복하는 폴백 동작으로 고정한다. 서브프롬프트 분할 자체를
+        # 검증하는 테스트는 개별적으로 이 mock을 override한다.
+        subprompt_patcher = patch(
+            "app.services.asset_integration_service.subprompt_service.generate_subprompts",
+            side_effect=lambda image_prompt, count=4: [image_prompt] * count,
+        )
+        self.addCleanup(subprompt_patcher.stop)
+        self.mock_generate_subprompts = subprompt_patcher.start()
+
     # --- Scene당 4개 asset 생성 (AI 경로) ---
 
     @patch("app.services.asset_integration_service.generate_image")
@@ -216,6 +227,104 @@ class TestMultiAssetGeneration(unittest.TestCase):
 
         self.assertEqual(len(result["assets"]), 1)
         mock_generate_image.assert_not_called()
+
+    # --- Sprint62-5: 추가 AI asset은 서브프롬프트를 사용한다 ---
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_extra_assets_use_distinct_subprompts_when_available(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        subprompts = ["primary framing", "close-up", "wide shot", "side angle"]
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = subprompts
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        extra_prompts_used = [
+            call.args[0] for call in mock_generate_image.call_args_list[1:]
+        ]
+        self.assertEqual(extra_prompts_used, subprompts[1:])
+
+        extra_asset_prompts = [asset["prompt"] for asset in result["assets"][1:]]
+        self.assertEqual(extra_asset_prompts, subprompts[1:])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_primary_asset_still_uses_raw_image_prompt(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        # 1차 asset(asset_path)은 이번 스프린트에서 손대지 않는다 -
+        # 서브프롬프트가 있어도 원본 image_prompt로 생성돼야 한다.
+        subprompts = ["primary framing", "close-up", "wide shot", "side angle"]
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = subprompts
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        first_call_prompt = mock_generate_image.call_args_list[0].args[0]
+        self.assertEqual(first_call_prompt, SAMPLE_SCENE["image_prompt"])
+        self.assertEqual(result["assets"][0]["prompt"], SAMPLE_SCENE["image_prompt"])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_subprompt_service_called_with_image_prompt_and_asset_count(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [
+            "a", "b", "c", "d",
+        ]
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        integrate_asset(scene, self.project_path)
+
+        mock_generate_subprompts.assert_called_once_with(
+            SAMPLE_SCENE["image_prompt"], count=4,
+        )
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_extra_assets_fall_back_to_image_prompt_when_subprompt_service_falls_back(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        # 서브프롬프트 생성이 실패하면 subprompt_service 자체가
+        # image_prompt를 4번 반복한 리스트로 폴백한다(test_subprompt_
+        # service.py에서 검증) - 이 폴백 결과를 그대로 받았을 때도
+        # 추가 asset 생성이 기존 image_prompt로 정상 동작해야 한다.
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        for asset in result["assets"]:
+            self.assertEqual(asset["prompt"], SAMPLE_SCENE["image_prompt"])
+        for call in mock_generate_image.call_args_list:
+            self.assertEqual(call.args[0], SAMPLE_SCENE["image_prompt"])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_stock_sourced_scene_never_calls_subprompt_service(
+        self, mock_get_candidates, mock_download, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        mock_generate_subprompts.assert_not_called()
 
 
 if __name__ == "__main__":
