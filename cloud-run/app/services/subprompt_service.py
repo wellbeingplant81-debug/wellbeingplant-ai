@@ -9,6 +9,7 @@ Sprint62-5 - Visual Diversity: Sub-prompt Generation.
 """
 
 import json
+import re
 
 from google import genai
 
@@ -74,6 +75,54 @@ def _has_duplicate_subprompts(subprompts: list) -> bool:
     return len(set(normalized)) != len(normalized)
 
 
+# Sprint63-4 - Quality Gate: 두 서브프롬프트의 단어 집합 Jaccard
+# 유사도가 이 값 이상이면 "표현만 다를 뿐 사실상 같은 키워드 반복"으로
+# 보고 폴백한다.
+KEYWORD_OVERLAP_THRESHOLD = 0.8
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+
+def _tokenize(text: str) -> set:
+    return set(_WORD_RE.findall(text.lower()))
+
+
+def _has_near_duplicate_keywords(subprompts: list) -> bool:
+
+    token_sets = [_tokenize(subprompt) for subprompt in subprompts]
+
+    for i in range(len(token_sets)):
+        for j in range(i + 1, len(token_sets)):
+            union = token_sets[i] | token_sets[j]
+            if not union:
+                continue
+            overlap = len(token_sets[i] & token_sets[j]) / len(union)
+            if overlap >= KEYWORD_OVERLAP_THRESHOLD:
+                return True
+
+    return False
+
+
+def _has_missing_dimension(subprompts: list) -> bool:
+    """
+    Sprint63-4 - Shot Type/Focus Type/Camera Angle/Composition/Subject
+    Distance 중 어느 하나라도 4개의 서브프롬프트 전체를 통틀어 단 한
+    번도 언급되지 않았으면(LLM이 해당 축 지시를 완전히 무시함) True를
+    반환한다. 항목별 1:1 배치까지는 강제하지 않는다 - 자연어 응답의
+    표현 편차를 허용하면서도, 축 전체가 통째로 누락된 명백한 실패만
+    잡아낸다.
+    """
+
+    combined_text = " ".join(subprompts).lower()
+
+    dimensions = [SHOT_TYPES, FOCUS_TYPES, CAMERA_ANGLES, COMPOSITIONS, SUBJECT_DISTANCES]
+
+    return any(
+        not any(keyword in combined_text for keyword in dimension)
+        for dimension in dimensions
+    )
+
+
 def generate_subprompts(image_prompt: str, count: int = SUBPROMPT_COUNT) -> list:
 
     try:
@@ -125,6 +174,16 @@ JSON 외의 다른 설명은 절대 출력하지 마세요.
         if _has_duplicate_subprompts(subprompts):
             raise ValueError(
                 f"서브프롬프트에 중복이 있습니다: {subprompts!r}"
+            )
+
+        if _has_near_duplicate_keywords(subprompts):
+            raise ValueError(
+                f"서브프롬프트 키워드가 서로 거의 동일합니다: {subprompts!r}"
+            )
+
+        if count == len(SHOT_TYPES) and _has_missing_dimension(subprompts):
+            raise ValueError(
+                f"서브프롬프트에 누락된 다양성 요소가 있습니다: {subprompts!r}"
             )
 
         return subprompts

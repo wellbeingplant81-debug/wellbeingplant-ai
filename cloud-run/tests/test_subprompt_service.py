@@ -14,6 +14,19 @@ from app.services import subprompt_service
 
 IMAGE_PROMPT = "Ultra realistic photo of a tired woman in a messy office."
 
+# Sprint63-4 - Quality Gate가 요구하는 5개 축(Shot Type/Focus Type/
+# Camera Angle/Composition/Subject Distance)을 전부 만족하는 기준
+# fixture. 이전 스프린트(62-5~63-3)의 "accepts unchanged" 테스트들도
+# 이 fixture로 갱신한다 - 기존 fixture는 새로 추가된 다양성 축(63-2/
+# 63-3에서 도입된 focus/camera/composition/distance) 어휘가 전혀
+# 없어 Quality Gate 도입 후에는 폴백을 유발하기 때문이다.
+GOOD_SUBPROMPTS = [
+    "Wide shot, eye level, centered, full body: the messy office environment at dawn.",
+    "Medium shot, low angle, rule of thirds, half body: the subject, a tired woman, drinking coffee.",
+    "Close-up, high angle, foreground emphasis, close detail: her action of rubbing tired eyes.",
+    "Detail shot, over-the-shoulder, background emphasis, wide environment: a supporting object, an old alarm clock.",
+]
+
 
 def _mock_gemini_response(subprompts):
     response = MagicMock()
@@ -32,14 +45,13 @@ class TestGenerateSubprompts(unittest.TestCase):
     @patch("app.services.subprompt_service.client")
     def test_returns_four_subprompts_from_gemini_response(self, mock_client):
         mock_client.models.generate_content.return_value = _mock_gemini_response(
-            ["close-up shot, tired woman", "wide shot, messy office",
-             "side angle, tired woman", "detail shot, cluttered desk"],
+            GOOD_SUBPROMPTS,
         )
 
         result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
 
         self.assertEqual(len(result), 4)
-        self.assertEqual(result[0], "close-up shot, tired woman")
+        self.assertEqual(result[0], GOOD_SUBPROMPTS[0])
 
     @patch("app.services.subprompt_service.client")
     def test_sends_image_prompt_to_gemini(self, mock_client):
@@ -55,12 +67,12 @@ class TestGenerateSubprompts(unittest.TestCase):
     @patch("app.services.subprompt_service.client")
     def test_strips_markdown_json_fence(self, mock_client):
         response = MagicMock()
-        response.text = "```json\n" + json.dumps({"subprompts": ["a", "b", "c", "d"]}) + "\n```"
+        response.text = "```json\n" + json.dumps({"subprompts": GOOD_SUBPROMPTS}) + "\n```"
         mock_client.models.generate_content.return_value = response
 
         result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
 
-        self.assertEqual(result, ["a", "b", "c", "d"])
+        self.assertEqual(result, GOOD_SUBPROMPTS)
 
     @patch("app.services.subprompt_service.client")
     def test_falls_back_to_image_prompt_on_gemini_exception(self, mock_client):
@@ -155,10 +167,10 @@ class TestSubpromptShotTypeDiversity(unittest.TestCase):
     @patch("app.services.subprompt_service.client")
     def test_accepts_four_distinct_subprompts_unchanged(self, mock_client):
         subprompts = [
-            "Wide shot establishing the messy office.",
-            "Medium shot of the tired woman at her desk.",
-            "Close-up on her exhausted face.",
-            "Detail shot of her cluttered desk items.",
+            "Wide shot establishing the messy office, eye level, centered, full body, environment focus.",
+            "Medium shot of the tired woman at her desk, low angle, rule of thirds, half body, subject focus.",
+            "Close-up on her exhausted face, high angle, foreground emphasis, close detail, action focus.",
+            "Detail shot of her cluttered desk items, over-the-shoulder, background emphasis, wide environment, supporting object focus.",
         ]
         mock_client.models.generate_content.return_value = _mock_gemini_response(
             subprompts,
@@ -240,10 +252,10 @@ class TestSubpromptSemanticFocusDiversity(unittest.TestCase):
     @patch("app.services.subprompt_service.client")
     def test_accepts_four_semantically_distinct_subprompts(self, mock_client):
         subprompts = [
-            "Wide shot of the messy office, establishing the environment.",
-            "Medium shot of the tired woman, the main subject, at her desk.",
-            "Close-up on her hand rubbing her tired eyes, capturing the action.",
-            "Detail shot of a cold coffee cup, a supporting object on the desk.",
+            "Wide shot of the messy office, establishing the environment, eye level, centered, full body.",
+            "Medium shot of the tired woman, the main subject, at her desk, low angle, rule of thirds, half body.",
+            "Close-up on her hand rubbing her tired eyes, capturing the action, high angle, foreground emphasis, close detail.",
+            "Detail shot of a cold coffee cup, a supporting object on the desk, over-the-shoulder, background emphasis, wide environment.",
         ]
         mock_client.models.generate_content.return_value = _mock_gemini_response(
             subprompts,
@@ -361,6 +373,141 @@ class TestSubpromptVisualCompositionDiversity(unittest.TestCase):
         result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
 
         self.assertEqual(result, subprompts)
+
+
+class TestSubpromptQualityGate(unittest.TestCase):
+    """
+    Sprint63-4 - 생성 품질 자동 검증(Quality Gate). Gemini가 반환한
+    4개의 subprompt가 동일 문장/근사 중복 키워드/5개 다양성 축
+    (Shot Type, Focus Type, Camera Angle, Composition, Subject
+    Distance) 중 어느 하나라도 완전히 누락되면 기존 image_prompt
+    반복 폴백을 그대로 사용한다. 새로운 재생성 로직은 추가하지
+    않는다 - 단발성 검증 후 실패 시 즉시 폴백.
+    """
+
+    # --- 거의 동일한 키워드 반복 ---
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_subprompts_are_near_duplicate_in_wording(self, mock_client):
+        # 정확히 동일하지는 않지만(기존 exact-duplicate 검사는 통과)
+        # 단어 대부분이 겹치는 두 문장이 섞여 있으면 폴백해야 한다.
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot of a tired woman sitting at a messy desk in the office.",
+            "Wide shot of a tired woman sitting at a messy desk in an office.",
+            "Close-up on her exhausted face, showing pure exhaustion in her eyes today.",
+            "Detail shot of a coffee cup, cold and half-empty, sitting there quietly.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    # --- 다양성 축 누락 ---
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_shot_type_entirely_missing(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Eye level, centered, full body: the messy office environment at dawn.",
+            "Low angle, rule of thirds, half body: the subject, a tired woman, drinking coffee.",
+            "High angle, foreground emphasis, close detail: her action of rubbing tired eyes.",
+            "Over-the-shoulder, background emphasis, wide environment: a supporting object, an old alarm clock.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_focus_type_entirely_missing(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot, eye level, centered, full body: the messy office at dawn.",
+            "Medium shot, low angle, rule of thirds, half body: a tired woman drinking coffee.",
+            "Close-up, high angle, foreground emphasis, close detail: her rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, background emphasis, close detail: an old alarm clock.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_camera_angle_entirely_missing(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot, centered, full body: the messy office environment at dawn.",
+            "Medium shot, rule of thirds, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, foreground emphasis, close detail: her action of rubbing tired eyes.",
+            "Detail shot, background emphasis, wide environment: a supporting object, an old alarm clock.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_composition_entirely_missing(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot, eye level, full body: the messy office environment at dawn.",
+            "Medium shot, low angle, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, an old alarm clock.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_falls_back_when_subject_distance_entirely_missing(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot, eye level, centered: the messy office environment at dawn.",
+            "Medium shot, low angle, rule of thirds: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, foreground emphasis: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, background emphasis: a supporting object, an old alarm clock.",
+        ])
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    # --- 동일 문장(기존 Sprint63-1 폴백 재확인) ---
+
+    @patch("app.services.subprompt_service.client")
+    def test_still_falls_back_on_identical_sentences(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS[:1] * 4,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    # --- 다양성 축 검사는 count가 4일 때만 적용 ---
+
+    @patch("app.services.subprompt_service.client")
+    def test_dimension_check_skipped_when_count_is_not_four(self, mock_client):
+        # count=2일 때는 애초에 5개 축 키워드를 요청하지 않으므로
+        # (_shot_type_instruction), 다양성 축 누락으로 폴백해서는
+        # 안 된다 - 동일 문장/근사 중복만 아니면 그대로 반환한다.
+        subprompts = ["A tired woman looking at her phone.", "A messy desk with papers scattered."]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT, count=2)
+
+        self.assertEqual(result, subprompts)
+
+    # --- 정상 케이스 ---
+
+    @patch("app.services.subprompt_service.client")
+    def test_passes_quality_gate_and_returns_unchanged_when_all_dimensions_present(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, GOOD_SUBPROMPTS)
 
 
 if __name__ == "__main__":
