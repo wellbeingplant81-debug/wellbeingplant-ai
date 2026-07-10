@@ -19,7 +19,9 @@ SAMPLE_SCENES = [
 ]
 
 
-def _fake_integrate_asset(scene, project_path, channel="wellbeing", prefer_ai=False):
+def _fake_integrate_asset(
+    scene, project_path, channel="wellbeing", prefer_ai=False, visual_profile=None,
+):
     # scene 번호가 클수록 늦게 끝나도록 지연을 줘서 as_completed 순서가
     # 입력 순서와 다를 수 있음을 시뮬레이션한다.
     time.sleep(0.01 * (len(SAMPLE_SCENES) - scene["scene"]))
@@ -108,6 +110,42 @@ class TestStep02Assets(unittest.TestCase):
         self.assertTrue(prefer_ai_by_scene[1])
         self.assertFalse(prefer_ai_by_scene[2])
         self.assertFalse(prefer_ai_by_scene[3])
+
+    # --- Sprint72-1: Visual Diversity Engine wiring ---
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_visual_profile_passed_for_every_scene(self, mock_integrate):
+        collect_assets(SAMPLE_SCENES, "output/proj")
+
+        for call in mock_integrate.call_args_list:
+            self.assertIsNotNone(call.kwargs["visual_profile"])
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_different_scenes_get_different_visual_profiles(self, mock_integrate):
+        collect_assets(SAMPLE_SCENES, "output/proj")
+
+        profiles_by_scene = {
+            call.args[0]["scene"]: call.kwargs["visual_profile"]
+            for call in mock_integrate.call_args_list
+        }
+
+        combos = {
+            (p["camera_distance"], p["camera_angle"])
+            for p in profiles_by_scene.values()
+        }
+        self.assertEqual(len(combos), len(SAMPLE_SCENES))
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_visual_profile_matches_assign_visual_profiles(self, mock_integrate):
+        from app.services.visual_diversity_engine import assign_visual_profiles
+
+        collect_assets(SAMPLE_SCENES, "output/proj")
+
+        expected = assign_visual_profiles(SAMPLE_SCENES)
+
+        for call in mock_integrate.call_args_list:
+            scene_number = call.args[0]["scene"]
+            self.assertEqual(call.kwargs["visual_profile"], expected[scene_number])
 
 
 if __name__ == "__main__":

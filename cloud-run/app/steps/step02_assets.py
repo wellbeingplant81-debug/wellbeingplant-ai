@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.services.asset_integration_service import integrate_asset
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.asset_priority_classifier import select_ai_priority_scenes
+from app.services.visual_diversity_engine import assign_visual_profiles
 
 
 MAX_WORKERS = 3
@@ -26,12 +27,21 @@ def collect_assets(
     asset_integration_service.integrate_asset()의 Pexels 품질
     게이트가 최종 결정합니다.
 
+    Sprint72-1 - Visual Diversity Engine: scene 배치 전체를 대상으로
+    Camera Distance/Angle/Composition/Lighting Profile을 한 번만
+    배정해두고(assign_visual_profiles), 각 scene에 visual_profile로
+    전달합니다 - 이래야 scene마다 서로 다른 조합이 보장됩니다(scene을
+    하나씩 독립적으로 처리하면 배치 전체 관점의 "이미 쓴 조합"을 알
+    수 없습니다).
+
     기존 step02_image.py는 삭제/수정하지 않고 그대로 유지합니다.
     """
 
     ai_priority_scenes = select_ai_priority_scenes(
         scenes, get_ai_ratio_cap(),
     )
+
+    visual_profiles = assign_visual_profiles(scenes)
 
     futures = []
     results = []
@@ -47,6 +57,7 @@ def collect_assets(
                     project_path,
                     channel,
                     prefer_ai=scene["scene"] in ai_priority_scenes,
+                    visual_profile=visual_profiles.get(scene["scene"]),
                 )
             )
 

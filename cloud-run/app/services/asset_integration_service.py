@@ -9,6 +9,7 @@ from app.services.asset_selector import download_candidate, get_candidates
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
 from app.services import subprompt_service
+from app.services.visual_diversity_engine import apply_profile_to_prompt
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 
 
@@ -34,9 +35,17 @@ ASSET_ROLES = ["environment", "subject", "detail", "transition"]
 HYBRID_STOCK_ROLES = {"detail", "transition"}
 
 
-def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def _ai_result(
+    image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
+    visual_profile=None,
+):
+    # Sprint72-1 - Visual Diversity Engine: 실제 이미지 생성(Imagen)에
+    # 넘기는 프롬프트에만 Profile 문구를 얹는다 - search_query 등
+    # 메타데이터는 원본 image_prompt 기준으로 그대로 유지한다.
+    enriched_prompt = apply_profile_to_prompt(image_prompt, visual_profile)
+
     ai_path = generate_image(
-        image_prompt,
+        enriched_prompt,
         staging_path,
         channel=channel,
         is_hook_scene=is_hook_scene,
@@ -50,7 +59,10 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=N
     }
 
 
-def _select_real_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def _select_real_first(
+    image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
+    visual_profile=None,
+):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
@@ -72,12 +84,18 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene, visua
             )
 
     return (
-        _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type),
+        _ai_result(
+            image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            visual_profile,
+        ),
         False,
     )
 
 
-def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def _select_ai_first(
+    image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
+    visual_profile=None,
+):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
 
@@ -91,6 +109,7 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene, visual_
         return (
             _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                visual_profile,
             ),
             True,
         )
@@ -197,6 +216,7 @@ def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_pat
 
 def _generate_extra_ai_assets(
     image_prompt, images_dir, scene_number, channel, is_hook_scene, visual_type,
+    visual_profile=None,
 ):
     """
     Sprint62-4 - 1차 asset이 이미 AI(Imagen)로 생성된 scene에 한해,
@@ -218,10 +238,17 @@ def _generate_extra_ai_assets(
     role 값은 asset 출처와 무관하게 그대로 ASSET_ROLES 순서를
     따릅니다 - 다른 소비처(asset_usage_planner/video_builder/
     qa_report_service)는 role만 보므로 영향받지 않습니다.
+
+    Sprint72-1 - Visual Diversity Engine: subprompt_service에 넘기는
+    베이스 프롬프트에 Profile 문구를 얹어, 이 scene에서 파생되는
+    4개 subprompt 전부(따라서 1차를 제외한 3개 extra asset 전부)가
+    같은 Profile을 공유하게 한다("같은 Scene에서는 Profile을 유지").
     """
 
+    enriched_prompt = apply_profile_to_prompt(image_prompt, visual_profile)
+
     subprompts = subprompt_service.generate_subprompts(
-        image_prompt, count=AI_ASSET_COUNT,
+        enriched_prompt, count=AI_ASSET_COUNT,
     )
 
     extra_assets = []
@@ -272,6 +299,7 @@ def integrate_asset(
     project_path: str,
     channel: str = "wellbeing",
     prefer_ai: bool = False,
+    visual_profile: dict = None,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
@@ -330,10 +358,12 @@ def integrate_asset(
     if visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            visual_profile,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
             image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            visual_profile,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
@@ -356,6 +386,7 @@ def integrate_asset(
         else:
             result = _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                visual_profile,
             )
 
     source = result["source"]
@@ -412,7 +443,7 @@ def integrate_asset(
         primary_asset["role"] = ASSET_ROLES[0]
         extra_assets = _generate_extra_ai_assets(
             image_prompt, images_dir, scene_number, channel, is_hook_scene,
-            visual_type,
+            visual_type, visual_profile,
         )
     else:
         extra_assets = []

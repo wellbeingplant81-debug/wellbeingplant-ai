@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ffprobe *)"
+      "Bash(ffprobe *)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python -m unittest:*)",
+      "Bash(python -m unittest discover:*)",
+      "Bash(.venv/Scripts/python.exe -m unittest:*)",
+      "Bash(.venv/Scripts/python.exe -m unittest discover:*)"
     ]
   }
 }

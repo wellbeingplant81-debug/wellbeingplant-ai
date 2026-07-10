@@ -682,5 +682,144 @@ class TestHybridAssetComposer(unittest.TestCase):
         mock_generate_image.assert_not_called()
 
 
+class TestVisualDiversityWiring(unittest.TestCase):
+    """
+    Sprint72-1 - Visual Diversity Engine이 integrate_asset()의 AI
+    생성 경로(primary + extra 4-asset)에 올바르게 연결되는지 검증한다.
+    visual_profile을 넘기지 않으면(기본값 None) 기존 동작과 100%
+    동일해야 하고(다른 모든 기존 테스트가 이를 증명), 넘기면 AI로
+    보내는 프롬프트에만 반영되고 스톡 검색/role/저장된 prompt 메타
+    데이터에는 영향이 없어야 한다.
+    """
+
+    def setUp(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_dir.cleanup)
+        self.project_path = self._tmp_dir.name
+        os.makedirs(os.path.join(self.project_path, "images"), exist_ok=True)
+
+        feedback_patcher = patch(
+            "app.services.asset_integration_service.asset_feedback_service.record",
+        )
+        self.addCleanup(feedback_patcher.stop)
+        feedback_patcher.start()
+
+        ranking_patcher = patch(
+            "app.services.asset_ranking_service.load_all",
+            return_value=[],
+        )
+        self.addCleanup(ranking_patcher.stop)
+        ranking_patcher.start()
+
+        self.profile = {
+            "camera_distance": "macro",
+            "camera_angle": "top-down",
+            "composition": "leading lines",
+            "lighting": "backlit",
+        }
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_enriches_primary_ai_generation_prompt(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        from app.services.visual_diversity_engine import profile_to_text
+
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        first_call_prompt = mock_generate_image.call_args_list[0].args[0]
+        self.assertIn(profile_to_text(self.profile), first_call_prompt)
+        self.assertIn(SAMPLE_SCENE["image_prompt"], first_call_prompt)
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_enriches_subprompt_generation_base(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        from app.services.visual_diversity_engine import profile_to_text
+
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        subprompt_base = mock_generate_subprompts.call_args.args[0]
+        self.assertIn(profile_to_text(self.profile), subprompt_base)
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_does_not_affect_stock_search_query(
+        self, mock_get_candidates, mock_download, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        scene = {**SAMPLE_SCENE, "visual_type": "real"}
+        integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        search_prompt = mock_get_candidates.call_args_list[0].args[0]
+        self.assertEqual(search_prompt, SAMPLE_SCENE["image_prompt"])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_does_not_change_stored_prompt_metadata(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        self.assertEqual(result["assets"][0]["prompt"], SAMPLE_SCENE["image_prompt"])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_role_order_unaffected_by_visual_profile(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        roles = [a["role"] for a in result["assets"]]
+        self.assertEqual(roles, ["environment", "subject", "detail", "transition"])
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_no_visual_profile_behaves_exactly_like_before(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        integrate_asset(scene, self.project_path)
+
+        first_call_prompt = mock_generate_image.call_args_list[0].args[0]
+        self.assertEqual(first_call_prompt, SAMPLE_SCENE["image_prompt"])
+
+        subprompt_base = mock_generate_subprompts.call_args.args[0]
+        self.assertEqual(subprompt_base, SAMPLE_SCENE["image_prompt"])
+
+
 if __name__ == "__main__":
     unittest.main()
