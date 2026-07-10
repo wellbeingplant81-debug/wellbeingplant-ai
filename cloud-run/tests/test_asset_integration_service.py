@@ -345,6 +345,14 @@ class TestAssetIntegrationService(unittest.TestCase):
             "width": 1920, "height": 1080, "query": "tired woman office",
         }
         mock_get_candidates.return_value = [low_quality_candidate]
+        # Sprint71-2 - Hybrid Asset Composer: 1차 asset이 AI로 정해지면
+        # extra 슬롯 중 detail/transition이 (이 테스트가 primary용으로
+        # 채워둔) 같은 stock 후보를 찾아 다운로드를 시도할 수 있다 -
+        # 크래시 없이 정상적으로 처리되도록 side_effect를 채워둔다.
+        # 이 테스트가 검증하는 것은 여전히 "primary asset은 저품질
+        # 스톡을 거부하고 AI를 쓴다"이지, extra 슬롯의 다운로드 여부가
+        # 아니다.
+        mock_download.side_effect = _download_candidate_side_effect()
 
         def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
@@ -356,7 +364,6 @@ class TestAssetIntegrationService(unittest.TestCase):
         result = integrate_asset(SAMPLE_SCENE, self.project_path, prefer_ai=True)
 
         self.assertEqual(result["provider"], "ai_image")
-        mock_download.assert_not_called()
 
         _, kwargs = self.mock_record.call_args
         self.assertEqual(kwargs["outcome"], "ai_priority")
@@ -447,6 +454,14 @@ class TestAssetIntegrationService(unittest.TestCase):
     def test_visual_type_ai_uses_imagen_first(
         self, mock_generate_image, mock_get_candidates,
     ):
+        # Sprint71-2 - Hybrid Asset Composer: primary asset 선택 자체는
+        # 여전히 스톡 검색 없이 바로 Imagen을 쓰지만(핵심 불변식),
+        # source=="ai_image"로 정해진 뒤 extra 슬롯(detail/transition)이
+        # 별도로 스톡을 시도하므로 get_candidates 자체는 더 이상
+        # "전혀 호출 안 됨"이 아니다 - 후보 없음(빈 리스트)으로 고정해
+        # extra 슬롯도 안전하게 AI로 폴백하게 한다.
+        mock_get_candidates.return_value = []
+
         def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
@@ -458,7 +473,6 @@ class TestAssetIntegrationService(unittest.TestCase):
         result = integrate_asset(scene, self.project_path)
 
         self.assertEqual(result["provider"], "ai_image")
-        mock_get_candidates.assert_not_called()
         _, kwargs = self.mock_record.call_args
         self.assertEqual(kwargs["outcome"], "ai_priority")
 
@@ -516,6 +530,10 @@ class TestAssetIntegrationService(unittest.TestCase):
     def test_visual_type_ai_passes_visual_type_to_generate_image(
         self, mock_get_candidates, mock_generate_image,
     ):
+        # Sprint71-2 - extra 슬롯(detail/transition)이 스톡을 시도할 수
+        # 있으므로 후보 없음으로 고정해 AI로만 폴백하게 한다.
+        mock_get_candidates.return_value = []
+
         def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")

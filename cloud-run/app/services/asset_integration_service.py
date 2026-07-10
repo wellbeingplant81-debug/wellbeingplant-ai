@@ -23,6 +23,16 @@ AI_ASSET_COUNT = 4
 # asset에는 붙이지 않는다(하위 호환 - role 없는 asset도 그대로 유효).
 ASSET_ROLES = ["environment", "subject", "detail", "transition"]
 
+# Sprint71-2 - Hybrid Asset Composer. AI 4-asset scene에서 4장 모두
+# 같은 생성기(Imagen)로 나오면 "사진이 한 장면에 몰려 나오는" 반복감이
+# 생긴다(Sprint71-1 조사). environment/subject는 narration이 지시하는
+# 핵심 개념이라 스톡으로 부정확할 위험이 크므로 AI를 유지하고, 상대적
+# 으로 일반적인 브릿지 컷인 detail/transition만 스톡을 먼저 시도한다.
+# role 값 자체는 asset 출처와 무관하게 그대로 유지되므로(Sprint71-1
+# 설계 결정), asset_usage_planner/video_builder/qa_report_service의
+# role 기반 로직은 전혀 수정하지 않아도 된다.
+HYBRID_STOCK_ROLES = {"detail", "transition"}
+
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
     ai_path = generate_image(
@@ -132,6 +142,59 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
     return output_image_path
 
 
+def _finalize_downloaded_asset(result: dict, output_path: str) -> None:
+    """
+    Sprint71-2 - download_candidate()의 반환값을 최종 이미지 경로에
+    저장합니다. 비디오였다면 첫 프레임을 추출 후 원본을 정리하고,
+    이미지였다면 그대로 옮깁니다. integrate_asset()의 1차 asset
+    경로와 _download_stock_asset()(Hybrid extra 슬롯)이 공유하는
+    헬퍼입니다 - 기존에 integrate_asset() 안에 있던 동일 로직을
+    추출했을 뿐, 동작은 바뀌지 않습니다.
+    """
+
+    source = result["source"]
+
+    if "video" in source:
+        try:
+            _extract_first_frame(result["local_path"], output_path)
+        finally:
+            if os.path.exists(result["local_path"]):
+                os.remove(result["local_path"])
+    else:
+        os.replace(result["local_path"], output_path)
+
+
+def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_path):
+    """
+    Sprint71-2 - Hybrid Asset Composer. _select_real_first()와 동일한
+    패턴(검색 -> 최고 점수 후보 다운로드)으로 스톡 후보를 찾아
+    output_path에 저장하고 실제 source 문자열("pexels_image" 등)을
+    반환합니다. 후보가 없거나 다운로드 자체가 실패하면(네트워크 오류
+    등) None을 반환합니다 - 예외를 던지지 않으므로 호출자가 그대로
+    AI 생성으로 이어갈 수 있습니다.
+    """
+
+    stock_candidates = get_candidates(search_prompt, allow_video=True)
+    best_candidate, _ = select_best_with_score(
+        stock_candidates, is_hook_scene=is_hook_scene,
+    )
+
+    if best_candidate is None:
+        return None
+
+    try:
+        result = download_candidate(best_candidate, staging_path)
+    except Exception as exc:
+        print(
+            f"[AssetIntegration] Hybrid 스톡 다운로드 실패, AI로 폴백: {exc}"
+        )
+        return None
+
+    _finalize_downloaded_asset(result, output_path)
+
+    return result["source"]
+
+
 def _generate_extra_ai_assets(
     image_prompt, images_dir, scene_number, channel, is_hook_scene, visual_type,
 ):
@@ -147,6 +210,14 @@ def _generate_extra_ai_assets(
     (integrate_asset()의 기존 _ai_result() 경로, 미수정). 서브프롬프트
     생성이 실패하면 subprompt_service 자체가 image_prompt를 반복한
     리스트로 폴백하므로, 이 함수는 항상 정상적으로 동작합니다.
+
+    Sprint71-2 - Hybrid Asset Composer: role이 HYBRID_STOCK_ROLES
+    (detail/transition)인 슬롯만 먼저 스톡을 시도하고, 후보가 없거나
+    다운로드가 실패하면 기존처럼 AI로 생성합니다. environment(1차,
+    이 함수 밖)/subject(extra 1번)는 대상이 아니라 항상 AI입니다.
+    role 값은 asset 출처와 무관하게 그대로 ASSET_ROLES 순서를
+    따릅니다 - 다른 소비처(asset_usage_planner/video_builder/
+    qa_report_service)는 role만 보므로 영향받지 않습니다.
     """
 
     subprompts = subprompt_service.generate_subprompts(
@@ -158,23 +229,40 @@ def _generate_extra_ai_assets(
     for i in range(2, AI_ASSET_COUNT + 1):
 
         asset_prompt = subprompts[i - 1]
+        role = ASSET_ROLES[i - 1]
 
         output_file = os.path.join(images_dir, f"scene{scene_number}_{i}.png")
 
-        generate_image(
-            asset_prompt,
-            output_file,
-            channel=channel,
-            is_hook_scene=is_hook_scene,
-            visual_type=visual_type,
-        )
+        source = None
 
-        extra_assets.append({
+        if role in HYBRID_STOCK_ROLES:
+            staging_path = os.path.join(
+                images_dir, f"scene{scene_number}_{i}.raw",
+            )
+            source = _download_stock_asset(
+                asset_prompt, output_file, is_hook_scene, staging_path,
+            )
+
+        if source is None:
+            generate_image(
+                asset_prompt,
+                output_file,
+                channel=channel,
+                is_hook_scene=is_hook_scene,
+                visual_type=visual_type,
+            )
+
+        asset_entry = {
             "type": "image",
             "path": output_file,
             "prompt": asset_prompt,
-            "role": ASSET_ROLES[i - 1],
-        })
+            "role": role,
+        }
+
+        if source is not None:
+            asset_entry["source"] = source
+
+        extra_assets.append(asset_entry)
 
     return extra_assets
 
@@ -273,14 +361,7 @@ def integrate_asset(
     source = result["source"]
     asset_type = "video" if "video" in source else "image"
 
-    if asset_type == "video":
-        try:
-            _extract_first_frame(result["local_path"], final_image_path)
-        finally:
-            if os.path.exists(result["local_path"]):
-                os.remove(result["local_path"])
-    else:
-        os.replace(result["local_path"], final_image_path)
+    _finalize_downloaded_asset(result, final_image_path)
 
     confidence = 1.0 if source == "ai_image" else 0.8
 

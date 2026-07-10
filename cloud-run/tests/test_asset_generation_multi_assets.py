@@ -455,5 +455,232 @@ class TestAssetRoleMetadata(unittest.TestCase):
             self.assertIsNone(asset.get("nonexistent_field"))
 
 
+class TestHybridAssetComposer(unittest.TestCase):
+    """
+    Sprint71-2 - Hybrid Asset Composer. AI 4-asset 경로(source ==
+    "ai_image")의 extra 3슬롯 중 detail/transition role만 스톡
+    (Pexels/Pixabay)을 먼저 시도하고, 후보가 없거나 다운로드가
+    실패하면 기존처럼 AI(Imagen)로 생성한다. environment(1차)와
+    subject(extra 1번)는 스톡 후보 존재 여부와 무관하게 항상 AI를
+    유지한다. role 값 자체는 asset의 출처(source)와 무관하게 그대로
+    유지되어(Sprint71-1 설계 결정) asset_usage_planner/video_builder/
+    qa_report_service._validate_roles 등 기존 소비처가 전혀 영향받지
+    않아야 한다.
+    """
+
+    def setUp(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_dir.cleanup)
+        self.project_path = self._tmp_dir.name
+        os.makedirs(os.path.join(self.project_path, "images"), exist_ok=True)
+
+        feedback_patcher = patch(
+            "app.services.asset_integration_service.asset_feedback_service.record",
+        )
+        self.addCleanup(feedback_patcher.stop)
+        feedback_patcher.start()
+
+        ranking_patcher = patch(
+            "app.services.asset_ranking_service.load_all",
+            return_value=[],
+        )
+        self.addCleanup(ranking_patcher.stop)
+        ranking_patcher.start()
+
+        subprompt_patcher = patch(
+            "app.services.asset_integration_service.subprompt_service.generate_subprompts",
+            return_value=["wide shot", "close-up", "detail shot", "transition shot"],
+        )
+        self.addCleanup(subprompt_patcher.stop)
+        subprompt_patcher.start()
+
+    def _roles_and_sources(self, result):
+        return {
+            asset["role"]: asset.get("source")
+            for asset in result["assets"]
+        }
+
+    # --- detail/transition: 스톡 후보가 있으면 Stock 우선 ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_detail_and_transition_prefer_stock_when_candidates_exist(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        by_role = self._roles_and_sources(result)
+        self.assertEqual(by_role["detail"], "pexels_image")
+        self.assertEqual(by_role["transition"], "pexels_image")
+
+    # --- environment/subject: 스톡 후보가 있어도 항상 AI 유지 ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_environment_and_subject_always_use_ai_even_with_stock_available(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        by_role = self._roles_and_sources(result)
+        self.assertIsNone(by_role["environment"])
+        self.assertIsNone(by_role["subject"])
+
+        # primary(environment) + subject 2건만 AI 생성돼야 한다.
+        self.assertEqual(mock_generate_image.call_count, 2)
+        # detail + transition 2건만 스톡 다운로드돼야 한다.
+        self.assertEqual(mock_download.call_count, 2)
+
+    # --- 스톡 후보가 없으면 기존 AI 생성으로 자동 폴백 ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_no_stock_candidates_falls_back_to_ai_for_all_slots(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(len(result["assets"]), 4)
+        self.assertEqual(mock_generate_image.call_count, 4)
+        mock_download.assert_not_called()
+
+        by_role = self._roles_and_sources(result)
+        for role in ("environment", "subject", "detail", "transition"):
+            self.assertIsNone(by_role[role])
+
+    # --- 스톡 다운로드 실패 시에도 AI로 폴백(예외 전파 없음) ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_stock_download_failure_falls_back_to_ai(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = Exception("network error")
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertEqual(len(result["assets"]), 4)
+        by_role = self._roles_and_sources(result)
+        self.assertIsNone(by_role["detail"])
+        self.assertIsNone(by_role["transition"])
+
+    # --- 스톡 후보가 비디오여도 프레임 추출 후 이미지로 처리 ---
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_hybrid_video_candidate_is_frame_extracted(
+        self, mock_get_candidates, mock_generate_image, mock_download, mock_subprocess_run,
+    ):
+        mock_get_candidates.return_value = [PEXELS_VIDEO_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect(
+            content=b"fake video bytes",
+        )
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        def _ffmpeg_side_effect(command, capture_output, text):
+            output_path = command[-1]
+            with open(output_path, "wb") as f:
+                f.write(b"fake frame bytes")
+            from unittest.mock import MagicMock
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            return mock_result
+
+        mock_subprocess_run.side_effect = _ffmpeg_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        detail_asset = next(a for a in result["assets"] if a["role"] == "detail")
+        self.assertEqual(detail_asset["type"], "image")
+        self.assertTrue(os.path.exists(detail_asset["path"]))
+
+    # --- assets는 항상 4개, role 순서는 항상 고정 ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_four_assets_with_fixed_role_order_regardless_of_stock_availability(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        mock_download.side_effect = _download_candidate_side_effect()
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        for stock_available in (True, False):
+            with self.subTest(stock_available=stock_available):
+                mock_get_candidates.return_value = (
+                    [PEXELS_IMAGE_CANDIDATE] if stock_available else []
+                )
+
+                scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+                result = integrate_asset(scene, self.project_path)
+
+                self.assertEqual(len(result["assets"]), 4)
+                roles = [a["role"] for a in result["assets"]]
+                self.assertEqual(
+                    roles, ["environment", "subject", "detail", "transition"],
+                )
+
+    # --- 기존 QA role_validation이 그대로 통과 ---
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_qa_role_validation_still_passes_for_hybrid_scene(
+        self, mock_get_candidates, mock_generate_image, mock_download,
+    ):
+        from app.services.qa_report_service import _validate_roles
+
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+        mock_generate_image.side_effect = _generate_image_side_effect
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        roles = [a["role"] for a in result["assets"]]
+        self.assertTrue(_validate_roles(roles))
+
+    # --- 스톡 소싱 scene(1개 asset)은 하이브리드 로직 자체가 무관 ---
+
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_stock_sourced_scene_unaffected_by_hybrid_logic(
+        self, mock_get_candidates, mock_download, mock_generate_image,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertEqual(len(result["assets"]), 1)
+        mock_generate_image.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
