@@ -510,5 +510,99 @@ class TestSubpromptQualityGate(unittest.TestCase):
         self.assertEqual(result, GOOD_SUBPROMPTS)
 
 
+class TestSubpromptQualityGateLanguageAliases(unittest.TestCase):
+    """
+    Sprint66-1 - Sprint65 실제 E2E("장내세균이 우울감과 기억력에
+    영향을 주는 이유" scene4)에서 발견된 버그 재현/수정 확인. Gemini가
+    focus/camera angle/composition/subject distance는 한국어+영어
+    괄호 병기("환경(environment)")로 응답하면서 shot type만 한글
+    음차("와이드 샷")로만 응답해, _has_missing_dimension()이 실제로는
+    4개가 서로 다른 shot type이었음에도 "축 전체 누락"으로 오판해
+    image_prompt 반복 폴백을 유발했다. 프롬프트 생성 로직
+    (SHOT_TYPES/_shot_type_instruction)은 건드리지 않고, 검증 시
+    한국어/자연어 alias를 함께 인정하도록 고친다.
+    """
+
+    # Sprint65 실제 quality_report 실패 로그에서 그대로 가져온 서브
+    # 프롬프트 4개(장내세균 주제, scene4). shot type만 한글 음차,
+    # 나머지 4축은 한국어+영어 괄호 병기.
+    REAL_E2E_SUBPROMPTS = [
+        "멸균 처리된 실험 장비와 커다란 창문으로 들어오는 부드러운 아침 햇살이 공존하는 미니멀한 "
+        "실험실 전체를 아이 레벨(eye level)로 담아내는 와이드 샷. 화면 중앙(centered composition)에 "
+        "선 연구원의 전신(full body)이 보이며, 그는 깨끗한 흰색 조리대 위에 놓인 페트리 접시를 응시하고 "
+        "있음. 과학적 긴박함 속에서 환경(environment)이 주는 고요함과 집중의 순간을 포착.",
+        "낮은 앵글(low angle)에서 3분할 구도(rule of thirds)로 포착한 미디엄 샷. 허리까지 보이는"
+        "(half body) 연구원(subject)이 페트리 접시를 들고 있으며, 그의 얼굴에는 우려와 강렬한 집중이 "
+        "교차함. 접시 안에서 공격적으로 퍼지는 어두운 박테리아 군집이 보이며, 세련된 웰니스 미학의 "
+        "실험실 배경과 실험 램프의 거친 조명이 만드는 날카로운 그림자가 발견의 심각성을 강조.",
+        "행위(action)에 초점을 맞춘 하이 앵글(high angle) 클로즈업 샷. 전경을 강조(foreground "
+        "emphasis)하여 장갑을 낀 손이 금속 도구로 페트리 접시 안의 염증이 생긴 표면을 조심스럽게 건드리는 "
+        "순간을 포착. 카메라가 어둡고 불건강해 보이는 박테리아가 공격적으로 퍼지는 아주 가까운 디테일"
+        "(close detail)을 담아내며, 위에서 비추는 임상 조명이 유리에 거친 반사를 만들고 주변의 따뜻하고 "
+        "깨끗한 작업 공간은 불안할 정도로 고요한 배경이 됨.",
+        "연구원의 어깨 너머(over-the-shoulder)로 촬영한 디테일 샷. 전경의 페트리 접시(supporting "
+        "object)에 담긴 위협적인 박테리아 군집이 상세하게 보이지만, 구도는 배경을 강조(background "
+        "emphasis)하여 넓은 실험실 환경(wide environment)을 함께 보여줌. 배경에는 식물과 자연광이 있는 "
+        "깨끗하고 미니멀한 미학이 드러나, 전경에 들고 있는 실험의 임상적 긴급성과 극명한 대조를 이루며 "
+        "깊은 서사적 긴장감을 연출.",
+    ]
+
+    @patch("app.services.subprompt_service.client")
+    def test_real_e2e_korean_shot_type_no_longer_falls_back(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            self.REAL_E2E_SUBPROMPTS,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, self.REAL_E2E_SUBPROMPTS)
+
+    @patch("app.services.subprompt_service.client")
+    def test_all_five_dimensions_expressed_only_in_korean_aliases(self, mock_client):
+        subprompts = [
+            "와이드 샷으로 환경을 담아낸 아이 레벨 화면 중앙 구도, 전신이 보이는 장면.",
+            "미디엄 샷, 로우 앵글, 3분할 구도, 상반신이 보이는 피사체 장면.",
+            "클로즈업 샷, 하이 앵글, 전경을 강조한 구도로 행동에 초점을 맞춘 근접 디테일 장면.",
+            "디테일 샷, 오버 더 숄더, 배경을 강조한 구도로 소품과 넓은 배경이 함께 보이는 장면.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_still_falls_back_when_dimension_truly_missing_in_any_language(self, mock_client):
+        # shot type을 영어로도 한국어 alias로도 전혀 언급하지 않음 -
+        # 진짜 누락은 여전히 잡아야 한다(회귀 확인).
+        subprompts = [
+            "환경(environment), 아이 레벨(eye level), 화면 중앙(centered), 전신(full body)만 있는 문장.",
+            "피사체(subject), 로우 앵글(low angle), 3분할(rule of thirds), 상반신(half body)만 있는 문장.",
+            "행동(action), 하이 앵글(high angle), 전경 강조(foreground emphasis), 근접 디테일(close detail)만 있는 문장.",
+            "소품(supporting object), 오버 더 숄더(over-the-shoulder), 배경 강조(background emphasis), 넓은 환경(wide environment)만 있는 문장.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_english_only_keywords_still_pass_unchanged(self, mock_client):
+        # 기존 영어 키워드만 있는 경우(Sprint63-4 원래 동작)도 회귀 없이
+        # 그대로 통과해야 한다.
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, GOOD_SUBPROMPTS)
+
+
 if __name__ == "__main__":
     unittest.main()
