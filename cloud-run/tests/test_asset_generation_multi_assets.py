@@ -820,6 +820,119 @@ class TestVisualDiversityWiring(unittest.TestCase):
         subprompt_base = mock_generate_subprompts.call_args.args[0]
         self.assertEqual(subprompt_base, SAMPLE_SCENE["image_prompt"])
 
+    # --- Sprint72-2: Observability - profile recorded in metadata ---
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_recorded_on_scene_level_field(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        self.assertEqual(result["visual_profile"], self.profile)
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_recorded_on_ai_generated_primary_asset(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        self.assertEqual(result["assets"][0]["visual_profile"], self.profile)
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_recorded_on_ai_generated_extra_asset(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        # subject(index 1)는 HYBRID_STOCK_ROLES 대상이 아니라 항상 AI다.
+        subject_asset = result["assets"][1]
+        self.assertEqual(subject_asset["role"], "subject")
+        self.assertEqual(subject_asset["visual_profile"], self.profile)
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_not_recorded_on_stock_sourced_extra_asset(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+        mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path, visual_profile=self.profile)
+
+        detail_asset = next(a for a in result["assets"] if a["role"] == "detail")
+        self.assertEqual(detail_asset["source"], "pexels_image")
+        self.assertNotIn("visual_profile", detail_asset)
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_not_recorded_on_stock_sourced_primary_asset(
+        self, mock_get_candidates, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(
+            SAMPLE_SCENE, self.project_path, visual_profile=self.profile,
+        )
+
+        self.assertNotIn("visual_profile", result["assets"][0])
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_visual_profile_still_recorded_at_scene_level_for_stock_sourced_scene(
+        self, mock_get_candidates, mock_download,
+    ):
+        # 요구사항1 - "배정된" profile은 실제 사용 여부와 무관하게
+        # scene 레벨에는 항상 기록되어야 한다(QA observability).
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(
+            SAMPLE_SCENE, self.project_path, visual_profile=self.profile,
+        )
+
+        self.assertEqual(result["visual_profile"], self.profile)
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_no_visual_profile_field_when_none_passed(
+        self, mock_get_candidates, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertNotIn("visual_profile", result)
+        self.assertNotIn("visual_profile", result["assets"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

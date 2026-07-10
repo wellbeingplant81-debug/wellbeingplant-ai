@@ -288,6 +288,12 @@ def _generate_extra_ai_assets(
 
         if source is not None:
             asset_entry["source"] = source
+        elif visual_profile is not None:
+            # Sprint72-2 - source가 None이면 이 슬롯은 실제로 AI로
+            # 생성됐다는 뜻이다(HYBRID_STOCK_ROLES가 아니었거나, 스톡
+            # 시도가 실패해 AI로 폴백한 경우 모두 포함) - 그 경우에만
+            # 실제로 적용된 profile을 기록한다.
+            asset_entry["visual_profile"] = visual_profile
 
         extra_assets.append(asset_entry)
 
@@ -427,6 +433,14 @@ def integrate_asset(
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
 
+    # Sprint72-2 - Visual Diversity Engine Observability: "배정된"
+    # profile은 실제로 AI가 그 profile을 썼는지와 무관하게 scene
+    # 레벨에 항상 기록한다(QA가 diversity 배정 자체를 볼 수 있어야
+    # 함) - profile이 없으면(기본값 None) 기존과 동일하게 필드 자체를
+    # 추가하지 않는다.
+    if visual_profile is not None:
+        enriched["visual_profile"] = visual_profile
+
     # Sprint62-1 - Visual Diversity 기반 구조: scene["assets"][0]은
     # 항상 asset_path와 동일한 1차 이미지다.
     primary_asset = {
@@ -441,6 +455,10 @@ def integrate_asset(
         # 이번 스프린트에서 손대지 않는다(assets 1개 그대로 유지).
         # Sprint64-2 - AI 4-asset 경로에서만 role을 부여한다.
         primary_asset["role"] = ASSET_ROLES[0]
+        # Sprint72-2 - 1차 asset이 실제로 AI 생성됐을 때만(즉 여기,
+        # source == "ai_image") profile을 asset 메타데이터에도 남긴다.
+        if visual_profile is not None:
+            primary_asset["visual_profile"] = visual_profile
         extra_assets = _generate_extra_ai_assets(
             image_prompt, images_dir, scene_number, channel, is_hook_scene,
             visual_type, visual_profile,

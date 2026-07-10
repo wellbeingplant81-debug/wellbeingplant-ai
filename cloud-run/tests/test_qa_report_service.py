@@ -399,6 +399,59 @@ class TestBuildAssetIntelligenceSummary(unittest.TestCase):
         self.assertEqual(summary[0]["expected_durations"], [])
         self.assertTrue(summary[0]["role_validation"])
 
+    # --- Sprint72-2: Visual Diversity Engine Observability ---
+
+    def test_visual_profile_included_when_present_on_scene(self):
+        profile = {
+            "camera_distance": "close-up",
+            "camera_angle": "low angle",
+            "composition": "rule of thirds",
+            "lighting": "dramatic light",
+        }
+        scene = {
+            "scene": 1,
+            "asset_path": "images/scene1.png",
+            "visual_profile": profile,
+        }
+        _write_script(self.project_path, [scene])
+
+        summary = qa_report_service.build_asset_intelligence_summary(self.project_path)
+
+        self.assertEqual(summary[0]["visual_profile"], profile)
+
+    def test_visual_profile_none_when_scene_has_no_profile_field(self):
+        # 기존 script.json(Sprint72-2 이전에 생성됨/스톡 전용 파이프라인)에는
+        # visual_profile 필드 자체가 없다 - 크래시 없이 None으로 보고한다.
+        scene = {"scene": 1, "asset_path": "images/scene1.png"}
+        _write_script(self.project_path, [scene])
+
+        summary = qa_report_service.build_asset_intelligence_summary(self.project_path)
+
+        self.assertIsNone(summary[0]["visual_profile"])
+
+    def test_visual_profile_differs_per_scene(self):
+        scenes = [
+            {
+                "scene": 1, "asset_path": "images/scene1.png",
+                "visual_profile": {
+                    "camera_distance": "wide", "camera_angle": "eye level",
+                    "composition": "centered", "lighting": "soft daylight",
+                },
+            },
+            {
+                "scene": 2, "asset_path": "images/scene2.png",
+                "visual_profile": {
+                    "camera_distance": "macro", "camera_angle": "top-down",
+                    "composition": "leading lines", "lighting": "backlit",
+                },
+            },
+        ]
+        _write_script(self.project_path, scenes)
+
+        summary = qa_report_service.build_asset_intelligence_summary(self.project_path)
+
+        self.assertNotEqual(summary[0]["visual_profile"], summary[1]["visual_profile"])
+
 
 class TestBuildQaReportIncludesAssetIntelligence(unittest.TestCase):
     """
@@ -433,6 +486,23 @@ class TestBuildQaReportIncludesAssetIntelligence(unittest.TestCase):
         self.assertIn("QA Report:", text)
         self.assertIn("Scene durations:", text)
         self.assertIn("target range", text)
+
+    def test_format_report_includes_visual_profile_when_present(self):
+        scene = {
+            "scene": 1,
+            "asset_path": "a.png",
+            "visual_profile": {
+                "camera_distance": "macro", "camera_angle": "top-down",
+                "composition": "leading lines", "lighting": "backlit",
+            },
+        }
+        _write_script(self.project_path, [scene])
+
+        report = qa_report_service.build_qa_report(self.project_path)
+        text = qa_report_service.format_report(report)
+
+        self.assertIn("macro", text)
+        self.assertIn("top-down", text)
 
 
 if __name__ == "__main__":

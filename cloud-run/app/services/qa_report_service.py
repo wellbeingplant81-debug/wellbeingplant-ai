@@ -153,6 +153,11 @@ def build_asset_intelligence_summary(project_path: str) -> list:
             "duplicates": duplicates,
             "expected_durations": expected_durations,
             "role_validation": _validate_roles(roles),
+            # Sprint72-2 - Visual Diversity Engine Observability. scene에
+            # 배정된 profile(step02_assets.assign_visual_profiles())을
+            # 읽기 전용으로 그대로 보고한다 - 필드가 없는 scene(Sprint
+            # 72-2 이전 데이터/스톡 전용 파이프라인)은 None으로 보고한다.
+            "visual_profile": scene.get("visual_profile"),
         })
 
     return summary
@@ -228,7 +233,8 @@ def format_report(report: dict) -> str:
                 f"  scene{entry['scene']}: assets={entry['asset_count']} "
                 f"roles={entry['roles']} role_validation={entry['role_validation']} "
                 f"duplicates={len(entry['duplicates'])} "
-                f"expected_durations={entry['expected_durations']}"
+                f"expected_durations={entry['expected_durations']} "
+                f"visual_profile={entry['visual_profile']}"
             )
 
     return "\n".join(lines)
