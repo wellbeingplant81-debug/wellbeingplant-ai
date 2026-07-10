@@ -27,7 +27,6 @@ from app.services.subtitle_service import (
     split_subtitle,
     wrap_to_safe_lines,
 )
-from app.services.subtitle_placement_service import POSITION_BOTTOM, POSITION_TOP
 
 
 class TestSplitSentenceByWords(unittest.TestCase):
@@ -175,6 +174,21 @@ class TestWrapToSafeLines(unittest.TestCase):
         # 훨씬 작아야 한다 - 이 상수가 실수로 다시 커지는 회귀를 막는다.
         self.assertLess(SAFE_AREA_MAX_LINE_WIDTH, 25)
 
+    def test_sprint68_1_font_shrink_widens_default_budget(self):
+        # Sprint68-1 - FontSize 22->18 축소로 실제 렌더링 폭이 늘어난
+        # 만큼(2026-07-10 실측 "가나다" 263px, 1 unit≈43.83px)
+        # SAFE_AREA_MAX_LINE_WIDTH도 함께 커져야 한다(이전 FontSize=22
+        # 기준 17에서 늘어남) - 그래야 요구사항 3(가능한 한 줄 유지)이
+        # 실제로 더 잘 지켜진다.
+        self.assertGreater(SAFE_AREA_MAX_LINE_WIDTH, 17)
+
+    def test_realistic_short_caption_now_stays_on_one_line(self):
+        # Sprint68-1 요구사항 3: "가능한 한 줄 유지". FontSize 축소 전
+        # 예산(17)에서는 반드시 줄바꿈됐을 폭(18~20)의 실제 자막 문구가
+        # 재보정된 기본 예산에서는 한 줄로 유지돼야 한다.
+        for text in ("오늘부터 걸어보세요", "매일 걷는 습관이죠", "걷기만 해도 좋아요"):
+            self.assertNotIn("\n", wrap_to_safe_lines(text))
+
     def test_real_overflowing_example_now_wraps_with_default_width(self):
         # E2E 실측에서 실제로 화면 밖으로 잘려나갔던 문구
         # ("아침에 마시는 물 한 잔이", display_width=24). 재보정된
@@ -288,13 +302,14 @@ class TestSubtitleSafeAreaRegression(unittest.TestCase):
         self._assert_no_line_overflows(narration)
 
 
-class TestCreateSubtitlePositionTags(unittest.TestCase):
-    """Sprint57 - Smart Subtitle Placement v1. create_subtitle()가
-    scene별로 choose_subtitle_position() 결과를 SRT 텍스트 맨 앞에
-    ASS override tag({\\an8}=상단, {\\an2}=하단)로 심는지 검증한다.
-    실제 이미지 복잡도 분석(subtitle_placement_service 자체)은 이미
-    별도 테스트로 커버되므로, 여기서는 choose_subtitle_position을
-    mock으로 고정해 배선만 확인한다."""
+class TestCreateSubtitleFixedPosition(unittest.TestCase):
+    """Sprint68-1 - Shorts 자막 UI 개선. "모든 자막 동일 위치 고정"
+    요구사항에 따라 Sprint57/58 Smart Subtitle Placement(scene별
+    top/bottom 판단)를 더 이상 사용하지 않는다. create_subtitle()은
+    이제 scene 이미지 분석 없이, 어떤 cue에도 위치용 ASS override
+    tag({\\an8}/{\\an2})를 심지 않는다 - 위치는
+    final_video_service.py의 force_style(Alignment/MarginV)이 전체
+    영상에 한 번만 고정으로 적용한다."""
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
@@ -329,48 +344,23 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
         ) as f:
             return f.read()
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        side_effect=[POSITION_TOP, POSITION_BOTTOM],
-    )
-    def test_scene_positions_are_embedded_as_ass_override_tags(self, mock_choose):
+    def test_no_position_override_tags_are_embedded(self):
         create_subtitle(self.project_path)
 
         srt_text = self._read_srt()
 
-        self.assertIn(r"{\an8}안녕하세요.", srt_text)
-        self.assertIn(r"{\an2}반갑습니다.", srt_text)
+        self.assertNotIn(r"{\an8}", srt_text)
+        self.assertNotIn(r"{\an2}", srt_text)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_position_is_resolved_once_per_scene_not_per_cue(self, mock_choose):
+    def test_all_scenes_produce_untagged_cue_text(self):
         create_subtitle(self.project_path)
 
-        self.assertEqual(mock_choose.call_count, 2)
+        srt_text = self._read_srt()
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_is_hook_scene_true_only_for_scene_one(self, mock_choose):
-        # Sprint60 Hotfix - Hook Scene(scene 1)의 큰 얼굴 정책이 실제로
-        # 켜지려면 choose_subtitle_position이 scene 1에는 is_hook_scene=
-        # True, 나머지에는 False로 호출돼야 한다.
-        create_subtitle(self.project_path)
+        self.assertIn("안녕하세요.", srt_text)
+        self.assertIn("반갑습니다.", srt_text)
 
-        _, first_kwargs = mock_choose.call_args_list[0]
-        _, second_kwargs = mock_choose.call_args_list[1]
-
-        self.assertTrue(first_kwargs["is_hook_scene"])
-        self.assertFalse(second_kwargs["is_hook_scene"])
-
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_TOP,
-    )
-    def test_existing_srt_structure_is_unchanged_besides_tag(self, mock_choose):
+    def test_existing_srt_structure_is_unchanged(self):
         create_subtitle(self.project_path)
 
         srt_text = self._read_srt()
@@ -639,11 +629,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
         s, ms = rest.split(",")
         return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_last_cue_end_matches_final_audio_duration(self, mock_choose):
+    def test_last_cue_end_matches_final_audio_duration(self):
         # 두 씬 mp3 합은 약 4.0s지만, 실제 final_audio.mp3는 BGM 믹스/
         # 재인코딩 오차로 4.35s라고 가정한다. format_srt_time()의 ms
         # 절삭(Sprint59와 무관한 기존 동작)에 흔들리지 않도록 문자열이
@@ -660,11 +646,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
 
         self.assertAlmostEqual(end_seconds, 4.35, delta=0.01)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_first_cue_start_time_is_unaffected_by_snapping(self, mock_choose):
+    def test_first_cue_start_time_is_unaffected_by_snapping(self):
         self._make_final_audio(4.35)
 
         create_subtitle(self.project_path)
@@ -676,11 +658,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
 
         self.assertEqual(start_time_str, "00:00:00,000")
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_no_final_audio_file_preserves_old_behavior(self, mock_choose):
+    def test_no_final_audio_file_preserves_old_behavior(self):
         # final_audio.mp3가 없어도(안전장치가 발동하지 않아도) 마지막
         # cue는 씬 mp3 실측 길이의 합과 일치해야 한다. create_subtitle()
         # 내부는 (Sprint59 재조사 이후) get_audio_duration()(ffprobe)로
@@ -778,11 +756,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         end_time_str = timing_line.split(" --> ")[1]
         return self._srt_time_to_seconds(end_time_str)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_last_cue_end_excludes_trailing_silence(self, mock_choose):
+    def test_last_cue_end_excludes_trailing_silence(self):
         pause_seconds = 1.5
         self._write_metadata(pause_seconds=pause_seconds)
 
@@ -791,11 +765,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         expected = self.scene1_duration + (self.scene2_duration - pause_seconds)
         self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_no_metadata_file_uses_full_scene_duration(self, mock_choose):
+    def test_no_metadata_file_uses_full_scene_duration(self):
         # 메타데이터가 없으면(기존 프로젝트) 무음 보정 없이 기존 동작
         # (전체 scene2 길이를 그대로 씀) 그대로여야 한다.
         create_subtitle(self.project_path)
@@ -803,11 +773,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         expected = self.scene1_duration + self.scene2_duration
         self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_corrupt_metadata_falls_back_without_raising(self, mock_choose):
+    def test_corrupt_metadata_falls_back_without_raising(self):
         metadata_path = os.path.join(
             self.project_path, "audio", DURATION_OPTIMIZATION_METADATA_FILENAME,
         )
@@ -819,11 +785,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         expected = self.scene1_duration + self.scene2_duration
         self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_abnormal_pause_larger_than_scene_falls_back(self, mock_choose):
+    def test_abnormal_pause_larger_than_scene_falls_back(self):
         # pause_seconds(100)가 scene2 전체 길이보다 훨씬 크면 비정상
         # 이므로 무시하고 전체 길이를 그대로 써야 한다.
         self._write_metadata(pause_seconds=100.0)
@@ -833,11 +795,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         expected = self.scene1_duration + self.scene2_duration
         self.assertAlmostEqual(self._last_cue_end_seconds(), expected, delta=0.01)
 
-    @patch(
-        "app.services.subtitle_service.choose_subtitle_position",
-        return_value=POSITION_BOTTOM,
-    )
-    def test_only_last_scene_is_affected_first_scene_unchanged(self, mock_choose):
+    def test_only_last_scene_is_affected_first_scene_unchanged(self):
         self._write_metadata(pause_seconds=1.5)
 
         create_subtitle(self.project_path)

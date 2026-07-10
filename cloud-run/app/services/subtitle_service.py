@@ -7,11 +7,6 @@ from datetime import timedelta
 
 from app.services.duration_optimizer import get_audio_duration
 from app.services.kenburns import VIDEO_WIDTH
-from app.services.subtitle_placement_service import (
-    POSITION_TOP,
-    choose_subtitle_position,
-)
-from app.services.video_builder import _resolve_asset_path
 
 # Sprint59 - Subtitle Timing Precision. 마지막 cue의 종료 시간이
 # 실제 final_audio.mp3보다 짧아지는 극단적인 경우(예: 측정값이 마지막
@@ -24,36 +19,26 @@ MIN_LAST_CUE_DURATION_SECONDS = 0.05
 # 계약) - step03_tts.DURATION_OPTIMIZATION_METADATA_FILENAME 참고.
 DURATION_OPTIMIZATION_METADATA_FILENAME = "duration_optimization.json"
 
-# Sprint57 - Smart Subtitle Placement v1. choose_subtitle_position()이
-# 고른 "top"/"bottom"을 libass가 SRT 안에서도 그대로 해석하는 ASS
-# override tag로 바꾼다. force_style의 기본 Alignment=2(하단)는
-# final_video_service.py에서 그대로 유지하고, 상단으로 골라진 scene의
-# cue에만 {\an8}을 앞에 붙여 그 cue만 상단으로 덮어쓴다.
-_POSITION_TAGS = {
-    POSITION_TOP: r"{\an8}",
-}
-_DEFAULT_POSITION_TAG = r"{\an2}"
-
-
 MAX_CHARS = 18
 MIN_CHARS = 4
 
 # Sprint39 - Semantic Subtitle Engine.
 #
-# 실측 보정(2026-07-06): final_video_service.py와 동일한 force_style
-# (FontName=Malgun Gothic, FontSize=22, Bold=1, Outline=4)로 1080x1920
-# 검정 배경에 순수 한글 자막을 실제로 렌더링한 뒤, 흰 글자의 픽셀
-# bounding box를 직접 측정했다(폰트 메트릭 API가 아니라 libass가 실제로
-# 그린 결과를 측정 - PlayRes 관련 내부 스케일링까지 그대로 반영됨).
+# 실측 보정(2026-07-10, Sprint68-1 재보정): final_video_service.py와
+# 동일한 force_style(FontName=Malgun Gothic, FontSize=18, Bold=1,
+# Outline=4)로 1080x1920 검정 배경에 순수 한글 자막을 실제로 렌더링한
+# 뒤, 흰 글자의 픽셀 bounding box를 직접 측정했다(폰트 메트릭 API가
+# 아니라 libass가 실제로 그린 결과를 측정 - PlayRes 관련 내부 스케일링
+# 까지 그대로 반영됨). Sprint68-1은 Shorts 가독성을 위해 FontSize를
+# 22 -> 18(약 18% 축소, 요구사항 15~20% 범위)로 낮췄으므로 이 폭 상수도
+# 함께 다시 재야 한다 - 폰트가 작아진 만큼 한 줄에 더 많은 글자가
+# 들어간다.
 #
-#   한글 3자 "가나다"  -> 320px  (약 106.7px/자)
-#   한글 10자(공백 없음) -> 1080px에서 이미 꽉 참(경계)
+#   한글 3자 "가나다" (FontSize=18) -> 263px (약 87.7px/자)
 #
-# 즉 전각(한글) 1자 ≈ 107px, 이 모듈의 폭 단위(_display_width, 전각=2)
-# 기준으로 1 unit ≈ 53.5px다. 이전 값(SAFE_AREA_MAX_LINE_WIDTH=34)은
-# 이 실측 없이 잡은 추정치라 실제보다 훨씬 관대해서(실제 렌더링
-# 프레임에서 좌우 잘림 발생) 아래처럼 다시 계산한다.
-_MEASURED_PX_PER_UNIT = 53.5
+# 즉 전각(한글) 1자 ≈ 87.7px, 이 모듈의 폭 단위(_display_width, 전각=2)
+# 기준으로 1 unit ≈ 43.83px다.
+_MEASURED_PX_PER_UNIT = 43.83
 
 # 화면 폭 중 자막에 실제로 쓸 안전 영역 비율(좌우 각 7.5% 여백).
 SAFE_AREA_WIDTH_RATIO = 0.85
@@ -558,18 +543,6 @@ def create_subtitle(project_path: str):
         print("NARRATION")
         print(narration)
 
-        # Sprint57 - scene 이미지 상/하단 복잡도를 비교해 이
-        # scene의 모든 cue에 공통으로 적용할 위치를 한 번만
-        # 정한다(scene 안에서 위치가 cue마다 바뀌면 자막이
-        # 산만해지므로).
-        # Sprint60 Hotfix - Hook Scene(scene 1)의 큰 얼굴 정책을 켜기
-        # 위해 is_hook_scene을 전달한다.
-        asset_path = _resolve_asset_path(project_path, scene)
-        position = choose_subtitle_position(
-            asset_path, is_hook_scene=(scene.get("scene") == 1),
-        )
-        position_tag = _POSITION_TAGS.get(position, _DEFAULT_POSITION_TAG)
-
         subtitles = split_subtitle(
             narration
         )
@@ -624,7 +597,7 @@ def create_subtitle(project_path: str):
             cues.append({
                 "start": start,
                 "end": end,
-                "text": position_tag + wrap_to_safe_lines(subtitle),
+                "text": wrap_to_safe_lines(subtitle),
             })
 
             local_time += part_duration
