@@ -504,6 +504,83 @@ class TestBuildQaReportIncludesAssetIntelligence(unittest.TestCase):
         self.assertIn("macro", text)
         self.assertIn("top-down", text)
 
+    # --- Sprint72-3: Visual Diversity QA summary ---
+
+    def test_report_includes_visual_diversity_key(self):
+        _write_script(self.project_path, [{"scene": 1, "asset_path": "a.png"}])
+
+        report = qa_report_service.build_qa_report(self.project_path)
+
+        self.assertIn("visual_diversity", report)
+
+    def test_visual_diversity_summary_reflects_scene_profiles(self):
+        scenes = [
+            {
+                "scene": 1, "asset_path": "a.png",
+                "visual_profile": {
+                    "camera_distance": "wide", "camera_angle": "eye level",
+                    "composition": "centered", "lighting": "soft daylight",
+                },
+            },
+            {
+                "scene": 2, "asset_path": "b.png",
+                "visual_profile": {
+                    "camera_distance": "macro", "camera_angle": "top-down",
+                    "composition": "leading lines", "lighting": "backlit",
+                },
+            },
+        ]
+        _write_script(self.project_path, scenes)
+
+        report = qa_report_service.build_qa_report(self.project_path)
+
+        diversity = report["visual_diversity"]
+        self.assertEqual(diversity["camera_distance_diversity_count"], 2)
+        self.assertEqual(diversity["camera_angle_diversity_count"], 2)
+        self.assertEqual(
+            diversity["camera_distance_distribution"], {"wide": 1, "macro": 1},
+        )
+
+    def test_visual_diversity_includes_profiles_by_scene(self):
+        profile = {
+            "camera_distance": "wide", "camera_angle": "eye level",
+            "composition": "centered", "lighting": "soft daylight",
+        }
+        scene = {"scene": 1, "asset_path": "a.png", "visual_profile": profile}
+        _write_script(self.project_path, [scene])
+
+        report = qa_report_service.build_qa_report(self.project_path)
+
+        self.assertEqual(report["visual_diversity"]["profiles_by_scene"], {1: profile})
+
+    def test_visual_diversity_no_profiles_is_zeroed_not_broken(self):
+        # 요구사항: profile=None(전혀 없는 경우)이면 완전 no-op(에러
+        # 없이 0으로 채운 요약) - 기존 asset_intelligence 등 다른
+        # 섹션에도 영향이 없어야 한다.
+        _write_script(self.project_path, [{"scene": 1, "asset_path": "a.png"}])
+
+        report = qa_report_service.build_qa_report(self.project_path)
+
+        self.assertEqual(report["visual_diversity"]["diversity_score"], 0.0)
+        self.assertEqual(report["visual_diversity"]["profiles_by_scene"], {})
+        self.assertEqual(report["asset_intelligence"][0]["role_validation"], True)
+
+    def test_format_report_includes_diversity_score(self):
+        scene = {
+            "scene": 1, "asset_path": "a.png",
+            "visual_profile": {
+                "camera_distance": "wide", "camera_angle": "eye level",
+                "composition": "centered", "lighting": "soft daylight",
+            },
+        }
+        _write_script(self.project_path, [scene])
+
+        report = qa_report_service.build_qa_report(self.project_path)
+        text = qa_report_service.format_report(report)
+
+        self.assertIn("Visual Diversity", text)
+        self.assertIn("Score", text)
+
 
 if __name__ == "__main__":
     unittest.main()

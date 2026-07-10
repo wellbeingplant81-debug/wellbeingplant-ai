@@ -96,3 +96,77 @@ def apply_profile_to_prompt(image_prompt: str, profile: dict) -> str:
         return image_prompt
 
     return f"{image_prompt} {profile_text}."
+
+
+_DIMENSION_KEYS = (
+    ("camera_distance", CAMERA_DISTANCES),
+    ("camera_angle", CAMERA_ANGLES),
+    ("composition", COMPOSITIONS),
+    ("lighting", LIGHTING_STYLES),
+)
+
+
+def _distribution(profiles: list, key: str) -> dict:
+
+    counts = {}
+
+    for profile in profiles:
+        value = profile[key]
+        counts[value] = counts.get(value, 0) + 1
+
+    return counts
+
+
+def summarize_visual_diversity(profiles: list) -> dict:
+    """
+    Sprint72-3 - Visual Diversity QA. scene별 visual_profile 목록을
+    받아 quality_report.json에 실을 분포/다양성 개수/점수를 계산합니다.
+    None 항목(visual_profile이 없는 scene)은 걸러내고 집계합니다 -
+    profiles가 비었거나 전부 None이면(요구사항: profile=None이면
+    완전 no-op) 0으로 채운 빈 요약을 반환합니다. 순수 함수입니다.
+
+    diversity_score(0~100)는 4개 차원 각각에서 "실제 쓰인 서로 다른
+    값의 개수 / 그 차원이 가질 수 있는 전체 값의 개수" 비율을 구해
+    평균한 값입니다 - 한 scene 배치가 각 차원을 얼마나 골고루
+    썼는지를 나타내며, assign_visual_profiles()가 만들어내는 전형적인
+    6-scene 배치(4/6/4/5 값을 전부 순회)는 100점이 됩니다.
+    """
+
+    valid_profiles = [p for p in (profiles or []) if p]
+
+    if not valid_profiles:
+        return {
+            "camera_distance_distribution": {},
+            "camera_angle_distribution": {},
+            "composition_distribution": {},
+            "lighting_distribution": {},
+            "camera_distance_diversity_count": 0,
+            "camera_angle_diversity_count": 0,
+            "composition_diversity_count": 0,
+            "lighting_diversity_count": 0,
+            "diversity_score": 0.0,
+        }
+
+    distributions = {
+        key: _distribution(valid_profiles, key)
+        for key, _ in _DIMENSION_KEYS
+    }
+
+    ratios = [
+        min(len(distributions[key]), len(possible_values)) / len(possible_values)
+        for key, possible_values in _DIMENSION_KEYS
+    ]
+
+    diversity_score = round(sum(ratios) / len(ratios) * 100, 1)
+
+    return {
+        "camera_distance_distribution": distributions["camera_distance"],
+        "camera_angle_distribution": distributions["camera_angle"],
+        "composition_distribution": distributions["composition"],
+        "lighting_distribution": distributions["lighting"],
+        "camera_distance_diversity_count": len(distributions["camera_distance"]),
+        "camera_angle_diversity_count": len(distributions["camera_angle"]),
+        "composition_diversity_count": len(distributions["composition"]),
+        "lighting_diversity_count": len(distributions["lighting"]),
+        "diversity_score": diversity_score,
+    }

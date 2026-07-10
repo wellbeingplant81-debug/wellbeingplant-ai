@@ -8,12 +8,41 @@ from app.models.quality_report import (
     QualityReport,
     QualityReportMetadata,
     TechnicalValidation,
+    VisualDiversitySummary,
 )
 from app.services import quality_service
 from app.services import technical_validation_service
+from app.services.visual_diversity_engine import summarize_visual_diversity
 
 
 SCHEMA_VERSION = "sprint23"
+
+
+def _build_visual_diversity_summary(scenes: list):
+    """
+    Sprint72-3 - Visual Diversity QA. scenes(step07_quality.run()에
+    넘어오는 data["scenes"], Sprint72-2 이후 scene["visual_profile"]을
+    가질 수 있음)에서 visual_profile이 있는 scene만 모아 quality_
+    report.json에 실을 요약을 만든다. 판정 로직은 새로 만들지 않고
+    visual_diversity_engine.summarize_visual_diversity()를 그대로
+    재사용한다. visual_profile이 하나도 없으면(요구사항: profile=None
+    이면 완전 no-op) None을 반환해 QualityReport.visual_diversity가
+    그대로 None으로 남는다 - 기존 스키마와 완전히 하위 호환된다.
+    """
+
+    profiles_by_scene = {
+        scene["scene"]: scene["visual_profile"]
+        for scene in (scenes or [])
+        if scene.get("visual_profile")
+    }
+
+    if not profiles_by_scene:
+        return None
+
+    summary = summarize_visual_diversity(list(profiles_by_scene.values()))
+    summary["profiles_by_scene"] = profiles_by_scene
+
+    return VisualDiversitySummary(**summary)
 
 
 def _report_path(project_path):
@@ -152,6 +181,7 @@ def run(
             schema_version=SCHEMA_VERSION,
             ai_evaluation_skipped_reason=ai_evaluation_skipped_reason,
         ),
+        visual_diversity=_build_visual_diversity_summary(data.get("scenes")),
     )
 
     output_path = os.path.join(project_path, "quality_report.json")

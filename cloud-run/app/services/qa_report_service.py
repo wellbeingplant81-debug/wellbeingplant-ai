@@ -16,6 +16,7 @@ from app.services import asset_duplicate_detector
 from app.services import asset_usage_planner
 from app.services.asset_integration_service import ASSET_ROLES
 from app.services.duration_optimizer import get_audio_duration
+from app.services.visual_diversity_engine import summarize_visual_diversity
 
 TARGET_MIN_SECONDS = 43.0
 TARGET_MAX_SECONDS = 47.0
@@ -163,6 +164,29 @@ def build_asset_intelligence_summary(project_path: str) -> list:
     return summary
 
 
+def build_visual_diversity_summary(asset_intelligence: list) -> dict:
+    """
+    Sprint72-3 - Visual Diversity QA. build_asset_intelligence_summary()
+    가 이미 읽어둔 scene별 visual_profile(Sprint72-2)을 재사용해
+    분포/다양성 개수/점수(visual_diversity_engine.summarize_visual_
+    diversity)를 계산하고, scene 번호 -> profile 맵도 함께 담는다.
+    visual_profile이 없는 scene은 자동으로 제외되고(요구사항: 기존
+    동작 유지), 전부 없으면(profile=None) 0으로 채운 요약을 그대로
+    반환한다(완전 no-op) - 새 판정 로직 없이 기존 함수만 조합한다.
+    """
+
+    profiles_by_scene = {
+        entry["scene"]: entry["visual_profile"]
+        for entry in asset_intelligence
+        if entry.get("visual_profile")
+    }
+
+    summary = summarize_visual_diversity(list(profiles_by_scene.values()))
+    summary["profiles_by_scene"] = profiles_by_scene
+
+    return summary
+
+
 def build_qa_report(project_path: str) -> dict:
     """get_real_durations + load_quality_summary를 합치고,
     Sprint53 Duration Gate/Optimizer의 목표 범위(43~47초) 안에
@@ -170,7 +194,10 @@ def build_qa_report(project_path: str) -> dict:
 
     Sprint64-5 - asset_intelligence(멀티에셋/role/중복/기대 duration)
     를 추가한다. 기존 키(durations/quality/target_range_ok)는 전혀
-    바뀌지 않는다."""
+    바뀌지 않는다.
+
+    Sprint72-3 - visual_diversity(scene별 카메라/구도/조명 분포 및
+    다양성 점수)를 추가한다. 기존 키는 전혀 바뀌지 않는다."""
 
     durations = get_real_durations(project_path)
     quality = load_quality_summary(project_path)
@@ -182,12 +209,15 @@ def build_qa_report(project_path: str) -> dict:
         and TARGET_MIN_SECONDS <= final_duration <= TARGET_MAX_SECONDS
     )
 
+    asset_intelligence = build_asset_intelligence_summary(project_path)
+
     return {
         "project_path": project_path,
         "durations": durations,
         "quality": quality,
         "target_range_ok": target_range_ok,
-        "asset_intelligence": build_asset_intelligence_summary(project_path),
+        "asset_intelligence": asset_intelligence,
+        "visual_diversity": build_visual_diversity_summary(asset_intelligence),
     }
 
 
@@ -236,5 +266,31 @@ def format_report(report: dict) -> str:
                 f"expected_durations={entry['expected_durations']} "
                 f"visual_profile={entry['visual_profile']}"
             )
+
+    diversity = report.get("visual_diversity")
+
+    if diversity:
+        lines.append("")
+        lines.append("Visual Diversity Summary (Sprint72-3):")
+        lines.append(
+            f"  Camera Distance distribution: {diversity['camera_distance_distribution']}"
+        )
+        lines.append(
+            f"  Camera Angle distribution: {diversity['camera_angle_distribution']}"
+        )
+        lines.append(
+            f"  Composition distribution: {diversity['composition_distribution']}"
+        )
+        lines.append(
+            f"  Lighting distribution: {diversity['lighting_distribution']}"
+        )
+        lines.append(
+            "  Diversity counts: "
+            f"distance={diversity['camera_distance_diversity_count']} "
+            f"angle={diversity['camera_angle_diversity_count']} "
+            f"composition={diversity['composition_diversity_count']} "
+            f"lighting={diversity['lighting_diversity_count']}"
+        )
+        lines.append(f"  Diversity Score: {diversity['diversity_score']}/100")
 
     return "\n".join(lines)

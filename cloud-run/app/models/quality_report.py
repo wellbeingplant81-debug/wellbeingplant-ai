@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -143,9 +143,30 @@ class SceneRegenerationEntry(BaseModel):
     regeneration: RegenerationState = Field(default_factory=RegenerationState)
 
 
+class VisualDiversitySummary(BaseModel):
+    """Sprint72-3 - Visual Diversity QA. visual_diversity_engine.
+    summarize_visual_diversity()의 결과 + scene별 profile을 그대로
+    담는다. 새 판정 로직은 없다 - 기존 함수 결과를 직렬화할 뿐이다."""
+
+    camera_distance_distribution: Dict[str, int] = Field(default_factory=dict)
+    camera_angle_distribution: Dict[str, int] = Field(default_factory=dict)
+    composition_distribution: Dict[str, int] = Field(default_factory=dict)
+    lighting_distribution: Dict[str, int] = Field(default_factory=dict)
+    camera_distance_diversity_count: int = 0
+    camera_angle_diversity_count: int = 0
+    composition_diversity_count: int = 0
+    lighting_diversity_count: int = 0
+    diversity_score: float = 0.0
+    profiles_by_scene: Dict[int, Dict[str, str]] = Field(default_factory=dict)
+
+
 class QualityReport(BaseModel):
     project_id: str
     technical_validation: TechnicalValidation
     ai_quality_evaluation: Optional[AIQualityEvaluation] = None
     regeneration: List[SceneRegenerationEntry] = Field(default_factory=list)
     metadata: QualityReportMetadata
+    # Sprint72-3 - visual_profile이 있는 scene이 하나도 없으면(요구
+    # 사항: profile=None이면 완전 no-op) None으로 남아 기존
+    # quality_report.json 스키마와 완전히 하위 호환된다.
+    visual_diversity: Optional[VisualDiversitySummary] = None

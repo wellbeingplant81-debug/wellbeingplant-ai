@@ -15,6 +15,7 @@ from app.services.visual_diversity_engine import (
     apply_profile_to_prompt,
     assign_visual_profiles,
     profile_to_text,
+    summarize_visual_diversity,
 )
 
 
@@ -151,6 +152,113 @@ class TestApplyProfileToPrompt(unittest.TestCase):
         twice = apply_profile_to_prompt(once, self.profile)
 
         self.assertEqual(once, twice)
+
+
+SIX_DISTINCT_PROFILES = [
+    {"camera_distance": "wide", "camera_angle": "eye level", "composition": "centered", "lighting": "soft daylight"},
+    {"camera_distance": "medium", "camera_angle": "low angle", "composition": "rule of thirds", "lighting": "dramatic light"},
+    {"camera_distance": "close-up", "camera_angle": "high angle", "composition": "foreground framing", "lighting": "warm indoor"},
+    {"camera_distance": "macro", "camera_angle": "top-down", "composition": "leading lines", "lighting": "cool ambient"},
+    {"camera_distance": "wide", "camera_angle": "side view", "composition": "centered", "lighting": "backlit"},
+    {"camera_distance": "medium", "camera_angle": "over shoulder", "composition": "rule of thirds", "lighting": "soft daylight"},
+]
+
+
+class TestSummarizeVisualDiversity(unittest.TestCase):
+    """Sprint72-3 - Visual Diversity QA. quality_report.json에 넣을
+    분포/다양성 개수/점수를 계산하는 순수 함수."""
+
+    def test_empty_list_returns_zeroed_summary(self):
+        summary = summarize_visual_diversity([])
+
+        self.assertEqual(summary["camera_distance_distribution"], {})
+        self.assertEqual(summary["camera_angle_distribution"], {})
+        self.assertEqual(summary["composition_distribution"], {})
+        self.assertEqual(summary["lighting_distribution"], {})
+        self.assertEqual(summary["camera_distance_diversity_count"], 0)
+        self.assertEqual(summary["camera_angle_diversity_count"], 0)
+        self.assertEqual(summary["composition_diversity_count"], 0)
+        self.assertEqual(summary["lighting_diversity_count"], 0)
+        self.assertEqual(summary["diversity_score"], 0.0)
+
+    def test_none_input_behaves_like_empty_list(self):
+        self.assertEqual(summarize_visual_diversity(None), summarize_visual_diversity([]))
+
+    def test_none_entries_are_filtered_out(self):
+        # profile이 없는(None) scene은 집계에서 제외되어야 한다.
+        summary = summarize_visual_diversity([None, SIX_DISTINCT_PROFILES[0], None])
+
+        self.assertEqual(summary["camera_distance_diversity_count"], 1)
+
+    def test_distance_distribution_counts_occurrences(self):
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(
+            summary["camera_distance_distribution"],
+            {"wide": 2, "medium": 2, "close-up": 1, "macro": 1},
+        )
+
+    def test_angle_distribution_counts_occurrences(self):
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(
+            summary["camera_angle_distribution"],
+            {
+                "eye level": 1, "low angle": 1, "high angle": 1,
+                "top-down": 1, "side view": 1, "over shoulder": 1,
+            },
+        )
+
+    def test_composition_distribution_counts_occurrences(self):
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(
+            summary["composition_distribution"],
+            {"centered": 2, "rule of thirds": 2, "foreground framing": 1, "leading lines": 1},
+        )
+
+    def test_lighting_distribution_counts_occurrences(self):
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(
+            summary["lighting_distribution"],
+            {"soft daylight": 2, "dramatic light": 1, "warm indoor": 1, "cool ambient": 1, "backlit": 1},
+        )
+
+    def test_diversity_counts_for_six_distinct_profiles(self):
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(summary["camera_distance_diversity_count"], 4)
+        self.assertEqual(summary["camera_angle_diversity_count"], 6)
+        self.assertEqual(summary["composition_diversity_count"], 4)
+        self.assertEqual(summary["lighting_diversity_count"], 5)
+
+    def test_max_diversity_yields_score_of_100(self):
+        # SIX_DISTINCT_PROFILES는 assign_visual_profiles()가 실제로
+        # 만들어내는 6-scene 패턴과 동일하게 각 차원의 가능한 값을
+        # 전부 사용한다 - 점수는 만점(100.0)이어야 한다.
+        summary = summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+
+        self.assertEqual(summary["diversity_score"], 100.0)
+
+    def test_single_repeated_profile_yields_low_score(self):
+        one_profile = [SIX_DISTINCT_PROFILES[0]] * 6
+
+        summary = summarize_visual_diversity(one_profile)
+
+        self.assertLess(summary["diversity_score"], 30.0)
+        self.assertGreater(summary["diversity_score"], 0.0)
+
+    def test_score_is_between_zero_and_100(self):
+        for profiles in (SIX_DISTINCT_PROFILES, SIX_DISTINCT_PROFILES[:2], [SIX_DISTINCT_PROFILES[0]]):
+            summary = summarize_visual_diversity(profiles)
+            self.assertGreaterEqual(summary["diversity_score"], 0.0)
+            self.assertLessEqual(summary["diversity_score"], 100.0)
+
+    def test_does_not_mutate_input(self):
+        profiles_copy = [dict(p) for p in SIX_DISTINCT_PROFILES]
+        summarize_visual_diversity(SIX_DISTINCT_PROFILES)
+        self.assertEqual(SIX_DISTINCT_PROFILES, profiles_copy)
 
 
 if __name__ == "__main__":
