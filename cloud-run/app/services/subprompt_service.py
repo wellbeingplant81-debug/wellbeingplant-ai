@@ -123,10 +123,16 @@ DIMENSION_ALIASES = {
     "low angle": ["로우앵글", "로우 앵글", "낮은 앵글"],
     "high angle": ["하이앵글", "하이 앵글", "높은 앵글"],
     "over-the-shoulder": ["오버 더 숄더", "어깨 너머"],
-    "centered": ["중앙 구도", "화면 중앙", "센터드"],
-    "rule of thirds": ["삼분할", "3분할"],
-    "foreground emphasis": ["전경 강조", "전경을 강조"],
-    "background emphasis": ["배경 강조", "배경을 강조"],
+    "centered": ["중앙 구도", "화면 중앙", "센터드", "center"],
+    "rule of thirds": ["삼분할", "3분할", "third of the frame"],
+    # Sprint67-2 - "foreground"/"background"와 "emphasis"(자연어에서는
+    # "emphasizes"/"emphasized"처럼 다른 문장에 떨어져 나오기도 함,
+    # 실제 로그 확인)가 함께 등장하는지를 별도로 인정한다. 튜플은
+    # "이 단어들이 전부(어순 무관) combined_text 어딘가에 있어야
+    # 한다"는 의미 - "foreground"만 있고 emphasis 언급이 전혀 없는
+    # 경우까지 통과시키는 과도하게 느슨한 매칭은 아니다.
+    "foreground emphasis": ["전경 강조", "전경을 강조", ("foreground", "emphas")],
+    "background emphasis": ["배경 강조", "배경을 강조", ("background", "emphas")],
     "full body": ["전신"],
     "half body": ["상반신", "허리까지"],
     "close detail": ["근접 디테일", "가까운 디테일"],
@@ -134,12 +140,28 @@ DIMENSION_ALIASES = {
 }
 
 
+def _normalize_for_matching(text: str) -> str:
+    # Sprint67-2 - "eye-level"/"low-angle"/"high-angle"처럼 canonical
+    # 표현(공백)을 하이픈으로 바꿔 쓰는 자연어 변형을 흡수한다.
+    return text.replace("-", " ")
+
+
 def _mentions_keyword(combined_text: str, keyword: str) -> bool:
 
-    if keyword in combined_text:
+    normalized_text = _normalize_for_matching(combined_text)
+
+    if _normalize_for_matching(keyword) in normalized_text:
         return True
 
-    return any(alias in combined_text for alias in DIMENSION_ALIASES.get(keyword, []))
+    for alias in DIMENSION_ALIASES.get(keyword, []):
+
+        if isinstance(alias, tuple):
+            if all(word in normalized_text for word in alias):
+                return True
+        elif _normalize_for_matching(alias) in normalized_text:
+            return True
+
+    return False
 
 
 def _has_missing_dimension(subprompts: list) -> bool:

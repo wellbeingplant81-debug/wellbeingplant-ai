@@ -604,5 +604,175 @@ class TestSubpromptQualityGateLanguageAliases(unittest.TestCase):
         self.assertEqual(result, GOOD_SUBPROMPTS)
 
 
+class TestSubpromptQualityGateEnglishParaphrases(unittest.TestCase):
+    """
+    Sprint67-2 - Sprint67-1 실제 E2E("혈관 나이를 되돌리는 방법" scene2)
+    에서 발견된 버그 재현/수정 확인. Gemini가 영어로 응답하면서도
+    canonical 키워드를 리터럴 그대로 쓰지 않고 하이픈 변형("eye-level")
+    이나 자연스러운 패러프레이즈("exact center of the room", "left
+    third of the frame", "emphasis on the background")를 쓰면
+    _has_missing_dimension()이 오판했다. Sprint66-1의 한국어 alias는
+    그대로 유지한 채, 하이픈/공백 정규화와 일부 영어 패러프레이즈
+    alias를 추가한다.
+    """
+
+    # Sprint67-1 실제 quality_report 폴백 로그에서 그대로 가져온
+    # 서브프롬프트 4개(혈관 나이 주제, scene2). shot type/focus/
+    # subject distance는 우연히 다른 항목에서 커버됐지만, composition
+    # (centered/rule of thirds/foreground emphasis/background emphasis)
+    # 은 넷 다 리터럴로 전혀 매칭되지 않아 폴백을 유발했다.
+    REAL_E2E_SUBPROMPTS = [
+        "Eye-level wide shot of a minimalist, high-tech wellness clinic bathed in soft natural morning "
+        "light. In the exact center of the room, a large, dark holographic screen displays the full "
+        "length of a stylized, plaque-filled artery. This entire visualized artery glows with a "
+        "dangerous red hue, creating a stark, cinematic focal point within the otherwise warm, clean, "
+        "and peaceful environment.",
+        "A dramatic low-angle medium shot focusing on a significant, curved section of the stylized "
+        "artery, positioning it on the left third of the frame. This half-body view emphasizes the "
+        "subject's formidable and unhealthy state, with the menacing red glow from the plaque buildup "
+        "seeming to pulse with intensity. The dark, clinical background is slightly out of focus, "
+        "drawing all attention to the stiff, diseased texture of the artery itself.",
+        "High-angle close-up shot focusing on the action of blockage within the artery. A large, "
+        "jagged formation of plaque, glowing an aggressive red, dominates the foreground, almost "
+        "completely choking the arterial pathway. This view emphasizes the immediate danger, capturing "
+        "the close detail of the stiff, straining vessel wall, while the surrounding medical "
+        "visualization fades into a dark, cinematic void.",
+        "An over-the-shoulder detail shot, where the camera's perspective is positioned just behind a "
+        "small, isolated deposit of glowing red plaque (the supporting object). The focus is pulled "
+        "towards the background, which reveals the vast, branching network of the wider arterial "
+        "system stretching into the distance. This composition, with its emphasis on the background, "
+        "contrasts the small, detailed problem in the foreground against the expansive, cleaner "
+        "environment of the rest of the vessel, all within a warm, soft, wellness aesthetic.",
+    ]
+
+    @patch("app.services.subprompt_service.client")
+    def test_real_sprint67_1_scene2_subprompts_no_longer_fall_back(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            self.REAL_E2E_SUBPROMPTS,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, self.REAL_E2E_SUBPROMPTS)
+
+    @patch("app.services.subprompt_service.client")
+    def test_hyphenated_camera_angles_match_space_canonical(self, mock_client):
+        # over-the-shoulder를 일부러 빼서, eye-level/low-angle/high-angle
+        # 하이픈 표기만으로 camera angle 축이 인정되는지 검증한다.
+        subprompts = [
+            "Wide shot, eye-level, centered, full body: the messy office environment at dawn.",
+            "Medium shot, low-angle, rule of thirds, half body: the subject, a tired woman, "
+            "drinking coffee.",
+            "Close-up, high-angle, foreground emphasis, close detail: her action of rubbing "
+            "tired eyes.",
+            "Detail shot, background emphasis, wide environment: a supporting object, an old "
+            "alarm clock.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_centered_via_center_paraphrase(self, mock_client):
+        subprompts = [
+            "Wide shot, eye level, full body: the messy office environment, exact center of the "
+            "frame, at dawn.",
+            "Medium shot, low angle, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, an old alarm "
+            "clock.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_rule_of_thirds_via_third_of_the_frame_paraphrase(self, mock_client):
+        subprompts = [
+            "Wide shot, eye level, full body: the messy office environment at dawn.",
+            "Medium shot, low angle, half body: the subject positioned on the left third of the "
+            "frame, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, an old alarm "
+            "clock.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_foreground_emphasis_via_separated_words(self, mock_client):
+        # "foreground"와 "emphasizes"가 서로 다른 문장에 떨어져 있어도
+        # (실제 로그처럼) 인정되어야 한다.
+        subprompts = [
+            "Wide shot, eye level, full body: the messy office environment at dawn.",
+            "Medium shot, low angle, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: a cluttered desk item dominates the foreground. "
+            "This view emphasizes the disorder of her life.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, an old alarm "
+            "clock.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_background_emphasis_via_reordered_phrase(self, mock_client):
+        subprompts = [
+            "Wide shot, eye level, full body: the messy office environment at dawn.",
+            "Medium shot, low angle, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, with emphasis "
+            "on the background clutter.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, subprompts)
+
+    @patch("app.services.subprompt_service.client")
+    def test_still_falls_back_when_only_one_half_of_word_set_alias_present(self, mock_client):
+        # "foreground"라는 단어는 있지만 "emphas-" 어근이 전체 텍스트
+        # 어디에도 없으면 - 과도하게 느슨한 매칭이 되어서는 안 되므로
+        # 여전히 폴백해야 한다(composition 축 전체 누락).
+        subprompts = [
+            "Wide shot, eye level, full body: the foreground of the messy office environment at "
+            "dawn.",
+            "Medium shot, low angle, half body: the subject, a tired woman, drinking coffee.",
+            "Close-up, high angle, close detail: her action of rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, wide environment: a supporting object, an old alarm "
+            "clock.",
+        ]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(subprompts)
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, [IMAGE_PROMPT] * 4)
+
+    @patch("app.services.subprompt_service.client")
+    def test_korean_aliases_still_work_after_english_paraphrase_support_added(self, mock_client):
+        # Sprint66-1 회귀 확인 - 실제 Sprint65 재현 케이스가 여전히
+        # 통과해야 한다.
+        real_sprint65_subprompts = (
+            TestSubpromptQualityGateLanguageAliases.REAL_E2E_SUBPROMPTS
+        )
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            real_sprint65_subprompts,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertEqual(result, real_sprint65_subprompts)
+
+
 if __name__ == "__main__":
     unittest.main()
