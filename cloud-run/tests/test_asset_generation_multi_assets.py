@@ -1,8 +1,9 @@
+import json
 import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(
     0,
@@ -932,6 +933,119 @@ class TestVisualDiversityWiring(unittest.TestCase):
 
         self.assertNotIn("visual_profile", result)
         self.assertNotIn("visual_profile", result["assets"][0])
+
+
+class TestSubpromptDiagnosticsWiring(unittest.TestCase):
+    """
+    Sprint73 - Subprompt Quality Gate Observability. integrate_asset()
+    가 subprompt_service.get_last_diagnostics()를 읽어 scene 레벨
+    subprompt_diagnostics로 기록하는지 검증한다. 이 클래스만
+    generate_subprompts() 자체를 mock하지 않고 subprompt_service.client
+    (Gemini 호출)를 mock해, 실제 generate_subprompts() 본문이 실행돼
+    스레드 로컬 진단 정보가 채워지는 경로를 확인한다.
+    """
+
+    def setUp(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_dir.cleanup)
+        self.project_path = self._tmp_dir.name
+        os.makedirs(os.path.join(self.project_path, "images"), exist_ok=True)
+
+        feedback_patcher = patch(
+            "app.services.asset_integration_service.asset_feedback_service.record",
+        )
+        self.addCleanup(feedback_patcher.stop)
+        feedback_patcher.start()
+
+        ranking_patcher = patch(
+            "app.services.asset_ranking_service.load_all",
+            return_value=[],
+        )
+        self.addCleanup(ranking_patcher.stop)
+        ranking_patcher.start()
+
+    def _mock_gemini_subprompt_response(self, subprompts):
+        response = MagicMock()
+        response.text = json.dumps({"subprompts": subprompts}, ensure_ascii=False)
+        return response
+
+    @patch("app.services.asset_integration_service.subprompt_service.client")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_fallback_diagnostics_recorded_on_scene(
+        self, mock_get_candidates, mock_generate_image, mock_gemini_client,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        # 개수 불일치 -> Quality Gate 폴백 유발.
+        mock_gemini_client.models.generate_content.return_value = (
+            self._mock_gemini_subprompt_response(["only", "two"])
+        )
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        diagnostics = result["subprompt_diagnostics"]
+        self.assertTrue(diagnostics["fallback_occurred"])
+        self.assertEqual(diagnostics["fallback_reason"], "count_mismatch")
+        self.assertEqual(diagnostics["prompt_length"], len(SAMPLE_SCENE["image_prompt"]))
+
+    @patch("app.services.asset_integration_service.subprompt_service.client")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_success_diagnostics_recorded_on_scene(
+        self, mock_get_candidates, mock_generate_image, mock_gemini_client,
+    ):
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        good_subprompts = [
+            "Wide shot, eye level, centered, full body: the messy office at dawn.",
+            "Medium shot, low angle, rule of thirds, half body: the subject drinking coffee.",
+            "Close-up, high angle, foreground emphasis, close detail: rubbing tired eyes.",
+            "Detail shot, over-the-shoulder, background emphasis, wide environment: an alarm clock.",
+        ]
+        mock_gemini_client.models.generate_content.return_value = (
+            self._mock_gemini_subprompt_response(good_subprompts)
+        )
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        diagnostics = result["subprompt_diagnostics"]
+        self.assertFalse(diagnostics["fallback_occurred"])
+        self.assertIsNone(diagnostics["fallback_reason"])
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_stock_sourced_scene_has_no_subprompt_diagnostics(
+        self, mock_get_candidates, mock_download,
+    ):
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertNotIn("subprompt_diagnostics", result)
+
+    @patch("app.services.asset_integration_service.subprompt_service.generate_subprompts")
+    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_mocked_subprompt_service_leaves_diagnostics_absent(
+        self, mock_get_candidates, mock_generate_image, mock_generate_subprompts,
+    ):
+        # generate_subprompts() 자체를 통째로 mock하는(기존 방식)
+        # 호출부는 진단 정보가 없어야 정상이다 - 크래시 없이 그냥
+        # 필드가 빠질 뿐이어야 한다. reset_diagnostics()가 호출 직전에
+        # 초기화하므로, 다른 테스트가 남긴 진단 정보가 잘못 남아있는
+        # 것처럼 보이는 일도 없어야 한다.
+        mock_get_candidates.return_value = []
+        mock_generate_image.side_effect = _generate_image_side_effect
+        mock_generate_subprompts.return_value = [SAMPLE_SCENE["image_prompt"]] * 4
+
+        scene = {**SAMPLE_SCENE, "visual_type": "ai"}
+        result = integrate_asset(scene, self.project_path)
+
+        self.assertNotIn("subprompt_diagnostics", result)
 
 
 if __name__ == "__main__":

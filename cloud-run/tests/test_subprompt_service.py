@@ -510,6 +510,226 @@ class TestSubpromptQualityGate(unittest.TestCase):
         self.assertEqual(result, GOOD_SUBPROMPTS)
 
 
+class TestGenerateSubpromptsWithDiagnostics(unittest.TestCase):
+    """
+    Sprint73 - Subprompt Quality Gate Observability. 기존
+    generate_subprompts()의 판정/폴백 값 자체는 전혀 바꾸지 않고,
+    "왜" 폴백했는지(어느 게이트 조건이 실패했는지 + 그 시점의
+    image_prompt 길이)를 별도로 조회할 수 있는
+    generate_subprompts_with_diagnostics()를 추가한다. fallback_reason은
+    Gemini 응답 자체의 문제(개수/중복/누락)와 예외성 오류(파싱/API)를
+    구분하기 위한 고정된 코드 집합이다.
+    """
+
+    @patch("app.services.subprompt_service.client")
+    def test_success_case_reports_no_fallback(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(subprompts, GOOD_SUBPROMPTS)
+        self.assertFalse(diagnostics["fallback_occurred"])
+        self.assertIsNone(diagnostics["fallback_reason"])
+        self.assertIsNone(diagnostics["fallback_detail"])
+
+    @patch("app.services.subprompt_service.client")
+    def test_count_mismatch_reports_correct_reason(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["only", "two"],
+        )
+
+        subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(subprompts, [IMAGE_PROMPT] * 4)
+        self.assertTrue(diagnostics["fallback_occurred"])
+        self.assertEqual(diagnostics["fallback_reason"], "count_mismatch")
+
+    @patch("app.services.subprompt_service.client")
+    def test_identical_sentences_reports_duplicate_reason(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS[:1] * 4,
+        )
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["fallback_reason"], "duplicate_subprompts")
+
+    @patch("app.services.subprompt_service.client")
+    def test_near_duplicate_wording_reports_correct_reason(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Wide shot of a tired woman sitting at a messy desk in the office.",
+            "Wide shot of a tired woman sitting at a messy desk in an office.",
+            "Close-up on her exhausted face, showing pure exhaustion in her eyes today.",
+            "Detail shot of a coffee cup, cold and half-empty, sitting there quietly.",
+        ])
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["fallback_reason"], "near_duplicate_keywords")
+
+    @patch("app.services.subprompt_service.client")
+    def test_missing_dimension_reports_correct_reason(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response([
+            "Eye level, centered, full body: the messy office environment at dawn.",
+            "Low angle, rule of thirds, half body: the subject, a tired woman, drinking coffee.",
+            "High angle, foreground emphasis, close detail: her action of rubbing tired eyes.",
+            "Over-the-shoulder, background emphasis, wide environment: a supporting object, an old alarm clock.",
+        ])
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["fallback_reason"], "missing_dimension")
+
+    @patch("app.services.subprompt_service.client")
+    def test_gemini_exception_reports_generation_error_reason(self, mock_client):
+        mock_client.models.generate_content.side_effect = Exception("quota exceeded")
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["fallback_reason"], "generation_error")
+        self.assertIn("quota exceeded", diagnostics["fallback_detail"])
+
+    @patch("app.services.subprompt_service.client")
+    def test_malformed_json_reports_generation_error_reason(self, mock_client):
+        response = MagicMock()
+        response.text = "not json at all"
+        mock_client.models.generate_content.return_value = response
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["fallback_reason"], "generation_error")
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_length_is_recorded_on_success(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT,
+        )
+
+        self.assertEqual(diagnostics["prompt_length"], len(IMAGE_PROMPT))
+
+    @patch("app.services.subprompt_service.client")
+    def test_prompt_length_is_recorded_on_fallback(self, mock_client):
+        # Sprint73 - Visual Diversity Profile 등으로 image_prompt가
+        # 길어진 경우와 Gemini 응답 자체 문제를 구분하려면, 폴백이
+        # 발생했을 때도 그 시점의 실제 prompt 길이가 함께 기록돼야
+        # 한다.
+        mock_client.models.generate_content.side_effect = Exception("boom")
+        long_prompt = IMAGE_PROMPT + " " + ("wide shot, low angle, rule of thirds, dramatic light. " * 3)
+
+        _subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            long_prompt,
+        )
+
+        self.assertEqual(diagnostics["prompt_length"], len(long_prompt))
+        self.assertGreater(diagnostics["prompt_length"], len(IMAGE_PROMPT))
+
+    @patch("app.services.subprompt_service.client")
+    def test_dimension_check_skip_for_non_default_count_reports_no_fallback(self, mock_client):
+        subprompts_in = ["A tired woman looking at her phone.", "A messy desk with papers scattered."]
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            subprompts_in,
+        )
+
+        subprompts, diagnostics = subprompt_service.generate_subprompts_with_diagnostics(
+            IMAGE_PROMPT, count=2,
+        )
+
+        self.assertEqual(subprompts, subprompts_in)
+        self.assertFalse(diagnostics["fallback_occurred"])
+
+    @patch("app.services.subprompt_service.client")
+    def test_generate_subprompts_unaffected_by_diagnostics_addition(self, mock_client):
+        # 요구사항: 기존 동작은 유지 - generate_subprompts()는 여전히
+        # 순수 리스트만 반환해야 한다(튜플이 아님).
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        result = subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(result, GOOD_SUBPROMPTS)
+
+
+class TestGetLastDiagnosticsSideChannel(unittest.TestCase):
+    """
+    Sprint73 - generate_subprompts()(기존 공개 API, 이미 수십 개의
+    호출부/테스트가 이 함수를 그대로 mock하고 있음)의 반환 타입은
+    절대 바꾸지 않으면서, 방금 그 함수가 내부적으로 계산한 진단
+    정보를 get_last_diagnostics()로 곁가지 조회할 수 있게 한다.
+    generate_subprompts()를 그대로 mock하는 기존 테스트/호출부는
+    이 side-channel이 채워지지 않아도(None) 정상 동작해야 한다.
+    """
+
+    def setUp(self):
+        subprompt_service._diagnostics_state.last = None
+
+    @patch("app.services.subprompt_service.client")
+    def test_get_last_diagnostics_reflects_most_recent_call(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            ["only", "two"],
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        diagnostics = subprompt_service.get_last_diagnostics()
+
+        self.assertTrue(diagnostics["fallback_occurred"])
+        self.assertEqual(diagnostics["fallback_reason"], "count_mismatch")
+
+    @patch("app.services.subprompt_service.client")
+    def test_get_last_diagnostics_reflects_success(self, mock_client):
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+
+        diagnostics = subprompt_service.get_last_diagnostics()
+
+        self.assertFalse(diagnostics["fallback_occurred"])
+
+    def test_returns_none_when_never_called_in_this_thread(self):
+        self.assertIsNone(subprompt_service.get_last_diagnostics())
+
+    @patch("app.services.subprompt_service.client")
+    def test_reset_diagnostics_clears_the_side_channel(self, mock_client):
+        # 호출자(asset_integration_service._generate_extra_ai_assets)가
+        # generate_subprompts()를 호출하기 직전에 리셋해두면, 그
+        # 호출이 mock으로 가로채여 실제로 실행되지 않았을 때도(스레드
+        # 로컬을 건드리지 않으므로) 이전 호출의 진단 정보가 남아있는
+        # 것처럼 잘못 보이는 일이 없다.
+        mock_client.models.generate_content.return_value = _mock_gemini_response(
+            GOOD_SUBPROMPTS,
+        )
+        subprompt_service.generate_subprompts(IMAGE_PROMPT)
+        self.assertIsNotNone(subprompt_service.get_last_diagnostics())
+
+        subprompt_service.reset_diagnostics()
+
+        self.assertIsNone(subprompt_service.get_last_diagnostics())
+
+
 class TestSubpromptQualityGateLanguageAliases(unittest.TestCase):
     """
     Sprint66-1 - Sprint65 실제 E2E("장내세균이 우울감과 기억력에

@@ -7,8 +7,16 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
-from app.models.quality_report import QualityReport, QualityReportMetadata, VisualDiversitySummary
-from app.steps.step07_quality import _build_visual_diversity_summary
+from app.models.quality_report import (
+    QualityReport,
+    QualityReportMetadata,
+    SubpromptDiagnosticsSummary,
+    VisualDiversitySummary,
+)
+from app.steps.step07_quality import (
+    _build_subprompt_diagnostics_summary,
+    _build_visual_diversity_summary,
+)
 
 
 PROFILE_A = {
@@ -77,6 +85,86 @@ class TestBuildVisualDiversitySummary(unittest.TestCase):
 
         self.assertEqual(len(summary.profiles_by_scene), 1)
         self.assertIn(1, summary.profiles_by_scene)
+
+
+FALLBACK_DIAGNOSTICS = {
+    "fallback_occurred": True,
+    "fallback_reason": "missing_dimension",
+    "fallback_detail": "서브프롬프트에 누락된 다양성 요소가 있습니다: [...]",
+    "prompt_length": 342,
+}
+SUCCESS_DIAGNOSTICS = {
+    "fallback_occurred": False,
+    "fallback_reason": None,
+    "fallback_detail": None,
+    "prompt_length": 210,
+}
+
+
+class TestBuildSubpromptDiagnosticsSummary(unittest.TestCase):
+    """
+    Sprint73 - Subprompt Quality Gate Observability. quality_report.
+    json(실제 파일)에 실을 요약을 data["scenes"](Sprint73 이후
+    scene["subprompt_diagnostics"]을 가질 수 있음)로부터 만든다.
+    """
+
+    def test_no_scenes_returns_none(self):
+        self.assertIsNone(_build_subprompt_diagnostics_summary([]))
+
+    def test_none_scenes_returns_none(self):
+        self.assertIsNone(_build_subprompt_diagnostics_summary(None))
+
+    def test_scenes_without_diagnostics_returns_none(self):
+        scenes = [{"scene": 1, "asset_path": "a.png"}]
+        self.assertIsNone(_build_subprompt_diagnostics_summary(scenes))
+
+    def test_fallback_scene_is_listed(self):
+        scenes = [
+            {"scene": 2, "asset_path": "b.png", "subprompt_diagnostics": FALLBACK_DIAGNOSTICS},
+        ]
+
+        summary = _build_subprompt_diagnostics_summary(scenes)
+
+        self.assertIsInstance(summary, SubpromptDiagnosticsSummary)
+        self.assertEqual(summary.scenes_with_fallback, [2])
+        self.assertEqual(summary.fallback_reasons_by_scene[2], "missing_dimension")
+        self.assertIn("누락된 다양성 요소", summary.fallback_details_by_scene[2])
+
+    def test_success_scene_is_not_listed_as_fallback(self):
+        scenes = [
+            {"scene": 1, "asset_path": "a.png", "subprompt_diagnostics": SUCCESS_DIAGNOSTICS},
+        ]
+
+        summary = _build_subprompt_diagnostics_summary(scenes)
+
+        self.assertEqual(summary.scenes_with_fallback, [])
+        self.assertNotIn(1, summary.fallback_reasons_by_scene)
+
+    def test_prompt_lengths_recorded_for_all_scenes_regardless_of_fallback(self):
+        # 요구사항 - Gemini 응답 부족(reason)과 prompt 길이 증가를
+        # 구분해서 진단할 수 있어야 하므로, 성공/실패 무관하게 길이는
+        # 항상 기록한다.
+        scenes = [
+            {"scene": 1, "asset_path": "a.png", "subprompt_diagnostics": SUCCESS_DIAGNOSTICS},
+            {"scene": 2, "asset_path": "b.png", "subprompt_diagnostics": FALLBACK_DIAGNOSTICS},
+        ]
+
+        summary = _build_subprompt_diagnostics_summary(scenes)
+
+        self.assertEqual(summary.prompt_lengths_by_scene[1], 210)
+        self.assertEqual(summary.prompt_lengths_by_scene[2], 342)
+
+    def test_mixed_scenes_only_fallback_ones_in_reason_maps(self):
+        scenes = [
+            {"scene": 1, "asset_path": "a.png", "subprompt_diagnostics": SUCCESS_DIAGNOSTICS},
+            {"scene": 2, "asset_path": "b.png", "subprompt_diagnostics": FALLBACK_DIAGNOSTICS},
+            {"scene": 3, "asset_path": "c.png"},
+        ]
+
+        summary = _build_subprompt_diagnostics_summary(scenes)
+
+        self.assertEqual(summary.scenes_with_fallback, [2])
+        self.assertEqual(len(summary.prompt_lengths_by_scene), 2)
 
 
 class TestQualityReportModelBackwardCompatible(unittest.TestCase):
@@ -150,6 +238,40 @@ class TestQualityReportModelBackwardCompatible(unittest.TestCase):
         self.assertIn("visual_diversity", dumped)
         self.assertEqual(
             dumped["visual_diversity"]["camera_distance_diversity_count"], 1,
+        )
+
+    def test_subprompt_diagnostics_defaults_to_none(self):
+        report = QualityReport(**self._minimal_report_kwargs())
+        self.assertIsNone(report.subprompt_diagnostics)
+
+    def test_subprompt_diagnostics_can_be_populated(self):
+        summary = _build_subprompt_diagnostics_summary(
+            [{"scene": 2, "asset_path": "b.png", "subprompt_diagnostics": FALLBACK_DIAGNOSTICS}]
+        )
+        kwargs = self._minimal_report_kwargs()
+        kwargs["subprompt_diagnostics"] = summary
+
+        report = QualityReport(**kwargs)
+
+        self.assertIsNotNone(report.subprompt_diagnostics)
+        self.assertEqual(report.subprompt_diagnostics.scenes_with_fallback, [2])
+
+    def test_subprompt_diagnostics_round_trips_through_json(self):
+        import json
+
+        summary = _build_subprompt_diagnostics_summary(
+            [{"scene": 2, "asset_path": "b.png", "subprompt_diagnostics": FALLBACK_DIAGNOSTICS}]
+        )
+        kwargs = self._minimal_report_kwargs()
+        kwargs["subprompt_diagnostics"] = summary
+
+        report = QualityReport(**kwargs)
+        dumped = json.loads(json.dumps(report.model_dump(), ensure_ascii=False))
+
+        self.assertIn("subprompt_diagnostics", dumped)
+        self.assertEqual(
+            dumped["subprompt_diagnostics"]["fallback_reasons_by_scene"]["2"],
+            "missing_dimension",
         )
 
 

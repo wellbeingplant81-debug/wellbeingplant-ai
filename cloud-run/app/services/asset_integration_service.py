@@ -243,13 +243,30 @@ def _generate_extra_ai_assets(
     베이스 프롬프트에 Profile 문구를 얹어, 이 scene에서 파생되는
     4개 subprompt 전부(따라서 1차를 제외한 3개 extra asset 전부)가
     같은 Profile을 공유하게 한다("같은 Scene에서는 Profile을 유지").
+
+    Sprint73 - Subprompt Quality Gate Observability: 반환값이
+    (extra_assets, subprompt_diagnostics) 튜플로 바뀐다 - 이 함수는
+    integrate_asset() 하나만 호출하므로(직접 테스트 대상 아님) 하위
+    호환을 신경 쓸 필요가 없다. subprompt_diagnostics는 subprompt_
+    service.get_last_diagnostics()를 그대로 담을 뿐, 새 판정 로직은
+    없다.
     """
 
     enriched_prompt = apply_profile_to_prompt(image_prompt, visual_profile)
 
+    # Sprint73 - Subprompt Quality Gate Observability: generate_
+    # subprompts()의 반환 타입(순수 list)은 그대로 두고, 방금 이
+    # 호출이 실제로 폴백했는지/왜 폴백했는지를 스레드 로컬 곁가지로
+    # 읽는다. reset_diagnostics()를 먼저 호출해 두면, 테스트 등에서
+    # generate_subprompts() 자체가 통째로 mock되어 실행되지 않는
+    # 경우에도 다른 호출의 진단 정보가 잘못 남아있는 일이 없다.
+    subprompt_service.reset_diagnostics()
+
     subprompts = subprompt_service.generate_subprompts(
         enriched_prompt, count=AI_ASSET_COUNT,
     )
+
+    subprompt_diagnostics = subprompt_service.get_last_diagnostics()
 
     extra_assets = []
 
@@ -297,7 +314,7 @@ def _generate_extra_ai_assets(
 
         extra_assets.append(asset_entry)
 
-    return extra_assets
+    return extra_assets, subprompt_diagnostics
 
 
 def integrate_asset(
@@ -459,10 +476,16 @@ def integrate_asset(
         # source == "ai_image") profile을 asset 메타데이터에도 남긴다.
         if visual_profile is not None:
             primary_asset["visual_profile"] = visual_profile
-        extra_assets = _generate_extra_ai_assets(
+        extra_assets, subprompt_diagnostics = _generate_extra_ai_assets(
             image_prompt, images_dir, scene_number, channel, is_hook_scene,
             visual_type, visual_profile,
         )
+        # Sprint73 - Subprompt Quality Gate Observability: 이 scene의
+        # subprompt 생성이 폴백했는지/왜 폴백했는지를 scene 레벨에
+        # 기록한다 - step07_quality.py가 quality_report.json에 그대로
+        # 옮겨 싣는다(Sprint72-2 visual_profile과 동일 패턴).
+        if subprompt_diagnostics is not None:
+            enriched["subprompt_diagnostics"] = subprompt_diagnostics
     else:
         extra_assets = []
 

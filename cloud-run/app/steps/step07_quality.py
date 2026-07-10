@@ -7,6 +7,7 @@ from app.models.quality_report import (
     PerformanceMetrics,
     QualityReport,
     QualityReportMetadata,
+    SubpromptDiagnosticsSummary,
     TechnicalValidation,
     VisualDiversitySummary,
 )
@@ -43,6 +44,51 @@ def _build_visual_diversity_summary(scenes: list):
     summary["profiles_by_scene"] = profiles_by_scene
 
     return VisualDiversitySummary(**summary)
+
+
+def _build_subprompt_diagnostics_summary(scenes: list):
+    """
+    Sprint73 - Subprompt Quality Gate Observability. scenes(Sprint73
+    이후 scene["subprompt_diagnostics"]을 가질 수 있음)에서 진단
+    정보가 있는 scene만 모아 quality_report.json에 실을 요약을
+    만든다. subprompt_diagnostics가 하나도 없으면(요구사항: 진단
+    정보가 없으면 완전 no-op) None을 반환해 QualityReport.
+    subprompt_diagnostics가 그대로 None으로 남는다 - 기존 스키마와
+    완전히 하위 호환된다. prompt_length는 폴백 여부와 무관하게 모든
+    scene에 대해 기록해, "Gemini 응답 부족"(fallback_reason)과
+    "Prompt 길이 증가"를 나란히 놓고 교차 진단할 수 있게 한다.
+    """
+
+    diagnostics_by_scene = {
+        scene["scene"]: scene["subprompt_diagnostics"]
+        for scene in (scenes or [])
+        if scene.get("subprompt_diagnostics")
+    }
+
+    if not diagnostics_by_scene:
+        return None
+
+    fallback_scenes = {
+        scene_number: diagnostics
+        for scene_number, diagnostics in diagnostics_by_scene.items()
+        if diagnostics["fallback_occurred"]
+    }
+
+    return SubpromptDiagnosticsSummary(
+        scenes_with_fallback=sorted(fallback_scenes.keys()),
+        fallback_reasons_by_scene={
+            scene_number: diagnostics["fallback_reason"]
+            for scene_number, diagnostics in fallback_scenes.items()
+        },
+        fallback_details_by_scene={
+            scene_number: diagnostics["fallback_detail"]
+            for scene_number, diagnostics in fallback_scenes.items()
+        },
+        prompt_lengths_by_scene={
+            scene_number: diagnostics["prompt_length"]
+            for scene_number, diagnostics in diagnostics_by_scene.items()
+        },
+    )
 
 
 def _report_path(project_path):
@@ -182,6 +228,7 @@ def run(
             ai_evaluation_skipped_reason=ai_evaluation_skipped_reason,
         ),
         visual_diversity=_build_visual_diversity_summary(data.get("scenes")),
+        subprompt_diagnostics=_build_subprompt_diagnostics_summary(data.get("scenes")),
     )
 
     output_path = os.path.join(project_path, "quality_report.json")

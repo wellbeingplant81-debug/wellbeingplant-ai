@@ -10,6 +10,7 @@ Sprint62-5 - Visual Diversity: Sub-prompt Generation.
 
 import json
 import re
+import threading
 
 from google import genai
 
@@ -20,6 +21,35 @@ client = genai.Client(
 )
 
 SUBPROMPT_COUNT = 4
+
+# Sprint73 - Quality Gate Observability. generate_subprompts()(기존
+# 공개 API)는 수십 개의 기존 호출부/테스트가 "순수 list를 반환하는
+# 함수"로 그대로 mock하고 있어 반환 타입을 바꿀 수 없다. 그래서 진단
+# 정보는 반환값이 아니라 이 스레드 로컬 곁가지로 노출한다(get_last_
+# diagnostics()). step02_assets.collect_assets()의 ThreadPoolExecutor는
+# scene 하나를 한 worker 스레드가 끝까지 동기적으로 처리하므로("쓰고
+# 바로 같은 스레드에서 읽기"), thread-local이면 race condition 없이
+# 안전하다. generate_subprompts()를 통째로 mock하는 기존 테스트에서는
+# 이 값이 그냥 None으로 남을 뿐, 별도 처리가 필요 없다.
+_diagnostics_state = threading.local()
+
+
+def get_last_diagnostics():
+    """가장 최근 이 스레드에서 실행된 generate_subprompts() 호출의
+    진단 정보를 반환합니다. 아직 한 번도 호출되지 않았으면 None."""
+
+    return getattr(_diagnostics_state, "last", None)
+
+
+def reset_diagnostics():
+    """
+    스레드 로컬 진단 정보를 지웁니다. generate_subprompts()가 테스트
+    등에서 통째로 mock되어 실제로 실행되지 않는 경우, 그 직전 호출의
+    진단 정보가 남아 있는 것처럼 잘못 보이지 않도록 호출자가
+    generate_subprompts() 호출 직전에 사용합니다.
+    """
+
+    _diagnostics_state.last = None
 
 # Sprint63-1 - Visual Diversity 품질 향상. count가 기본값(4)과 같으면
 # 이 순서대로 서로 다른 화면 구성(shot type)을 하나씩 명시적으로
@@ -185,7 +215,65 @@ def _has_missing_dimension(subprompts: list) -> bool:
     )
 
 
+# Sprint73 - Subprompt Quality Gate Observability. 아래 4개 예외는
+# generate_subprompts_with_diagnostics()가 "어느 게이트 조건에서
+# 폴백했는지"를 문자열 매칭 없이 예외 타입만으로 정확히 구분하기
+# 위한 내부 전용 표식이다 - 판정 로직/메시지는 기존과 완전히 동일하고,
+# 그냥 bare ValueError 대신 이 서브클래스를 raise할 뿐이다.
+class _SubpromptCountMismatch(ValueError):
+    pass
+
+
+class _SubpromptDuplicate(ValueError):
+    pass
+
+
+class _SubpromptNearDuplicateKeywords(ValueError):
+    pass
+
+
+class _SubpromptMissingDimension(ValueError):
+    pass
+
+
 def generate_subprompts(image_prompt: str, count: int = SUBPROMPT_COUNT) -> list:
+    """
+    기존 공개 API. Sprint73 이후에도 반환값(순수 list, 실패 시
+    image_prompt 반복 폴백)은 전혀 바뀌지 않는다 - 진단 정보가 필요
+    없는 기존 호출부는 이 함수를 그대로 쓰면 된다. 진단 정보는
+    get_last_diagnostics()로 스레드 로컬 곁가지에 남는다.
+    """
+
+    subprompts, diagnostics = generate_subprompts_with_diagnostics(
+        image_prompt, count,
+    )
+
+    _diagnostics_state.last = diagnostics
+
+    return subprompts
+
+
+def generate_subprompts_with_diagnostics(
+    image_prompt: str, count: int = SUBPROMPT_COUNT,
+):
+    """
+    Sprint73 - generate_subprompts()와 완전히 동일한 판정/폴백
+    로직이지만, (subprompts, diagnostics) 튜플로 "왜" 폴백했는지도
+    함께 반환한다. 기존 동작(반환되는 subprompts 값 자체)은 절대
+    바뀌지 않는다 - 진단 정보만 추가로 관찰한다.
+
+    diagnostics = {
+        "fallback_occurred": bool,
+        "fallback_reason": None |
+            "count_mismatch" | "duplicate_subprompts" |
+            "near_duplicate_keywords" | "missing_dimension" |
+            "generation_error",
+        "fallback_detail": None | str(예외 메시지, 기존 print 문과 동일),
+        "prompt_length": int(image_prompt 길이 - Visual Diversity
+            Profile 등으로 프롬프트가 길어진 것이 원인인지, Gemini
+            응답 자체의 문제인지 fallback_reason과 교차 확인하기 위함),
+    }
+    """
 
     try:
         prompt = f"""
@@ -229,30 +317,56 @@ JSON 외의 다른 설명은 절대 출력하지 마세요.
         subprompts = data["subprompts"]
 
         if not isinstance(subprompts, list) or len(subprompts) != count:
-            raise ValueError(
+            raise _SubpromptCountMismatch(
                 f"서브프롬프트 개수가 예상({count})과 다릅니다: {subprompts!r}"
             )
 
         if _has_duplicate_subprompts(subprompts):
-            raise ValueError(
+            raise _SubpromptDuplicate(
                 f"서브프롬프트에 중복이 있습니다: {subprompts!r}"
             )
 
         if _has_near_duplicate_keywords(subprompts):
-            raise ValueError(
+            raise _SubpromptNearDuplicateKeywords(
                 f"서브프롬프트 키워드가 서로 거의 동일합니다: {subprompts!r}"
             )
 
         if count == len(SHOT_TYPES) and _has_missing_dimension(subprompts):
-            raise ValueError(
+            raise _SubpromptMissingDimension(
                 f"서브프롬프트에 누락된 다양성 요소가 있습니다: {subprompts!r}"
             )
 
-        return subprompts
+        return subprompts, {
+            "fallback_occurred": False,
+            "fallback_reason": None,
+            "fallback_detail": None,
+            "prompt_length": len(image_prompt),
+        }
 
+    except _SubpromptCountMismatch as exc:
+        reason = "count_mismatch"
+        detail = str(exc)
+    except _SubpromptDuplicate as exc:
+        reason = "duplicate_subprompts"
+        detail = str(exc)
+    except _SubpromptNearDuplicateKeywords as exc:
+        reason = "near_duplicate_keywords"
+        detail = str(exc)
+    except _SubpromptMissingDimension as exc:
+        reason = "missing_dimension"
+        detail = str(exc)
     except Exception as exc:
-        print(
-            f"[SubpromptService] 서브프롬프트 생성 실패, image_prompt로 "
-            f"폴백: {exc}"
-        )
-        return [image_prompt] * count
+        reason = "generation_error"
+        detail = str(exc)
+
+    print(
+        f"[SubpromptService] 서브프롬프트 생성 실패, image_prompt로 "
+        f"폴백: {detail}"
+    )
+
+    return [image_prompt] * count, {
+        "fallback_occurred": True,
+        "fallback_reason": reason,
+        "fallback_detail": detail,
+        "prompt_length": len(image_prompt),
+    }

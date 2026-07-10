@@ -160,6 +160,21 @@ class VisualDiversitySummary(BaseModel):
     profiles_by_scene: Dict[int, Dict[str, str]] = Field(default_factory=dict)
 
 
+class SubpromptDiagnosticsSummary(BaseModel):
+    """Sprint73 - Subprompt Quality Gate Observability. scene별
+    subprompt_service 진단 정보(폴백 발생 여부/이유/원본 예외 메시지/
+    당시 image_prompt 길이)를 모은다. fallback_reason은 Gemini 응답
+    자체의 문제(count_mismatch/duplicate_subprompts/
+    near_duplicate_keywords/missing_dimension)와 예외성 오류
+    (generation_error)를 구분하고, prompt_length는 scene마다 함께
+    기록해 "Prompt 길이 증가가 원인인지" 교차 확인할 수 있게 한다."""
+
+    scenes_with_fallback: List[int] = Field(default_factory=list)
+    fallback_reasons_by_scene: Dict[int, str] = Field(default_factory=dict)
+    fallback_details_by_scene: Dict[int, str] = Field(default_factory=dict)
+    prompt_lengths_by_scene: Dict[int, int] = Field(default_factory=dict)
+
+
 class QualityReport(BaseModel):
     project_id: str
     technical_validation: TechnicalValidation
@@ -170,3 +185,6 @@ class QualityReport(BaseModel):
     # 사항: profile=None이면 완전 no-op) None으로 남아 기존
     # quality_report.json 스키마와 완전히 하위 호환된다.
     visual_diversity: Optional[VisualDiversitySummary] = None
+    # Sprint73 - subprompt_diagnostics가 있는 scene이 하나도 없으면
+    # None으로 남아 기존 스키마와 완전히 하위 호환된다.
+    subprompt_diagnostics: Optional[SubpromptDiagnosticsSummary] = None
