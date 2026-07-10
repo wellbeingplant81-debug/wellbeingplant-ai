@@ -13,9 +13,13 @@ $topic
 영상 길이
 약 $target_duration초
 
+narration 목표 글자 수
+전체 약 $target_chars자 (문장부호/공백 제외 기준) - 이 글자 수에 최대한
+맞춰 작성하세요.
+
 Scene 개수
 정확히 $scene_count개
-
+$retry_feedback
 반드시 JSON만 출력하세요.
 
 {

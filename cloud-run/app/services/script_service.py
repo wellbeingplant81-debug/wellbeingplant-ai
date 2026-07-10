@@ -5,6 +5,7 @@ from google import genai
 from app import config
 from app.prompts.script_prompt import SCRIPT_PROMPT
 from app.prompts.viral_script_prompt import VIRAL_SCRIPT_PROMPT
+from app.services.duration_estimator import DEFAULT_CHARS_PER_SECOND
 
 
 client = genai.Client(
@@ -18,14 +19,23 @@ def generate_script(
     topic: str,
     target_duration: int = 45,
     scene_count: int = 6,
+    retry_feedback: str = "",
 ):
 
     template = VIRAL_SCRIPT_PROMPT if config.ENABLE_VIRAL_WRITER else SCRIPT_PROMPT
+
+    # Sprint69-2 - Duration Gate Adaptive Retry: duration_estimator와
+    # 동일한 계수(DEFAULT_CHARS_PER_SECOND)로 목표 글자 수를 역산해
+    # Writer 프롬프트에 명시한다 - 이전에는 "약 45초"라는 서술적
+    # 문구만 있어 실제 필요한 글자 수에 대한 신호가 없었다.
+    target_chars = round(target_duration * DEFAULT_CHARS_PER_SECOND)
 
     prompt = template.substitute(
         topic=topic,
         target_duration=target_duration,
         scene_count=scene_count,
+        target_chars=target_chars,
+        retry_feedback=retry_feedback,
     )
 
     print("\n" + "=" * 80)

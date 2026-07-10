@@ -12,8 +12,10 @@ from app.services.duration_gate import (
     MIN_ACCEPTABLE_SECONDS,
     MAX_ACCEPTABLE_SECONDS,
     MAX_ATTEMPTS,
+    _build_retry_feedback,
     generate_script_within_duration,
 )
+from app.services.duration_estimator import DEFAULT_CHARS_PER_SECOND
 
 
 def _scenes(*durations_in_chars):
@@ -25,13 +27,21 @@ def _scenes(*durations_in_chars):
 
 def _fake_generate(durations):
     """estimate_fn이 순서대로 durations를 반환하도록, 매 호출마다
-    다른 result를 만들어내는 generate_fn 스텁을 만든다."""
+    다른 result를 만들어내는 generate_fn 스텁을 만든다. Sprint69-2 -
+    각 호출에 실제로 전달된 kwargs(특히 retry_feedback)를 calls["kwargs"]에
+    기록해, 적응형 재시도 피드백이 제대로 전달되는지 검증할 수 있게 한다."""
 
-    calls = {"count": 0}
+    calls = {"count": 0, "kwargs": []}
 
-    def _generate(topic, target_duration, scene_count):
+    def _generate(topic, target_duration, scene_count, retry_feedback=""):
         index = calls["count"]
         calls["count"] += 1
+        calls["kwargs"].append({
+            "topic": topic,
+            "target_duration": target_duration,
+            "scene_count": scene_count,
+            "retry_feedback": retry_feedback,
+        })
         return {
             "success": True,
             "data": {
@@ -148,6 +158,135 @@ class TestGenerateScriptWithinDuration(unittest.TestCase):
 
         self.assertEqual(calls["count"], 2)
         self.assertTrue(outcome["passed"])
+
+
+class TestBuildRetryFeedback(unittest.TestCase):
+    """Sprint69-2 - estimated_seconds를 기반으로 부족/초과 글자 수를
+    계산해 다음 Writer 시도에 줄 구체적 피드백 문구를 만든다."""
+
+    def test_too_short_asks_for_more_chars(self):
+        feedback = _build_retry_feedback(
+            estimated_seconds=38.16, target_duration=45,
+            chars_per_second=DEFAULT_CHARS_PER_SECOND,
+        )
+        expected_chars = round((45 - 38.16) * DEFAULT_CHARS_PER_SECOND)
+
+        self.assertIn("더 길게", feedback)
+        self.assertIn(str(expected_chars), feedback)
+        self.assertIn("38.2", feedback)
+
+    def test_too_long_asks_for_fewer_chars(self):
+        feedback = _build_retry_feedback(
+            estimated_seconds=52.0, target_duration=45,
+            chars_per_second=DEFAULT_CHARS_PER_SECOND,
+        )
+        expected_chars = round((52.0 - 45) * DEFAULT_CHARS_PER_SECOND)
+
+        self.assertIn("더 짧게", feedback)
+        self.assertIn(str(expected_chars), feedback)
+
+    def test_feedback_scales_with_shortfall_size(self):
+        small_gap = _build_retry_feedback(44.0, 45, DEFAULT_CHARS_PER_SECOND)
+        large_gap = _build_retry_feedback(20.0, 45, DEFAULT_CHARS_PER_SECOND)
+
+        small_chars = round((45 - 44.0) * DEFAULT_CHARS_PER_SECOND)
+        large_chars = round((45 - 20.0) * DEFAULT_CHARS_PER_SECOND)
+
+        self.assertIn(str(small_chars), small_gap)
+        self.assertIn(str(large_chars), large_gap)
+        self.assertNotEqual(small_chars, large_chars)
+
+
+class TestAdaptiveRetryFeedbackThreading(unittest.TestCase):
+    """Sprint69-2 - 재시도할 때 직전 시도의 estimated_seconds 기반
+    피드백이 다음 generate_fn 호출로 실제 전달되는지 검증한다."""
+
+    def test_first_attempt_has_no_retry_feedback(self):
+        generate_fn, calls = _fake_generate([30.0, 45.0])
+        estimate_fn = MagicMock(side_effect=[30.0, 45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+        )
+
+        self.assertEqual(calls["kwargs"][0]["retry_feedback"], "")
+
+    def test_second_attempt_receives_feedback_based_on_first_estimate(self):
+        generate_fn, calls = _fake_generate([30.0, 45.0])
+        estimate_fn = MagicMock(side_effect=[30.0, 45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+        )
+
+        second_feedback = calls["kwargs"][1]["retry_feedback"]
+        self.assertNotEqual(second_feedback, "")
+        self.assertIn("더 길게", second_feedback)
+
+    def test_third_attempt_uses_most_recent_estimate_not_first(self):
+        # 2번째 시도(60.0, 너무 김)가 1번째(30.0, 너무 짧음)보다 최신이므로
+        # 3번째 호출의 피드백은 "더 짧게"(60.0 기준)여야 한다.
+        generate_fn, calls = _fake_generate([30.0, 60.0, 41.0])
+        estimate_fn = MagicMock(side_effect=[30.0, 60.0, 41.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            max_attempts=3,
+        )
+
+        third_feedback = calls["kwargs"][2]["retry_feedback"]
+        self.assertIn("더 짧게", third_feedback)
+
+    def test_passing_first_try_never_builds_feedback(self):
+        generate_fn, calls = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+        )
+
+        self.assertEqual(calls["kwargs"][0]["retry_feedback"], "")
+
+
+class TestShortfallSecondsInOutcome(unittest.TestCase):
+    """Sprint69-2 - QA 로그에 부족 시간을 명확히 기록하기 위해,
+    outcome에 target 대비 shortfall_seconds(양수=부족, 음수=초과)를
+    포함한다."""
+
+    def test_shortfall_seconds_present_when_passed(self):
+        generate_fn, _ = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        outcome = generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+        )
+
+        self.assertIn("shortfall_seconds", outcome)
+        self.assertAlmostEqual(outcome["shortfall_seconds"], 0.0, places=3)
+
+    def test_shortfall_seconds_reflects_gap_after_all_attempts_fail(self):
+        generate_fn, _ = _fake_generate([30.0, 60.0, 41.0])
+        estimate_fn = MagicMock(side_effect=[30.0, 60.0, 41.0])
+
+        outcome = generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            max_attempts=3,
+        )
+
+        # target(45)과 최종 채택된 41.0의 차이 = 4.0(부족)
+        self.assertFalse(outcome["passed"])
+        self.assertAlmostEqual(outcome["shortfall_seconds"], 4.0, places=3)
+
+    def test_shortfall_seconds_negative_when_estimate_too_long(self):
+        generate_fn, _ = _fake_generate([60.0, 60.0, 60.0])
+        estimate_fn = MagicMock(side_effect=[60.0, 60.0, 60.0])
+
+        outcome = generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            max_attempts=3,
+        )
+
+        self.assertAlmostEqual(outcome["shortfall_seconds"], -15.0, places=3)
 
 
 if __name__ == "__main__":

@@ -128,5 +128,45 @@ class TestSubstitutionArgsPassedThroughRegardlessOfFlag(unittest.TestCase):
             self.assertIn("정확히 4개", sent_prompt)
 
 
+class TestTargetCharsAndRetryFeedback(unittest.TestCase):
+    """Sprint69-2 - Duration Gate Adaptive Retry. Writer 프롬프트에
+    목표 글자 수를 명시하고, 재시도 시 직전 estimated_seconds 기반
+    피드백을 주입한다. 두 템플릿(SCRIPT_PROMPT/VIRAL_SCRIPT_PROMPT)
+    모두에 적용되므로 플래그 on/off 양쪽에서 검증한다."""
+
+    def _sent_prompt(self, flag_value, **kwargs):
+        with patch("app.services.script_service.client") as mock_client, \
+             patch("app.services.script_service.config.ENABLE_VIRAL_WRITER", flag_value):
+            mock_client.models.generate_content.return_value = _mock_gemini_response()
+
+            script_service.generate_script(topic="주제", **kwargs)
+
+            return mock_client.models.generate_content.call_args.kwargs["contents"]
+
+    def test_prompt_includes_target_chars_derived_from_default_duration(self):
+        # DEFAULT_CHARS_PER_SECOND(5.93) * 45초 ≈ 267자.
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(flag, target_duration=45)
+            self.assertIn("267", sent_prompt)
+
+    def test_target_chars_scales_with_target_duration(self):
+        # 5.93 * 30 ≈ 178자.
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(flag, target_duration=30)
+            self.assertIn("178", sent_prompt)
+
+    def test_no_retry_feedback_by_default(self):
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(flag)
+            self.assertNotIn("재시도 피드백", sent_prompt)
+
+    def test_retry_feedback_is_injected_when_provided(self):
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(
+                flag, retry_feedback="[재시도 피드백] 테스트 피드백 문구입니다.",
+            )
+            self.assertIn("[재시도 피드백] 테스트 피드백 문구입니다.", sent_prompt)
+
+
 if __name__ == "__main__":
     unittest.main()

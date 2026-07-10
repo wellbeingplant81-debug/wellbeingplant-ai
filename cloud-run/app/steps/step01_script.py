@@ -22,11 +22,18 @@ def run(
     print("STEP01 RESULT")
     print("=" * 80)
     print(json.dumps(data, ensure_ascii=False, indent=2))
-    print(
+    log_line = (
         f"Duration Gate: passed={gate_outcome['passed']} "
         f"attempts={gate_outcome['attempts']} "
         f"estimated_seconds={gate_outcome['estimated_seconds']:.2f}"
     )
+
+    # Sprint69-2 - 3회 재시도 모두 실패해 폴백했을 때, 목표 대비 얼마나
+    # 부족/초과했는지 QA 로그에 명확히 남긴다.
+    if not gate_outcome["passed"]:
+        log_line += f" shortfall_seconds={gate_outcome['shortfall_seconds']:.2f}"
+
+    print(log_line)
     print("=" * 80)
 
     with open(

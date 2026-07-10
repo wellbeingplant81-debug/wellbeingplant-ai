@@ -16,6 +16,8 @@ RENDERED = VIRAL_SCRIPT_PROMPT.substitute(
     topic="밤에 화장실을 자주 가는 사람, 의외의 원인",
     target_duration=45,
     scene_count=6,
+    target_chars=267,
+    retry_feedback="",
 )
 
 
@@ -33,9 +35,12 @@ class TestTemplateShape(unittest.TestCase):
     def test_substitutes_scene_count(self):
         self.assertIn("정확히 6개", RENDERED)
 
-    def test_requires_all_three_substitution_args(self):
+    def test_requires_all_substitution_args(self):
         with self.assertRaises(KeyError):
             VIRAL_SCRIPT_PROMPT.substitute(topic="t")
+
+    def test_substitutes_target_chars(self):
+        self.assertIn("267", RENDERED)
 
 
 class TestOutputSchemaUnchanged(unittest.TestCase):
