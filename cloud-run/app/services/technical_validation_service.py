@@ -1,4 +1,3 @@
-import glob
 import os
 import subprocess
 
@@ -74,14 +73,27 @@ def _check_required_files(project_path, scene_count):
 
 
 def _check_scene_count(project_path, scene_count):
+    """
+    Sprint66-2 - glob으로 images/ 디렉터리 전체를 스캔하면 Sprint62-4
+    멀티에셋 추가 파일(sceneN_2.png 등)까지 매칭되어 scene 개수를
+    과대 집계한다(예: scene_count=6인데 image_files=9로 오탐).
+    1차 asset 파일명(sceneN.png/sceneN.mp3)의 존재 여부만 인덱스별로
+    정확히 확인한다 - _check_required_files()와 동일한 접근 방식.
+    """
 
-    image_files = glob.glob(
-        os.path.join(project_path, "images", "scene*.png")
-    )
+    image_files = [
+        index
+        for index in range(1, scene_count + 1)
+        if os.path.exists(os.path.join(project_path, "images", f"scene{index}.png"))
+    ]
 
-    audio_files = glob.glob(
-        os.path.join(project_path, "audio", "scenes", "scene*.mp3")
-    )
+    audio_files = [
+        index
+        for index in range(1, scene_count + 1)
+        if os.path.exists(
+            os.path.join(project_path, "audio", "scenes", f"scene{index}.mp3")
+        )
+    ]
 
     return {
         "passed": (
