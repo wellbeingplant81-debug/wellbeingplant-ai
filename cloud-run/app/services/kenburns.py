@@ -15,13 +15,19 @@ SAFETY_SCALE = 1.001
 ZOOM_INTENSITY_RANGE = (0.04, 0.10)
 PAN_DISTANCE_RANGE = (40, 160)
 MAX_PAN_EXTRA_SCALE = 0.12
-MIN_PAN_TRAVEL = 40
 
+# Sprint70-1 - Ken Burns 다양화. 기존 pan_horizontal/pan_vertical은
+# 내부적으로 방향(왼쪽/오른쪽, 위/아래)이 랜덤이라 "같은 모션"이어도
+# 실제로는 다르게 보일 수 있었다 - 방향까지 이름에 고정해 4방향 pan +
+# zoom_in/zoom_out 총 6개로 늘려, scene마다/scene 안 연속 asset마다
+# 서로 다른 모션을 실제로 구별해 고를 수 있게 한다.
 MOTIONS = [
     "zoom_in",
     "zoom_out",
-    "pan_horizontal",
-    "pan_vertical",
+    "pan_left",
+    "pan_right",
+    "pan_up",
+    "pan_down",
 ]
 
 _last_motion = None
@@ -35,20 +41,54 @@ def _progress(t, duration):
     return _ease_in_out(min(1.0, max(0.0, t / duration)))
 
 
-def _pick_motion():
+def _pick_motion(exclude=None):
+    """
+    Sprint70-1 - exclude(호출자가 이미 이번 scene에서 쓴 모션들)가
+    주어지면 그 모션들을 후보에서 뺀다. 기존 전역 _last_motion 회피
+    (scene 경계를 넘어서도 바로 직전 모션은 피함)와 함께 적용된다.
+    둘을 합쳐도 후보가 하나도 안 남으면(극단적으로 asset이 MOTIONS
+    개수보다 많은 경우) 예외 없이 전체 목록으로 폴백한다.
+    """
 
     global _last_motion
 
-    choices = MOTIONS
+    excluded = set(exclude) if exclude else set()
 
     if _last_motion is not None:
-        choices = [m for m in MOTIONS if m != _last_motion] or MOTIONS
+        excluded.add(_last_motion)
+
+    choices = [m for m in MOTIONS if m not in excluded] or MOTIONS
 
     motion = random.choice(choices)
 
     _last_motion = motion
 
     return motion
+
+
+def _directional_pan_offsets(slack, travel, direction):
+    """
+    Sprint70-1 - pan_left/right/up/down처럼 이름에 방향이 고정된
+    모션을 위한 offset 계산. direction<0이면 위치가 0에서 -slack
+    쪽으로(콘텐츠가 오른쪽/아래로 흐르는 것처럼 보임 - pan_right/
+    pan_down), direction>0이면 -slack에서 0 쪽으로(pan_left/pan_up)
+    정확히 travel만큼 이동한다. 기존 _pan_offsets()는 방향이 랜덤이라
+    경계에 너무 가까운 시작점을 뽑으면 실제 이동 거리가 travel보다
+    훨씬 작아지는 보정이 필요했지만, 여기서는 방향이 고정이라 start를
+    처음부터 travel만큼 이동 가능한 범위에서만 뽑아 그런 보정이
+    필요 없다.
+    """
+
+    travel = min(travel, slack)
+
+    if direction < 0:
+        start = random.uniform(-slack + travel, 0.0)
+        end = start - travel
+    else:
+        start = random.uniform(-slack, -travel)
+        end = start + travel
+
+    return start, end
 
 
 def _fit_scale(img_w, img_h):
@@ -62,26 +102,25 @@ def _scale_for_travel(img_dim, canvas_dim, travel):
     return (canvas_dim + travel) / img_dim
 
 
-def _pan_offsets(slack, travel):
-
-    travel = min(travel, slack)
-
-    start = random.uniform(-slack, 0)
-    end = start + random.choice([-1, 1]) * travel
-    end = min(0.0, max(-slack, end))
-
-    if slack > 0 and abs(end - start) < min(MIN_PAN_TRAVEL, slack):
-        end = 0.0 if start < -slack / 2 else -slack
-
-    return start, end
-
-
 def build_kenburns_clip(
     image_path: str,
     duration: float,
+    motion: str = None,
 ):
+    """
+    Sprint70-1 - motion을 명시적으로 넘기면(예: video_builder.py가
+    scene 안 연속 asset마다 서로 다른 모션을 미리 골라 넘기는 경우)
+    그 모션을 그대로 쓰고 자동 선택(_pick_motion)은 하지 않는다.
+    motion을 안 넘기면(기본값 None) 기존과 100% 동일하게 자동
+    선택한다 - 완전히 하위 호환.
+    """
 
-    motion = _pick_motion()
+    global _last_motion
+
+    if motion is None:
+        motion = _pick_motion()
+    else:
+        _last_motion = motion
 
     raw = ImageClip(image_path).with_duration(duration)
     img_w, img_h = raw.w, raw.h
@@ -113,10 +152,10 @@ def build_kenburns_clip(
         )
 
     # -------------------------
-    # PAN HORIZONTAL
+    # PAN LEFT / RIGHT
     # -------------------------
 
-    elif motion == "pan_horizontal":
+    elif motion in ("pan_left", "pan_right"):
 
         desired_travel = random.uniform(*PAN_DISTANCE_RANGE)
 
@@ -133,7 +172,8 @@ def build_kenburns_clip(
         slack_x = max(0.0, clip.w - VIDEO_WIDTH)
         slack_y = max(0.0, clip.h - VIDEO_HEIGHT)
 
-        start_x, end_x = _pan_offsets(slack_x, travel)
+        direction = -1 if motion == "pan_right" else 1
+        start_x, end_x = _directional_pan_offsets(slack_x, travel, direction)
         y = -slack_y / 2
 
         clip = clip.with_position(
@@ -144,7 +184,7 @@ def build_kenburns_clip(
         )
 
     # -------------------------
-    # PAN VERTICAL
+    # PAN UP / DOWN
     # -------------------------
 
     else:
@@ -164,7 +204,8 @@ def build_kenburns_clip(
         slack_x = max(0.0, clip.w - VIDEO_WIDTH)
         slack_y = max(0.0, clip.h - VIDEO_HEIGHT)
 
-        start_y, end_y = _pan_offsets(slack_y, travel)
+        direction = -1 if motion == "pan_down" else 1
+        start_y, end_y = _directional_pan_offsets(slack_y, travel, direction)
         x = -slack_x / 2
 
         clip = clip.with_position(

@@ -8,7 +8,7 @@ from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
 from app.services import asset_usage_planner
-from app.services.kenburns import build_kenburns_clip
+from app.services.kenburns import _pick_motion, build_kenburns_clip
 from app.services.transition_engine import annotate_scenes_with_transitions
 
 
@@ -25,6 +25,14 @@ MIN_FADE_DURATION = 0.08
 # 영상 길이가 audio_service.py/subtitle_service.py가 이미 쓰고 있는
 # 겹침 없는 누적 scene 타임라인과 정확히 일치한다.
 CROSSFADE_DURATION = 0.35
+
+# Sprint70-1 - AI Multi Asset Scene Transition. 같은 scene 안에서
+# environment -> subject -> detail -> transition asset이 서로 컷으로만
+# 이어붙어 "사진이 한 장면에 몰려 나오는" 느낌을 줄이기 위해, scene
+# 경계(CROSSFADE_DURATION)보다 짧은 asset-to-asset crossfade를 별도로
+# 둔다. 위 CROSSFADE_DURATION과 같은 이유(padding 상쇄)로, 겹침 길이는
+# 여기 하나만 참조해야 한다.
+ASSET_CROSSFADE_DURATION = 0.25
 
 # Sprint55 - Adaptive Scene Timing. 각 scene의 Ken Burns clip 길이는
 # 이미 Sprint37-1부터 그 scene의 실제 narration(mp3) 길이를 그대로
@@ -219,14 +227,21 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
     Sprint62-3 - Scene 하나를 구성하는 clip을 만듭니다. asset이 1개면
     기존과 완전히 동일하게 단일 Ken Burns clip을 반환합니다(렌더링
     경로 무변경). 여러 개면 clip_duration을 컷별로 나눠 asset마다
-    Ken Burns clip을 만들고 순서대로 이어 붙입니다 - 컷 사이에는 별도
-    효과를 적용하지 않습니다(scene 경계의 crossfade/fade는 기존처럼
-    이 clip 전체의 앞/뒤에만 적용됩니다).
+    Ken Burns clip을 만들고 순서대로 이어 붙입니다.
 
     Sprint64-4 - scene을 넘기면 _resolve_cut_durations()로 role 가중
     분배를 시도합니다. scene을 넘기지 않으면(기본값 None) Sprint62-3
     당시의 균등 분배 동작과 100% 동일합니다 - 기존 호출부/테스트는
     수정 없이 그대로 유효합니다.
+
+    Sprint70-1 - AI Scene Transition 개선. 컷 사이가 하드컷으로만
+    이어붙던 것을(role 배분 자체는 그대로) ASSET_CROSSFADE_DURATION
+    만큼 겹치는 cross-dissolve로 바꾸고, 컷마다 서로 다른 Ken Burns
+    모션(_pick_motion의 exclude로 이 scene에서 이미 쓴 모션을 누적)을
+    쓴다. cut_durations(role 가중 분배 "값" 자체)는 전혀 바꾸지 않고,
+    scene 경계 crossfade(CROSSFADE_DURATION)와 동일한 방식으로 겹침
+    만큼만 렌더 길이를 늘렸다가 padding=-overlap으로 상쇄한다 - 이
+    clip 전체의 총 재생 길이(=clip_duration)는 그대로 보존된다.
     """
 
     if len(asset_paths) == 1:
@@ -238,12 +253,40 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
         else _split_duration_equally(clip_duration, len(asset_paths))
     )
 
-    cuts = [
-        build_kenburns_clip(path, duration).with_fps(30)
-        for path, duration in zip(asset_paths, cut_durations)
-    ]
+    overlap = min(ASSET_CROSSFADE_DURATION, min(cut_durations) / 2)
 
-    return concatenate_videoclips(cuts, method="compose").with_fps(30)
+    last_cut_index = len(asset_paths) - 1
+    used_motions = []
+    cuts = []
+
+    for index, (path, duration) in enumerate(zip(asset_paths, cut_durations)):
+
+        motion = _pick_motion(exclude=set(used_motions))
+        used_motions.append(motion)
+
+        render_duration = (
+            duration if index == last_cut_index else duration + overlap
+        )
+
+        clip = build_kenburns_clip(
+            path, render_duration, motion=motion,
+        ).with_fps(30)
+
+        effects = []
+
+        if index > 0:
+            effects.append(CrossFadeIn(overlap))
+        if index < last_cut_index:
+            effects.append(CrossFadeOut(overlap))
+
+        if effects:
+            clip = clip.with_effects(effects)
+
+        cuts.append(clip)
+
+    return concatenate_videoclips(
+        cuts, method="compose", padding=-overlap,
+    ).with_fps(30)
 
 
 def _effects_for_clip(index, last_index, scene, duration, overlap):

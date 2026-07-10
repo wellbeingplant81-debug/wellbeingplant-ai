@@ -8,8 +8,12 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from moviepy.video.fx.CrossFadeIn import CrossFadeIn
+from moviepy.video.fx.CrossFadeOut import CrossFadeOut
+
 from app.services import asset_usage_planner
 from app.services.video_builder import (
+    ASSET_CROSSFADE_DURATION,
     _build_scene_clip,
     _resolve_asset_paths,
     _resolve_cut_durations,
@@ -121,7 +125,9 @@ class TestBuildSceneClip(unittest.TestCase):
     def test_multiple_assets_builds_one_kenburns_clip_per_asset(
         self, mock_build_kenburns_clip, mock_concatenate_videoclips,
     ):
-        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
 
         asset_paths = ["a.png", "b.png", "c.png", "d.png"]
         _build_scene_clip(asset_paths, 8.0)
@@ -134,7 +140,15 @@ class TestBuildSceneClip(unittest.TestCase):
     def test_multiple_assets_split_scene_duration_equally(
         self, mock_build_kenburns_clip, mock_concatenate_videoclips,
     ):
-        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+        # Sprint70-1 - 컷 사이 crossfade(overlap)가 생기면서, 마지막
+        # 컷을 제외한 나머지는 렌더 길이가 overlap만큼 늘어난다(scene
+        # 경계 crossfade와 동일한 방식) - 하지만 "할당"(균등 분배)
+        # 자체는 여전히 2.0씩이라는 사실은 _resolve_cut_durations()로
+        # 직접 검증되며(TestResolveCutDurations), 이 테스트는 실제
+        # 렌더 호출값이 그 할당 + overlap 보정과 일치하는지 본다.
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
 
         asset_paths = ["a.png", "b.png", "c.png", "d.png"]
         _build_scene_clip(asset_paths, 8.0)
@@ -142,11 +156,12 @@ class TestBuildSceneClip(unittest.TestCase):
         called_durations = [
             call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
         ]
+        overlap = min(ASSET_CROSSFADE_DURATION, 2.0 / 2)
 
         self.assertEqual(len(called_durations), 4)
-        for duration in called_durations:
-            self.assertAlmostEqual(duration, 2.0, places=6)
-        self.assertAlmostEqual(sum(called_durations), 8.0, places=6)
+        for duration in called_durations[:-1]:
+            self.assertAlmostEqual(duration, 2.0 + overlap, places=6)
+        self.assertAlmostEqual(called_durations[-1], 2.0, places=6)
 
     @patch("app.services.video_builder.concatenate_videoclips")
     @patch("app.services.video_builder.build_kenburns_clip")
@@ -155,7 +170,7 @@ class TestBuildSceneClip(unittest.TestCase):
     ):
         created_clips = []
 
-        def _side_effect(path, duration):
+        def _side_effect(path, duration, motion=None):
             clip = MagicMock(name=f"clip_for_{path}")
             created_clips.append(clip)
             return clip
@@ -167,6 +182,84 @@ class TestBuildSceneClip(unittest.TestCase):
 
         concatenated_clips = mock_concatenate_videoclips.call_args.args[0]
         self.assertEqual(len(concatenated_clips), 2)
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_concatenate_called_with_negative_overlap_padding(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
+
+        _build_scene_clip(["a.png", "b.png", "c.png", "d.png"], 8.0)
+
+        overlap = min(ASSET_CROSSFADE_DURATION, 2.0 / 2)
+        self.assertAlmostEqual(
+            mock_concatenate_videoclips.call_args.kwargs["padding"], -overlap, places=6,
+        )
+        self.assertEqual(
+            mock_concatenate_videoclips.call_args.kwargs["method"], "compose",
+        )
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_cuts_receive_crossfade_effects_at_scene_internal_boundaries(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        created_clips = []
+
+        def _side_effect(path, duration, motion=None):
+            clip = MagicMock(name=f"clip_for_{path}")
+            created_clips.append(clip)
+            return clip
+
+        mock_build_kenburns_clip.side_effect = _side_effect
+
+        asset_paths = ["a.png", "b.png", "c.png"]
+        _build_scene_clip(asset_paths, 6.0)
+
+        overlap = min(ASSET_CROSSFADE_DURATION, 2.0 / 2)
+
+        def _effects_applied(index):
+            post_fps = created_clips[index].with_fps.return_value
+            return post_fps.with_effects.call_args.args[0]
+
+        first_effects = _effects_applied(0)
+        self.assertEqual(len(first_effects), 1)
+        self.assertIsInstance(first_effects[0], CrossFadeOut)
+        self.assertAlmostEqual(first_effects[0].duration, overlap, places=6)
+
+        middle_effects = _effects_applied(1)
+        self.assertEqual(len(middle_effects), 2)
+        self.assertIsInstance(middle_effects[0], CrossFadeIn)
+        self.assertIsInstance(middle_effects[1], CrossFadeOut)
+
+        last_effects = _effects_applied(2)
+        self.assertEqual(len(last_effects), 1)
+        self.assertIsInstance(last_effects[0], CrossFadeIn)
+        self.assertAlmostEqual(last_effects[0].duration, overlap, places=6)
+
+    @patch("app.services.video_builder.concatenate_videoclips")
+    @patch("app.services.video_builder.build_kenburns_clip")
+    def test_consecutive_cuts_use_different_motions(
+        self, mock_build_kenburns_clip, mock_concatenate_videoclips,
+    ):
+        used_motions = []
+
+        def _side_effect(path, duration, motion=None):
+            used_motions.append(motion)
+            return MagicMock()
+
+        mock_build_kenburns_clip.side_effect = _side_effect
+
+        asset_paths = ["a.png", "b.png", "c.png", "d.png"]
+        _build_scene_clip(asset_paths, 8.0)
+
+        self.assertEqual(len(used_motions), 4)
+        self.assertEqual(len(set(used_motions)), 4)
+        for motion in used_motions:
+            self.assertIsNotNone(motion)
 
 
 class TestResolveCutDurations(unittest.TestCase):
@@ -268,7 +361,12 @@ class TestBuildSceneClipWithScene(unittest.TestCase):
     def test_role_weighted_durations_passed_to_kenburns(
         self, mock_build_kenburns_clip, mock_concatenate_videoclips,
     ):
-        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+        # Sprint70-1 - role 가중 "할당" 자체(_resolve_cut_durations)는
+        # 그대로다(요구사항5) - 렌더 호출값은 그 위에 마지막 컷을 뺀
+        # 나머지에 crossfade overlap이 더해진 값이어야 한다.
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
 
         assets = [
             {"path": "a.png", "role": "environment"},
@@ -284,20 +382,24 @@ class TestBuildSceneClipWithScene(unittest.TestCase):
         called_durations = [
             call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
         ]
-        expected = [
+        allocations = [
             entry["duration"]
             for entry in asset_usage_planner.plan_asset_usage(assets, 8.0)
         ]
+        overlap = min(ASSET_CROSSFADE_DURATION, min(allocations) / 2)
+        expected = [d + overlap for d in allocations[:-1]] + [allocations[-1]]
 
-        self.assertEqual(called_durations, expected)
-        self.assertAlmostEqual(sum(called_durations), 8.0, places=6)
+        for actual, exp in zip(called_durations, expected):
+            self.assertAlmostEqual(actual, exp, places=6)
 
     @patch("app.services.video_builder.concatenate_videoclips")
     @patch("app.services.video_builder.build_kenburns_clip")
     def test_no_role_scene_still_splits_equally(
         self, mock_build_kenburns_clip, mock_concatenate_videoclips,
     ):
-        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
 
         assets = [{"path": "a.png"}, {"path": "b.png"}]
         scene = {"scene": 1, "assets": assets}
@@ -307,25 +409,34 @@ class TestBuildSceneClipWithScene(unittest.TestCase):
         called_durations = [
             call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
         ]
+        overlap = min(ASSET_CROSSFADE_DURATION, 2.0 / 2)
 
-        self.assertEqual(called_durations, [2.0, 2.0])
+        self.assertAlmostEqual(called_durations[0], 2.0 + overlap, places=6)
+        self.assertAlmostEqual(called_durations[1], 2.0, places=6)
 
     @patch("app.services.video_builder.concatenate_videoclips")
     @patch("app.services.video_builder.build_kenburns_clip")
     def test_default_scene_none_behaves_exactly_like_before(
         self, mock_build_kenburns_clip, mock_concatenate_videoclips,
     ):
-        mock_build_kenburns_clip.side_effect = lambda path, duration: MagicMock()
+        mock_build_kenburns_clip.side_effect = (
+            lambda path, duration, motion=None: MagicMock()
+        )
 
-        # scene 인자를 아예 넘기지 않는 기존 호출 방식 - Sprint62-3
-        # 동작과 100% 동일해야 한다.
+        # scene 인자를 아예 넘기지 않는 기존 호출 방식 - 균등 분배
+        # "할당"은 Sprint62-3 동작과 동일하고(_resolve_cut_durations로
+        # 별도 검증됨), 여기서는 크로스페이드 보정까지 포함한 렌더
+        # 호출값을 확인한다.
         _build_scene_clip(["a.png", "b.png", "c.png", "d.png"], 8.0)
 
         called_durations = [
             call_args.args[1] for call_args in mock_build_kenburns_clip.call_args_list
         ]
+        overlap = min(ASSET_CROSSFADE_DURATION, 2.0 / 2)
 
-        self.assertEqual(called_durations, [2.0, 2.0, 2.0, 2.0])
+        for duration in called_durations[:-1]:
+            self.assertAlmostEqual(duration, 2.0 + overlap, places=6)
+        self.assertAlmostEqual(called_durations[-1], 2.0, places=6)
 
 
 if __name__ == "__main__":
