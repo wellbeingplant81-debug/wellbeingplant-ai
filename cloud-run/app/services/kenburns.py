@@ -1,12 +1,25 @@
 import math
+import os
 import random
+import tempfile
 
+from PIL import Image
 from moviepy import ImageClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 
 
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
+
+# Sprint76 - 일부 스톡/생성 이미지가 PIL의 decompression-bomb 안전
+# 한도(기본 178,956,970 = 2 * Image.MAX_IMAGE_PIXELS)를 넘어 Video
+# Builder가 PIL.Image.DecompressionBombError로 죽는 게 실제 E2E에서
+# 확인됐다(2026-07-11, Sprint74 검증 중 200,540,160 픽셀 이미지).
+# Ken Burns는 최종 1080x1920 캔버스에 맞춰 리사이즈하므로 원본이 이
+# 정도로 클 필요가 전혀 없다 - 정상 이미지(절대다수)는 전혀 건드리지
+# 않고, 이 한도를 실제로 넘어서 예외가 나는 경우에만 안전한 해상도로
+# 축소한 임시 사본을 만들어 한 번 더 시도한다.
+SAFE_MAX_PIXELS = 25_000_000
 
 # Tiny safety margin over the exact cover-fit scale, purely to absorb
 # floating point / integer-rounding error in the resizer — not a framing margin.
@@ -102,6 +115,50 @@ def _scale_for_travel(img_dim, canvas_dim, travel):
     return (canvas_dim + travel) / img_dim
 
 
+def _downscaled_copy_for_oversized_image(image_path: str) -> str:
+    """
+    Sprint76 - PIL의 decompression-bomb 한도를 실제로 넘은 이미지만
+    호출되는 복구 경로. Image.MAX_IMAGE_PIXELS를 이 함수 실행 동안만
+    해제해 원본을 열고, SAFE_MAX_PIXELS 이하로 비율을 유지한 채 축소한
+    사본을 임시 파일로 저장해 그 경로를 반환한다. 원본 파일은 전혀
+    수정하지 않는다.
+    """
+
+    original_limit = Image.MAX_IMAGE_PIXELS
+    # 정상 운영 환경에서는 SAFE_MAX_PIXELS(25M)를 그대로 쓴다. 하지만
+    # 이 값은 항상 "현재 PIL 한도보다 확실히 안전한 크기"여야 하므로,
+    # 누군가 Image.MAX_IMAGE_PIXELS를 더 낮게 설정해 둔 환경(테스트
+    # 포함)에서는 그 한도를 넘지 않도록 더 작은 쪽을 목표로 삼는다.
+    pixel_budget = min(SAFE_MAX_PIXELS, original_limit) if original_limit else SAFE_MAX_PIXELS
+
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+
+        with Image.open(image_path) as img:
+            width, height = img.size
+            scale = min(1.0, (pixel_budget / (width * height)) ** 0.5)
+            new_size = (max(1, int(width * scale)), max(1, int(height * scale)))
+
+            resized = img.convert("RGB").resize(new_size, Image.LANCZOS)
+
+            fd, tmp_path = tempfile.mkstemp(suffix=".jpg")
+            os.close(fd)
+            resized.save(tmp_path, "JPEG", quality=95)
+
+            return tmp_path
+
+    finally:
+        Image.MAX_IMAGE_PIXELS = original_limit
+
+
+def _load_image_clip(image_path: str, duration: float):
+    try:
+        return ImageClip(image_path).with_duration(duration)
+    except Image.DecompressionBombError:
+        safe_path = _downscaled_copy_for_oversized_image(image_path)
+        return ImageClip(safe_path).with_duration(duration)
+
+
 def build_kenburns_clip(
     image_path: str,
     duration: float,
@@ -122,7 +179,7 @@ def build_kenburns_clip(
     else:
         _last_motion = motion
 
-    raw = ImageClip(image_path).with_duration(duration)
+    raw = _load_image_clip(image_path, duration)
     img_w, img_h = raw.w, raw.h
 
     fit_scale = _fit_scale(img_w, img_h)

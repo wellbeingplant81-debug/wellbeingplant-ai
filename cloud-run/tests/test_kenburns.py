@@ -169,5 +169,52 @@ class TestBuildKenburnsClipMotionParam(unittest.TestCase):
                 self.assertAlmostEqual(clip.duration, 1.0, places=3)
 
 
+class TestBuildKenburnsClipOversizedImage(unittest.TestCase):
+    """Sprint76 - 2026-07-11 Sprint74 검증 중 실제 E2E에서 200,540,160
+    픽셀짜리 스톡 이미지가 PIL의 decompression-bomb 안전 한도
+    (기본 178,956,970 = 2 * MAX_IMAGE_PIXELS)를 넘어 video_builder가
+    PIL.Image.DecompressionBombError로 죽는 게 확인됐다. 실제로 200M
+    픽셀 이미지를 만들면 테스트가 느려지므로(수백MB 메모리/인코딩),
+    대신 PIL.Image.MAX_IMAGE_PIXELS를 테스트 동안만 아주 낮춰 평범한
+    작은 테스트 이미지도 "오버사이즈"로 취급되게 만들어 실제 예외
+    경로(모킹 없이)를 그대로 검증한다."""
+
+    def setUp(self):
+        kenburns._last_motion = None
+        self.addCleanup(setattr, kenburns, "_last_motion", None)
+
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp_dir.cleanup)
+        self.image_path = os.path.join(self._tmp_dir.name, "oversized.png")
+        _make_test_image(self.image_path, size=(600, 800))
+
+        self._original_limit = Image.MAX_IMAGE_PIXELS
+        # 600*800 = 480,000 > 2*1000 이므로 이 테스트 안에서는 이
+        # 평범한 이미지도 DecompressionBombError를 실제로 유발한다.
+        Image.MAX_IMAGE_PIXELS = 1000
+        self.addCleanup(setattr, Image, "MAX_IMAGE_PIXELS", self._original_limit)
+
+    def test_oversized_image_does_not_raise(self):
+        clip = kenburns.build_kenburns_clip(
+            self.image_path, 1.0, motion="zoom_in",
+        )
+        self.assertAlmostEqual(clip.duration, 1.0, places=3)
+
+    def test_oversized_image_still_produces_correct_canvas_size(self):
+        clip = kenburns.build_kenburns_clip(
+            self.image_path, 1.0, motion="pan_left",
+        )
+        self.assertEqual(clip.w, kenburns.VIDEO_WIDTH)
+        self.assertEqual(clip.h, kenburns.VIDEO_HEIGHT)
+
+    def test_each_motion_renders_without_error_when_oversized(self):
+        for motion in MOTIONS:
+            with self.subTest(motion=motion):
+                clip = kenburns.build_kenburns_clip(
+                    self.image_path, 1.0, motion=motion,
+                )
+                self.assertAlmostEqual(clip.duration, 1.0, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()
