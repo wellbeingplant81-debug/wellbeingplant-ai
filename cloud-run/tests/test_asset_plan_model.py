@@ -39,7 +39,7 @@ class TestSceneAssetStrategy(unittest.TestCase):
     def test_valid_strategy_constructs(self):
         strategy = SceneAssetStrategy(
             scene=1, prefer_ai=True, visual_profile=SAMPLE_PROFILE,
-            scene_role="hero", scene_shot="wide",
+            scene_role="hero", scene_shot="wide", scene_intent="hook",
         )
         self.assertEqual(strategy.scene, 1)
         self.assertTrue(strategy.prefer_ai)
@@ -50,7 +50,7 @@ class TestSceneAssetStrategy(unittest.TestCase):
 
         strategy = SceneAssetStrategy(
             scene=1, prefer_ai=False, visual_profile=SAMPLE_PROFILE,
-            scene_role="detail", scene_shot="medium",
+            scene_role="detail", scene_shot="medium", scene_intent="explain",
         )
         dumped = strategy.model_dump()
 
@@ -59,6 +59,7 @@ class TestSceneAssetStrategy(unittest.TestCase):
         self.assertEqual(dumped["visual_profile"], SAMPLE_PROFILE)
         self.assertEqual(dumped["scene_role"], "detail")
         self.assertEqual(dumped["scene_shot"], "medium")
+        self.assertEqual(dumped["scene_intent"], "explain")
         # 예외 없이 직렬화 가능해야 pipeline.py의 json.dump(data, ...)와 호환된다.
         json.dumps(dumped)
 
@@ -73,7 +74,7 @@ class TestAssetPlan(unittest.TestCase):
         plan = AssetPlan(strategies={
             1: SceneAssetStrategy(
                 scene=1, prefer_ai=True, visual_profile=SAMPLE_PROFILE,
-                scene_role="hero", scene_shot="wide",
+                scene_role="hero", scene_shot="wide", scene_intent="hook",
             ),
         })
         self.assertIn(1, plan.strategies)

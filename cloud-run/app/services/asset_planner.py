@@ -30,6 +30,14 @@ assign_visual_profiles()가 만드는 visual_profile["composition"]
 (centered/rule of thirds/foreground framing/leading lines - 구도
 "스타일")과는 값 도메인이 다른 별개의 축이라, 의미 충돌을 피하기 위해
 필드명을 "composition"이 아니라 "scene_shot"으로 분리했다.
+
+Sprint80 - Asset Planner v4 (Scene Intent Planner). assign_scene_intents()는
+scene 배치 전체를 대상으로 서사적 의도(scene_intent: hook/context/
+explain/cta)를 배정하는 순수 함수다. scene_planner_service.py
+(Sprint44, ENABLE_SCENE_PLANNER)가 이미 scene마다 "purpose"(hook/
+development/cta)를 배정하지만, scene_intent는 그 모듈을 호출하거나
+재사용하지 않는 asset_planner 전용의 완전히 독립적인 메타데이터다 -
+"hook" 값이 우연히 겹칠 뿐 서로 무관하다.
 """
 
 from app.models.asset_plan import SceneAssetStrategy
@@ -110,6 +118,41 @@ def assign_scene_shots(scenes: list) -> dict:
     return shots
 
 
+SCENE_INTENTS = ["hook", "context", "explain", "cta"]
+
+# Scene 1(hook, 아래 assign_scene_intents 참고)을 제외한 나머지 scene이
+# 순환하는 순서. hook은 항상 첫 scene 전용이라 이 목록에서 뺐다.
+_CYCLE_SCENE_INTENTS = ["context", "explain", "cta"]
+
+
+def assign_scene_intents(scenes: list) -> dict:
+    """
+    scene 목록을 받아 {scene_number: intent} 딕셔너리를 반환한다. 순수
+    함수다 - 랜덤을 쓰지 않고, 입력 scenes를 변경하지 않으며, 같은
+    입력에는 항상 같은 결과를 낸다.
+
+    첫 scene은 항상 "hook". 이후 scene은 "context" -> "explain" ->
+    "cta" 순으로 순환 배정된다.
+    """
+
+    if not scenes:
+        return {}
+
+    intents = {}
+
+    for index, scene in enumerate(scenes):
+        scene_number = scene["scene"]
+
+        if index == 0:
+            intents[scene_number] = "hook"
+        else:
+            intents[scene_number] = _CYCLE_SCENE_INTENTS[
+                (index - 1) % len(_CYCLE_SCENE_INTENTS)
+            ]
+
+    return intents
+
+
 def plan_asset_strategy(scenes: list) -> dict:
 
     if not scenes:
@@ -119,6 +162,7 @@ def plan_asset_strategy(scenes: list) -> dict:
     visual_profiles = assign_visual_profiles(scenes)
     scene_roles = assign_scene_roles(scenes)
     scene_shots = assign_scene_shots(scenes)
+    scene_intents = assign_scene_intents(scenes)
 
     plan = {}
 
@@ -131,6 +175,7 @@ def plan_asset_strategy(scenes: list) -> dict:
             visual_profile=visual_profiles[scene_number],
             scene_role=scene_roles[scene_number],
             scene_shot=scene_shots[scene_number],
+            scene_intent=scene_intents[scene_number],
         )
 
         plan[scene_number] = strategy.model_dump()

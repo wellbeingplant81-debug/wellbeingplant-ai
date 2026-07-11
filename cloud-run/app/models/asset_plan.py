@@ -35,6 +35,12 @@ class SceneAssetStrategy(BaseModel):
     # composition(구도 스타일)과는 다른 축이라 필드명을 분리했다.
     # asset_planner.assign_scene_shots()가 배정한다.
     scene_shot: str
+    # Sprint80 - Asset Planner v4 (Scene Intent Planner). 이 scene의
+    # 서사적 의도(hook/context/explain/cta). scene_planner_service.py의
+    # "purpose"(Sprint44, ENABLE_SCENE_PLANNER)와는 완전히 독립적인
+    # asset_planner 전용 메타데이터다 - 서로 호출/참조하지 않는다.
+    # asset_planner.assign_scene_intents()가 배정한다.
+    scene_intent: str
 
 
 class AssetPlan(BaseModel):

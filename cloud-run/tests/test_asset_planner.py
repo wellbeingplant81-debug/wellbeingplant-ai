@@ -9,8 +9,10 @@ sys.path.insert(
 )
 
 from app.services.asset_planner import (
+    SCENE_INTENTS,
     SCENE_SHOT_TYPES,
     SCENE_VISUAL_ROLES,
+    assign_scene_intents,
     assign_scene_roles,
     assign_scene_shots,
     plan_asset_strategy,
@@ -273,6 +275,91 @@ class TestPlanAssetStrategyIncludesSceneShot(unittest.TestCase):
             self.assertEqual(strategy["scene_shot"], expected[scene_number])
 
     def test_plan_result_still_json_serializable_with_scene_shot(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        json.dumps(plan)
+
+
+# --- Sprint80: Asset Planner v4 (Scene Intent Planner) - scene intent ---
+
+
+class TestAssignSceneIntents(unittest.TestCase):
+    """
+    Sprint80 - scene 배치 전체를 대상으로 각 scene의 서사적 의도
+    (scene_intent)를 배정한다. 순수 함수여야 한다 - 랜덤을 쓰지 않고,
+    입력 scenes를 변경하지 않으며, 같은 입력에는 항상 같은 결과를 낸다.
+
+    주의: scene_planner_service.py(Sprint44, ENABLE_SCENE_PLANNER)도
+    이미 scene마다 "purpose"(hook/development/cta)를 배정하는 별개의
+    Planner다. 이번 scene_intent는 asset_planner.py 자체의 새 축이며
+    scene_planner_service를 호출하거나 재사용하지 않는다 - 값 이름
+    ("hook")이 우연히 겹칠 뿐 서로 무관하다.
+    """
+
+    def test_empty_scenes_returns_empty_dict(self):
+        self.assertEqual(assign_scene_intents([]), {})
+
+    def test_returns_intent_for_every_scene(self):
+        intents = assign_scene_intents(SIX_SCENES)
+
+        self.assertEqual(set(intents.keys()), {1, 2, 3, 4, 5, 6})
+
+    def test_all_assigned_intents_are_valid(self):
+        intents = assign_scene_intents(SIX_SCENES)
+
+        for intent in intents.values():
+            self.assertIn(intent, SCENE_INTENTS)
+
+    def test_first_scene_is_hook(self):
+        intents = assign_scene_intents(SIX_SCENES)
+
+        self.assertEqual(intents[1], "hook")
+
+    def test_cycles_context_explain_cta_after_first_scene(self):
+        intents = assign_scene_intents(SIX_SCENES)
+
+        ordered = [intents[scene["scene"]] for scene in SIX_SCENES]
+
+        self.assertEqual(
+            ordered,
+            ["hook", "context", "explain", "cta", "context", "explain"],
+        )
+
+    def test_is_deterministic(self):
+        first = assign_scene_intents(SIX_SCENES)
+        second = assign_scene_intents(SIX_SCENES)
+
+        self.assertEqual(first, second)
+
+    def test_does_not_mutate_input_scenes(self):
+        scenes_copy = [dict(s) for s in SIX_SCENES]
+
+        assign_scene_intents(SIX_SCENES)
+
+        self.assertEqual(SIX_SCENES, scenes_copy)
+
+
+class TestPlanAssetStrategyIncludesSceneIntent(unittest.TestCase):
+    """Sprint80 - plan_asset_strategy()의 결과 dict에 scene_intent가
+    함께 실려야 한다(기존 scene/prefer_ai/visual_profile/scene_role/
+    scene_shot 필드에 추가)."""
+
+    def test_plan_includes_scene_intent_for_every_scene(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        for strategy in plan.values():
+            self.assertIn("scene_intent", strategy)
+            self.assertIn(strategy["scene_intent"], SCENE_INTENTS)
+
+    def test_plan_scene_intent_matches_assign_scene_intents(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        expected = assign_scene_intents(SIX_SCENES)
+
+        for scene_number, strategy in plan.items():
+            self.assertEqual(strategy["scene_intent"], expected[scene_number])
+
+    def test_plan_result_still_json_serializable_with_scene_intent(self):
         plan = plan_asset_strategy(SIX_SCENES)
 
         json.dumps(plan)
