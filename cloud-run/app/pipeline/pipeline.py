@@ -4,6 +4,7 @@ import time
 
 from app import config
 from app.services import ai_director_service
+from app.services import asset_planner
 from app.steps import step01_script
 from app.steps import step02_assets
 from app.steps import step03_tts
@@ -148,11 +149,27 @@ def run_pipeline(
         data["scenes"],
     )
 
+    # Sprint77 - Asset Planner v1: 기본적으로 꺼져 있고, 켜져도
+    # asset_plan은 step02_assets.collect_assets()가 이미 하던 계산을
+    # 미리 한 번 해서 넘겨줄 뿐이라 오늘 시점 결과물은 바뀌지 않는다
+    # (data.get("asset_plan")이 None이면 collect_assets()가 기존
+    # 계산 경로로 그대로 폴백 - 완전히 하위 호환).
+    if config.ENABLE_ASSET_PLANNER:
+        try:
+            data["asset_plan"] = asset_planner.plan_asset_strategy(data["scenes"])
+        except Exception as exc:
+            print(f"Asset planner step failed: {exc}")
+
+    collect_assets_kwargs = {}
+    if data.get("asset_plan"):
+        collect_assets_kwargs["asset_plan"] = data["asset_plan"]
+
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(
         data["scenes"],
         project_path,
         channel,
+        **collect_assets_kwargs,
     )
     _save_script(project_path, data)
     timings["image_generation"] = time.perf_counter() - t0

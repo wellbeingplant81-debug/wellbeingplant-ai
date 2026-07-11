@@ -42,3 +42,14 @@ ENABLE_AI_DIRECTOR = False
 # working without modification. Flag off means byte-for-byte identical
 # behavior to pre-Sprint51.
 ENABLE_VIRAL_WRITER = False
+
+# Sprint77 - Asset Planner v1. Off by default. asset_planner.plan_asset_
+# strategy() only unifies two existing batch-level computations
+# (select_ai_priority_scenes/assign_visual_profiles) that step02_assets.
+# collect_assets() already runs inline - when this flag is off,
+# collect_assets() falls back to that exact same inline computation
+# (asset_plan=None), so pipeline output is byte-for-byte identical to
+# pre-Sprint77 regardless of this flag's value today. Turning it on only
+# adds data["asset_plan"] for observability/future extension; it does not
+# change today's asset selection outcome.
+ENABLE_ASSET_PLANNER = False

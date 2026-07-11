@@ -147,6 +147,92 @@ class TestStep02Assets(unittest.TestCase):
             scene_number = call.args[0]["scene"]
             self.assertEqual(call.kwargs["visual_profile"], expected[scene_number])
 
+    # --- Sprint77: Asset Planner v1 wiring ---
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_asset_plan_none_matches_pre_sprint77_behavior(self, mock_integrate):
+        # asset_plan을 안 넘기면(기본값 None) 기존처럼 select_ai_priority_
+        # scenes()/assign_visual_profiles()를 직접 계산한 결과와 완전히
+        # 동일해야 한다 - 하위 호환의 핵심 검증.
+        from app.services.visual_diversity_engine import assign_visual_profiles
+
+        collect_assets(SAMPLE_SCENES, "output/proj")
+
+        expected_profiles = assign_visual_profiles(SAMPLE_SCENES)
+
+        for call in mock_integrate.call_args_list:
+            scene_number = call.args[0]["scene"]
+            self.assertEqual(call.kwargs["visual_profile"], expected_profiles[scene_number])
+            self.assertFalse(call.kwargs["prefer_ai"])
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_asset_plan_provided_overrides_prefer_ai(self, mock_integrate):
+        asset_plan = {
+            1: {"scene": 1, "prefer_ai": True, "visual_profile": {
+                "camera_distance": "wide", "camera_angle": "eye level",
+                "composition": "centered", "lighting": "soft daylight",
+            }},
+            2: {"scene": 2, "prefer_ai": False, "visual_profile": {
+                "camera_distance": "medium", "camera_angle": "low angle",
+                "composition": "rule of thirds", "lighting": "dramatic light",
+            }},
+            3: {"scene": 3, "prefer_ai": False, "visual_profile": {
+                "camera_distance": "close-up", "camera_angle": "high angle",
+                "composition": "foreground framing", "lighting": "warm indoor",
+            }},
+        }
+
+        collect_assets(SAMPLE_SCENES, "output/proj", asset_plan=asset_plan)
+
+        prefer_ai_by_scene = {
+            call.args[0]["scene"]: call.kwargs["prefer_ai"]
+            for call in mock_integrate.call_args_list
+        }
+
+        self.assertTrue(prefer_ai_by_scene[1])
+        self.assertFalse(prefer_ai_by_scene[2])
+        self.assertFalse(prefer_ai_by_scene[3])
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_asset_plan_provided_overrides_visual_profile(self, mock_integrate):
+        asset_plan = {
+            1: {"scene": 1, "prefer_ai": False, "visual_profile": {
+                "camera_distance": "macro", "camera_angle": "top-down",
+                "composition": "leading lines", "lighting": "backlit",
+            }},
+            2: {"scene": 2, "prefer_ai": False, "visual_profile": {
+                "camera_distance": "medium", "camera_angle": "low angle",
+                "composition": "rule of thirds", "lighting": "dramatic light",
+            }},
+            3: {"scene": 3, "prefer_ai": False, "visual_profile": {
+                "camera_distance": "close-up", "camera_angle": "high angle",
+                "composition": "foreground framing", "lighting": "warm indoor",
+            }},
+        }
+
+        collect_assets(SAMPLE_SCENES, "output/proj", asset_plan=asset_plan)
+
+        profile_scene_1 = next(
+            call.kwargs["visual_profile"]
+            for call in mock_integrate.call_args_list
+            if call.args[0]["scene"] == 1
+        )
+
+        self.assertEqual(profile_scene_1["camera_distance"], "macro")
+
+    @patch("app.steps.step02_assets.integrate_asset", side_effect=_fake_integrate_asset)
+    def test_empty_asset_plan_falls_back_to_existing_computation(self, mock_integrate):
+        # asset_plan={}(falsy)도 None과 동일하게 기존 경로로 폴백해야 한다.
+        from app.services.visual_diversity_engine import assign_visual_profiles
+
+        collect_assets(SAMPLE_SCENES, "output/proj", asset_plan={})
+
+        expected_profiles = assign_visual_profiles(SAMPLE_SCENES)
+
+        for call in mock_integrate.call_args_list:
+            scene_number = call.args[0]["scene"]
+            self.assertEqual(call.kwargs["visual_profile"], expected_profiles[scene_number])
+
 
 if __name__ == "__main__":
     unittest.main()

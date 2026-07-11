@@ -13,6 +13,7 @@ def collect_assets(
     scenes,
     project_path,
     channel="wellbeing",
+    asset_plan=None,
 ):
     """
     기존 step02_image.py의 병렬 처리 구조(ThreadPoolExecutor,
@@ -34,14 +35,32 @@ def collect_assets(
     하나씩 독립적으로 처리하면 배치 전체 관점의 "이미 쓴 조합"을 알
     수 없습니다).
 
+    Sprint77 - Asset Planner v1: asset_plan(pipeline.py가
+    ENABLE_ASSET_PLANNER일 때만 asset_planner.plan_asset_strategy()로
+    미리 계산해 넘기는, {scene_number: {"prefer_ai", "visual_profile"}}
+    형태의 dict)이 주어지면 그 값을 그대로 쓰고, select_ai_priority_
+    scenes()/assign_visual_profiles()를 다시 계산하지 않습니다.
+    asset_plan이 없으면(기본값 None, 즉 Planner 미사용) 기존 계산
+    경로를 그대로 실행합니다 - 완전히 하위 호환입니다.
+
     기존 step02_image.py는 삭제/수정하지 않고 그대로 유지합니다.
     """
 
-    ai_priority_scenes = select_ai_priority_scenes(
-        scenes, get_ai_ratio_cap(),
-    )
-
-    visual_profiles = assign_visual_profiles(scenes)
+    if asset_plan:
+        ai_priority_scenes = {
+            scene_number
+            for scene_number, strategy in asset_plan.items()
+            if strategy.get("prefer_ai")
+        }
+        visual_profiles = {
+            scene_number: strategy.get("visual_profile")
+            for scene_number, strategy in asset_plan.items()
+        }
+    else:
+        ai_priority_scenes = select_ai_priority_scenes(
+            scenes, get_ai_ratio_cap(),
+        )
+        visual_profiles = assign_visual_profiles(scenes)
 
     futures = []
     results = []
