@@ -8,7 +8,11 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
-from app.services.asset_planner import plan_asset_strategy
+from app.services.asset_planner import (
+    SCENE_VISUAL_ROLES,
+    assign_scene_roles,
+    plan_asset_strategy,
+)
 from app.services.asset_priority_classifier import select_ai_priority_scenes
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.visual_diversity_engine import assign_visual_profiles
@@ -28,6 +32,14 @@ MEDICAL_SCENES = [
     },
     {"scene": 2, "narration": "n2", "image_prompt": "p2"},
     {"scene": 3, "narration": "n3", "image_prompt": "p3"},
+]
+
+# 실제 파이프라인의 전형적인 scene 개수(script_prompt.py "정확히 6개")와
+# 맞춘 fixture - role 다양성/반복 회피를 의미 있게 검증하려면 최소
+# SCENE_VISUAL_ROLES 개수보다 많은 scene이 필요하다.
+SIX_SCENES = [
+    {"scene": i, "narration": f"n{i}", "image_prompt": f"p{i}"}
+    for i in range(1, 7)
 ]
 
 
@@ -92,6 +104,93 @@ class TestPlanAssetStrategy(unittest.TestCase):
         plan_asset_strategy(SAMPLE_SCENES)
 
         self.assertEqual(SAMPLE_SCENES, scenes_copy)
+
+
+# --- Sprint78: Asset Planner v2 (Diversity Planner) - scene visual role ---
+
+
+class TestAssignSceneRoles(unittest.TestCase):
+    """
+    Sprint78 - scene 배치 전체를 대상으로 "이 scene이 영상에서 맡는
+    시각적 역할"(hero/detail/transition/context)을 배정한다. 이미
+    존재하는 asset_integration_service.ASSET_ROLES(environment/subject/
+    detail/transition)는 "같은 scene 안 4개 AI asset끼리의" 역할이라
+    - 이 테스트가 다루는 "scene 하나 전체의" 역할과는 다른 축이다.
+    """
+
+    def test_empty_scenes_returns_empty_dict(self):
+        self.assertEqual(assign_scene_roles([]), {})
+
+    def test_returns_role_for_every_scene(self):
+        roles = assign_scene_roles(SAMPLE_SCENES)
+
+        self.assertEqual(set(roles.keys()), {1, 2, 3})
+
+    def test_all_assigned_roles_are_valid_scene_visual_roles(self):
+        roles = assign_scene_roles(SIX_SCENES)
+
+        for role in roles.values():
+            self.assertIn(role, SCENE_VISUAL_ROLES)
+
+    def test_roles_are_diverse_not_all_identical(self):
+        roles = assign_scene_roles(SIX_SCENES)
+
+        self.assertGreater(len(set(roles.values())), 1)
+
+    def test_same_role_does_not_repeat_consecutively(self):
+        roles = assign_scene_roles(SIX_SCENES)
+
+        ordered = [roles[scene["scene"]] for scene in SIX_SCENES]
+
+        for previous, current in zip(ordered, ordered[1:]):
+            self.assertNotEqual(previous, current)
+
+    def test_first_scene_is_hero_role(self):
+        # Scene 1은 파이프라인 전반에서 이미 "hook/커버" scene으로
+        # 특별 취급된다(asset_integration_service.is_hook_scene,
+        # script_prompt.py Scene 1 규칙 등과 동일한 관례).
+        roles = assign_scene_roles(SIX_SCENES)
+
+        self.assertEqual(roles[1], "hero")
+
+    def test_all_roles_used_at_least_once_when_enough_scenes(self):
+        # scene 개수가 SCENE_VISUAL_ROLES 개수 이상이면(6 >= 4) 모든
+        # role이 최소 한 번은 쓰여야 "다양하게 분배"라고 볼 수 있다.
+        roles = assign_scene_roles(SIX_SCENES)
+
+        self.assertEqual(set(roles.values()), set(SCENE_VISUAL_ROLES))
+
+    def test_does_not_mutate_input_scenes(self):
+        scenes_copy = [dict(s) for s in SIX_SCENES]
+
+        assign_scene_roles(SIX_SCENES)
+
+        self.assertEqual(SIX_SCENES, scenes_copy)
+
+
+class TestPlanAssetStrategyIncludesSceneRole(unittest.TestCase):
+    """Sprint78 - plan_asset_strategy()의 결과 dict에 scene_role이
+    함께 실려야 한다(기존 scene/prefer_ai/visual_profile 필드에 추가)."""
+
+    def test_plan_includes_scene_role_for_every_scene(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        for strategy in plan.values():
+            self.assertIn("scene_role", strategy)
+            self.assertIn(strategy["scene_role"], SCENE_VISUAL_ROLES)
+
+    def test_plan_scene_role_matches_assign_scene_roles(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        expected = assign_scene_roles(SIX_SCENES)
+
+        for scene_number, strategy in plan.items():
+            self.assertEqual(strategy["scene_role"], expected[scene_number])
+
+    def test_plan_result_still_json_serializable_with_scene_role(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        json.dumps(plan)
 
 
 if __name__ == "__main__":

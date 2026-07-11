@@ -26,6 +26,10 @@ class SceneAssetStrategy(BaseModel):
     scene: int
     prefer_ai: bool
     visual_profile: VisualProfile
+    # Sprint78 - Asset Planner v2 (Diversity Planner). 이 scene이
+    # 영상 전체에서 맡는 시각적 역할(hero/detail/transition/context).
+    # asset_planner.assign_scene_roles()가 배정한다.
+    scene_role: str
 
 
 class AssetPlan(BaseModel):
