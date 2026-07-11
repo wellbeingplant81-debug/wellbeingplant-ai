@@ -122,11 +122,46 @@ def _calculate_speaking_rate(
     return min(max(rate, min_rate), max_rate)
 
 
+def _apply_uniform_rate_to_other_scenes(
+    scene_audio_paths: list, durations: list, rate: float, current_total: float,
+) -> float:
+    """
+    last scene 단독 보정(rate 계산/무음 패딩)만으로는 43~47초 범위에
+    들어오지 못하는 극단적인 경우에만 호출되는 2차 패스(cascade).
+    이미 처리된 마지막 scene은 다시 건드리지 않고, 나머지 scene 각각에
+    동일한 rate(기존과 같은 MIN/MAX_SPEAKING_RATE 한도 안)만큼만 추가로
+    적용해 총 길이를 더 좁힌다. 안전 한도(±3%, 3초)는 절대 넓히지 않고,
+    "last scene 하나"가 아니라 "여러 scene에 나눠서" 적용해 같은 한도로
+    더 큰 총합 보정을 만드는 것이 핵심이다.
+    """
+
+    new_total = current_total
+
+    for path, original_duration in zip(scene_audio_paths[:-1], durations[:-1]):
+        tmp_path = path + ".optimized.mp3"
+        speed_up_audio(path, rate, tmp_path)
+        os.replace(tmp_path, path)
+
+        new_duration = original_duration / rate
+        new_total = new_total - original_duration + new_duration
+
+    return new_total
+
+
 def optimize_scene_audio(scene_audio_paths: list) -> dict:
     """
     이미 합성된 scene mp3 파일 경로 리스트를 받아, 실제 합 길이가
-    43~47초를 벗어나면 마지막 파일만 in-place로 후처리한다. 파일
+    43~47초를 벗어나면 마지막 파일을 in-place로 후처리한다. 파일
     개수/순서는 바꾸지 않는다.
+
+    Sprint74 - Duration Optimizer 안정화: 마지막 scene 하나에 대한
+    보정(무음 패딩 최대 3초, 속도 조절 최대 ±3%)만으로는 격차가 큰
+    실측 케이스(2026-07-10 E2E에서 43~47초 범위를 벗어난 채로 끝난
+    실패 사례들)를 못 닫는 경우가 있었다. 안전 한도 자체를 넓히는 대신
+    - 이미 Sprint53에서 오디오 품질 저하를 막기 위해 의도적으로 정한
+    한도이므로 - 같은 한도를 마지막 scene 외 나머지 scene에도 나눠서
+    적용해(2차 패스) 총 보정량을 늘린다. 1차 패스(마지막 scene만)로
+    이미 범위 안에 들어오면 2차 패스는 발동하지 않는다.
     """
 
     if not scene_audio_paths:
@@ -150,12 +185,22 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
         append_silence(last_path, pause_seconds, tmp_path)
         os.replace(tmp_path, last_path)
 
-        return {
+        final_total = total + pause_seconds
+        result = {
             "action": "expand",
             "original_total": total,
-            "final_total": total + pause_seconds,
+            "final_total": final_total,
             "pause_seconds": pause_seconds,
+            "secondary_adjustment": False,
         }
+
+        if final_total < MIN_ACCEPTABLE_SECONDS:
+            result["final_total"] = _apply_uniform_rate_to_other_scenes(
+                scene_audio_paths, durations, MIN_SPEAKING_RATE, final_total,
+            )
+            result["secondary_adjustment"] = True
+
+        return result
 
     seconds_to_remove = total - TARGET_DURATION_SECONDS
     rate = _calculate_speaking_rate(last_duration, seconds_to_remove)
@@ -163,10 +208,20 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
     os.replace(tmp_path, last_path)
 
     new_last_duration = last_duration / rate
+    final_total = total - last_duration + new_last_duration
 
-    return {
+    result = {
         "action": "contract",
         "original_total": total,
-        "final_total": total - last_duration + new_last_duration,
+        "final_total": final_total,
         "speaking_rate": rate,
+        "secondary_adjustment": False,
     }
+
+    if final_total > MAX_ACCEPTABLE_SECONDS:
+        result["final_total"] = _apply_uniform_rate_to_other_scenes(
+            scene_audio_paths, durations, MAX_SPEAKING_RATE, final_total,
+        )
+        result["secondary_adjustment"] = True
+
+    return result

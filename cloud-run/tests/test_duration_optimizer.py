@@ -211,36 +211,97 @@ class TestOptimizeSceneAudioReal(RealAudioTestCase):
             self.assertAlmostEqual(get_audio_duration(path), original, delta=0.05)
 
     def test_under_43_appends_silence_to_last_scene_only(self):
-        # 6 * 6.0 = 36.0s -> 45초에 9초 부족하지만 MAX_PAUSE_SECONDS(3초)로 clamp
-        paths = [self._make_silence(f"scene{i}.mp3", 6.0) for i in range(1, 7)]
+        # 6 * 6.9 = 41.4s -> 45초에 3.6초 부족하지만 MAX_PAUSE_SECONDS(3초)로
+        # clamp해도 41.4+3.0=44.4로 43~47 범위에 들어오는 "보통" 케이스.
+        # last scene 단독 보정만으로 충분하므로 2차 보정(cascade)은 발동되지 않아야 한다.
+        paths = [self._make_silence(f"scene{i}.mp3", 6.9) for i in range(1, 7)]
         earlier_durations = [get_audio_duration(p) for p in paths[:-1]]
 
         result = optimize_scene_audio(paths)
 
         self.assertEqual(result["action"], "expand")
+        self.assertFalse(result.get("secondary_adjustment", False))
         for path, original in zip(paths[:-1], earlier_durations):
             self.assertAlmostEqual(get_audio_duration(path), original, delta=0.05)
 
         self.assertAlmostEqual(
             get_audio_duration(paths[-1]),
-            6.0 + MAX_PAUSE_SECONDS,
+            6.9 + MAX_PAUSE_SECONDS,
             delta=0.15,
         )
+        self.assertGreaterEqual(result["final_total"], MIN_ACCEPTABLE_SECONDS)
+        self.assertLessEqual(result["final_total"], MAX_ACCEPTABLE_SECONDS)
 
     def test_over_47_speeds_up_last_scene_only(self):
-        # 6 * 9.0 = 54.0s -> 47초 초과
-        paths = [self._make_silence(f"scene{i}.mp3", 9.0) for i in range(1, 7)]
+        # 6 * 7.85 = 47.1s -> 47초를 살짝 초과하지만 last scene 단독의 최대
+        # 압축(±3%)만으로도 46.87s까지 내려가 43~47 범위에 들어오는 "보통" 케이스.
+        # 2차 보정(cascade)은 발동되지 않아야 한다.
+        paths = [self._make_silence(f"scene{i}.mp3", 7.85) for i in range(1, 7)]
         earlier_durations = [get_audio_duration(p) for p in paths[:-1]]
 
         result = optimize_scene_audio(paths)
 
         self.assertEqual(result["action"], "contract")
+        self.assertFalse(result.get("secondary_adjustment", False))
         for path, original in zip(paths[:-1], earlier_durations):
             self.assertAlmostEqual(get_audio_duration(path), original, delta=0.05)
 
         new_last = get_audio_duration(paths[-1])
-        self.assertLess(new_last, 9.0)
-        self.assertAlmostEqual(new_last, 9.0 / MAX_SPEAKING_RATE, delta=0.2)
+        self.assertLess(new_last, 7.85)
+        self.assertAlmostEqual(new_last, 7.85 / MAX_SPEAKING_RATE, delta=0.2)
+        self.assertGreaterEqual(result["final_total"], MIN_ACCEPTABLE_SECONDS)
+        self.assertLessEqual(result["final_total"], MAX_ACCEPTABLE_SECONDS)
+
+    def test_severely_under_43_falls_back_to_secondary_scene_adjustment(self):
+        # 6 * 6.076 = 36.456s -> 2026-07-10 실제 E2E 실패 케이스 재현.
+        # last scene 단독 무음 패딩(3초 cap)만으로는 39.456s로 여전히 43초
+        # 미만이라, 나머지 scene에도 MIN_SPEAKING_RATE(감속)를 추가로 적용해
+        # 최대한 43초에 가깝게 만들어야 한다(완전히 범위 안에 들어오지
+        # 않을 수 있는 극단적 케이스지만, 반드시 개선은 되어야 한다).
+        paths = [self._make_silence(f"scene{i}.mp3", 6.076) for i in range(1, 7)]
+        earlier_durations = [get_audio_duration(p) for p in paths[:-1]]
+
+        result = optimize_scene_audio(paths)
+
+        self.assertEqual(result["action"], "expand")
+        self.assertTrue(result.get("secondary_adjustment", False))
+
+        pad_only_total = 6.076 + MAX_PAUSE_SECONDS
+        pad_only_final_total = 6.076 * 5 + pad_only_total
+
+        self.assertGreater(result["final_total"], pad_only_final_total)
+
+        for path, original in zip(paths[:-1], earlier_durations):
+            self.assertGreater(get_audio_duration(path), original)
+            self.assertAlmostEqual(
+                get_audio_duration(path),
+                original / MIN_SPEAKING_RATE,
+                delta=0.1,
+            )
+
+    def test_severely_over_47_falls_back_to_secondary_scene_adjustment(self):
+        # 6 * 8.044 = 48.264s -> 2026-07-10 실제 E2E 실패 케이스 재현.
+        # last scene 단독 압축(±3% cap)만으로는 48.03s로 여전히 47초를
+        # 초과하므로, 나머지 scene에도 MAX_SPEAKING_RATE(가속)를 추가로
+        # 적용해 43~47초 범위 안으로 들어와야 한다.
+        paths = [self._make_silence(f"scene{i}.mp3", 8.044) for i in range(1, 7)]
+        earlier_durations = [get_audio_duration(p) for p in paths[:-1]]
+
+        result = optimize_scene_audio(paths)
+
+        self.assertEqual(result["action"], "contract")
+        self.assertTrue(result.get("secondary_adjustment", False))
+
+        for path, original in zip(paths[:-1], earlier_durations):
+            self.assertLess(get_audio_duration(path), original)
+            self.assertAlmostEqual(
+                get_audio_duration(path),
+                original / MAX_SPEAKING_RATE,
+                delta=0.1,
+            )
+
+        self.assertGreaterEqual(result["final_total"], MIN_ACCEPTABLE_SECONDS)
+        self.assertLessEqual(result["final_total"], MAX_ACCEPTABLE_SECONDS)
 
     def test_empty_list_returns_none_action(self):
         result = optimize_scene_audio([])
