@@ -9,8 +9,10 @@ sys.path.insert(
 )
 
 from app.services.asset_planner import (
+    SCENE_SHOT_TYPES,
     SCENE_VISUAL_ROLES,
     assign_scene_roles,
+    assign_scene_shots,
     plan_asset_strategy,
 )
 from app.services.asset_priority_classifier import select_ai_priority_scenes
@@ -188,6 +190,89 @@ class TestPlanAssetStrategyIncludesSceneRole(unittest.TestCase):
             self.assertEqual(strategy["scene_role"], expected[scene_number])
 
     def test_plan_result_still_json_serializable_with_scene_role(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        json.dumps(plan)
+
+
+# --- Sprint79: Asset Planner v3 (Shot Type Planner) - scene shot type ---
+
+
+class TestAssignSceneShots(unittest.TestCase):
+    """
+    Sprint79 - scene 배치 전체를 대상으로 각 scene의 촬영 shot
+    scale(SCENE_SHOT_TYPES: wide/medium/close_up/overhead)을 배정한다.
+    visual_diversity_engine.assign_visual_profiles()가 만드는
+    visual_profile["composition"](centered/rule of thirds/foreground
+    framing/leading lines - 구도 "스타일")과는 값 도메인이 다른 별개의
+    축이다 - 의미 충돌을 피하기 위해 필드명도 "composition"이 아니라
+    "scene_shot"을 쓴다.
+    """
+
+    def test_empty_scenes_returns_empty_dict(self):
+        self.assertEqual(assign_scene_shots([]), {})
+
+    def test_returns_shot_for_every_scene(self):
+        shots = assign_scene_shots(SIX_SCENES)
+
+        self.assertEqual(set(shots.keys()), {1, 2, 3, 4, 5, 6})
+
+    def test_all_assigned_shots_are_valid(self):
+        shots = assign_scene_shots(SIX_SCENES)
+
+        for shot in shots.values():
+            self.assertIn(shot, SCENE_SHOT_TYPES)
+
+    def test_first_scene_is_wide(self):
+        shots = assign_scene_shots(SIX_SCENES)
+
+        self.assertEqual(shots[1], "wide")
+
+    def test_cycles_medium_close_up_overhead_after_first_scene(self):
+        shots = assign_scene_shots(SIX_SCENES)
+
+        ordered = [shots[scene["scene"]] for scene in SIX_SCENES]
+
+        self.assertEqual(
+            ordered,
+            ["wide", "medium", "close_up", "overhead", "medium", "close_up"],
+        )
+
+    def test_is_deterministic(self):
+        first = assign_scene_shots(SIX_SCENES)
+        second = assign_scene_shots(SIX_SCENES)
+
+        self.assertEqual(first, second)
+
+    def test_does_not_mutate_input_scenes(self):
+        scenes_copy = [dict(s) for s in SIX_SCENES]
+
+        assign_scene_shots(SIX_SCENES)
+
+        self.assertEqual(SIX_SCENES, scenes_copy)
+
+
+class TestPlanAssetStrategyIncludesSceneShot(unittest.TestCase):
+    """Sprint79 - plan_asset_strategy()의 결과 dict에 scene_shot이
+    함께 실려야 한다(기존 scene/prefer_ai/visual_profile/scene_role
+    필드에 추가)."""
+
+    def test_plan_includes_scene_shot_for_every_scene(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        for strategy in plan.values():
+            self.assertIn("scene_shot", strategy)
+            self.assertIn(strategy["scene_shot"], SCENE_SHOT_TYPES)
+
+    def test_plan_scene_shot_matches_assign_scene_shots(self):
+        plan = plan_asset_strategy(SIX_SCENES)
+
+        expected = assign_scene_shots(SIX_SCENES)
+
+        for scene_number, strategy in plan.items():
+            self.assertEqual(strategy["scene_shot"], expected[scene_number])
+
+    def test_plan_result_still_json_serializable_with_scene_shot(self):
         plan = plan_asset_strategy(SIX_SCENES)
 
         json.dumps(plan)

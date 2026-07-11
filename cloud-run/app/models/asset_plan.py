@@ -30,6 +30,11 @@ class SceneAssetStrategy(BaseModel):
     # 영상 전체에서 맡는 시각적 역할(hero/detail/transition/context).
     # asset_planner.assign_scene_roles()가 배정한다.
     scene_role: str
+    # Sprint79 - Asset Planner v3 (Shot Type Planner). 이 scene의 촬영
+    # shot scale(wide/medium/close_up/overhead). visual_profile.
+    # composition(구도 스타일)과는 다른 축이라 필드명을 분리했다.
+    # asset_planner.assign_scene_shots()가 배정한다.
+    scene_shot: str
 
 
 class AssetPlan(BaseModel):
