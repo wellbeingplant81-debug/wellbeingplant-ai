@@ -148,11 +148,20 @@ def _apply_uniform_rate_to_other_scenes(
     return new_total
 
 
-def optimize_scene_audio(scene_audio_paths: list) -> dict:
+def optimize_scene_audio(
+    scene_audio_paths: list,
+    target_duration: float = TARGET_DURATION_SECONDS,
+    tolerance: float = TOLERANCE_SECONDS,
+) -> dict:
     """
     이미 합성된 scene mp3 파일 경로 리스트를 받아, 실제 합 길이가
-    43~47초를 벗어나면 마지막 파일을 in-place로 후처리한다. 파일
-    개수/순서는 바꾸지 않는다.
+    target_duration±tolerance(기본 45±2=43~47초)를 벗어나면 마지막
+    파일을 in-place로 후처리한다. 파일 개수/순서는 바꾸지 않는다.
+
+    Sprint94 - ProductionProfile Duration Target Activation: target_
+    duration/tolerance를 optional 파라미터로 받아 호출부(step03_tts.py)
+    가 원하는 목표로 override할 수 있게 한다. 기본값은 기존 모듈 상수와
+    동일해 파라미터 없이 호출하면 지금까지와 완전히 동일하다.
 
     Sprint74 - Duration Optimizer 안정화: 마지막 scene 하나에 대한
     보정(무음 패딩 최대 3초, 속도 조절 최대 ±3%)만으로는 격차가 큰
@@ -164,22 +173,25 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
     이미 범위 안에 들어오면 2차 패스는 발동하지 않는다.
     """
 
+    min_acceptable = target_duration - tolerance
+    max_acceptable = target_duration + tolerance
+
     if not scene_audio_paths:
         return {"action": "none", "original_total": 0.0, "final_total": 0.0}
 
     durations = [get_audio_duration(path) for path in scene_audio_paths]
     total = sum(durations)
 
-    if MIN_ACCEPTABLE_SECONDS <= total <= MAX_ACCEPTABLE_SECONDS:
+    if min_acceptable <= total <= max_acceptable:
         return {"action": "none", "original_total": total, "final_total": total}
 
     last_path = scene_audio_paths[-1]
     last_duration = durations[-1]
     tmp_path = last_path + ".optimized.mp3"
 
-    if total < MIN_ACCEPTABLE_SECONDS:
+    if total < min_acceptable:
         pause_seconds = min(
-            max(TARGET_DURATION_SECONDS - total, 0.0),
+            max(target_duration - total, 0.0),
             MAX_PAUSE_SECONDS,
         )
         append_silence(last_path, pause_seconds, tmp_path)
@@ -194,7 +206,7 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
             "secondary_adjustment": False,
         }
 
-        if final_total < MIN_ACCEPTABLE_SECONDS:
+        if final_total < min_acceptable:
             result["final_total"] = _apply_uniform_rate_to_other_scenes(
                 scene_audio_paths, durations, MIN_SPEAKING_RATE, final_total,
             )
@@ -202,7 +214,7 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
 
         return result
 
-    seconds_to_remove = total - TARGET_DURATION_SECONDS
+    seconds_to_remove = total - target_duration
     rate = _calculate_speaking_rate(last_duration, seconds_to_remove)
     speed_up_audio(last_path, rate, tmp_path)
     os.replace(tmp_path, last_path)
@@ -218,7 +230,7 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
         "secondary_adjustment": False,
     }
 
-    if final_total > MAX_ACCEPTABLE_SECONDS:
+    if final_total > max_acceptable:
         result["final_total"] = _apply_uniform_rate_to_other_scenes(
             scene_audio_paths, durations, MAX_SPEAKING_RATE, final_total,
         )

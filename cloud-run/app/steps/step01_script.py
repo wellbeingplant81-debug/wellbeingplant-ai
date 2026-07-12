@@ -7,13 +7,30 @@ from app.services.duration_gate import generate_script_within_duration
 def run(
     topic: str,
     project_path: str,
+    target_duration=None,
+    min_acceptable=None,
+    max_acceptable=None,
 ):
 
     # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
     # 길이가 43~47초 범위인지 먼저 확인하고, 벗어나면 Writer를 다시
     # 호출한다(최대 3회). Duration Optimizer(Sprint53-2)는 이 게이트를
     # 통과한 대본의 미세한 오차만 다듬는다.
-    gate_outcome = generate_script_within_duration(topic=topic)
+    #
+    # Sprint94 - ProductionProfile Duration Target Activation:
+    # target_duration/min_acceptable/max_acceptable이 주어지면 그대로
+    # generate_script_within_duration()에 전달해 목표를 override한다.
+    # 주어지지 않으면(기본값 None) 지금까지처럼 인자를 생략해 기존
+    # 45/43/47 기본값과 완전히 동일하게 동작한다.
+    gate_kwargs = {}
+    if target_duration is not None:
+        gate_kwargs["target_duration"] = target_duration
+    if min_acceptable is not None:
+        gate_kwargs["min_acceptable"] = min_acceptable
+    if max_acceptable is not None:
+        gate_kwargs["max_acceptable"] = max_acceptable
+
+    gate_outcome = generate_script_within_duration(topic=topic, **gate_kwargs)
 
     result = gate_outcome["result"]
     data = result["data"]
