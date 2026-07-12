@@ -7,6 +7,7 @@ from app.services.project_service import create_project
 def generate_short_video(
     topic: str,
     channel: str = "wellbeing",
+    production_profile_name: str = None,
 ):
 
     pipeline_start = time.perf_counter()
@@ -29,6 +30,7 @@ def generate_short_video(
         channel=channel,
         project_creation_time=project_creation_time,
         pipeline_start=pipeline_start,
+        production_profile_name=production_profile_name,
     )
 
     return {
