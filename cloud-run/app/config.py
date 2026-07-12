@@ -53,3 +53,12 @@ ENABLE_VIRAL_WRITER = False
 # adds data["asset_plan"] for observability/future extension; it does not
 # change today's asset selection outcome.
 ENABLE_ASSET_PLANNER = False
+
+# Sprint93 - ProductionProfile Activation. Off by default. When off,
+# pipeline.run_pipeline() never calls ProductionProfileIntegration and
+# never adds data["production_profile"] - output is byte-for-byte
+# identical to pre-Sprint93. When on, it stores
+# ProductionProfileIntegration.load_profile(enabled=True) under
+# data["production_profile"] for observability; nothing downstream reads
+# it yet.
+ENABLE_PRODUCTION_PROFILE = False
