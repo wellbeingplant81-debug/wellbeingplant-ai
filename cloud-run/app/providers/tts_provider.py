@@ -6,9 +6,12 @@ from app.services.speech_normalizer import normalize_for_speech
 from app.services.voice_quality_engine import optimize_for_tts
 
 
-def generate_voice(text: str, output_file: str):
+def generate_voice(text: str, output_file: str, provider: str = None):
 
-    provider = os.getenv("TTS_PROVIDER", "google").lower()
+    # Sprint95 - ProductionProfile tts_provider Activation: provider가
+    # 주어지면 환경변수보다 우선한다. 주어지지 않으면(기본값 None)
+    # 지금까지처럼 TTS_PROVIDER 환경변수를 그대로 읽는다.
+    provider = (provider or os.getenv("TTS_PROVIDER", "google")).lower()
 
     print(f"Using TTS Provider: {'ElevenLabs' if provider == 'elevenlabs' else 'Google'}")
 

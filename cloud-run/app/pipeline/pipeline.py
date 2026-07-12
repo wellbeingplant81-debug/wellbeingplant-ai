@@ -15,6 +15,7 @@ from app.steps import step07_quality
 from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
 from app.services import prompt_learning_service
+from app.services import production_profile_integration
 from app.services import prompt_optimization_service
 from app.services import regeneration_service
 from app.services import scene_planner_service
@@ -42,12 +43,16 @@ def _save_script(project_path, data):
         )
 
 
+DURATION_TOLERANCE_SECONDS = 2
+
+
 def run_pipeline(
     topic: str,
     project_path: str,
     channel: str,
     project_creation_time: float = 0.0,
     pipeline_start: float = None,
+    production_profile_name: str = None,
 ):
 
     if pipeline_start is None:
@@ -57,12 +62,47 @@ def run_pipeline(
         "project_creation": project_creation_time,
     }
 
+    # Sprint93/94 - ProductionProfile Activation: 기본적으로 꺼져 있고,
+    # 켜져도 development profile(45초)이면 기존과 수치상 완전히
+    # 동일하다. step01_script.run()보다 먼저 계산해야 duration_target이
+    # Duration Gate에도 전달될 수 있다.
+    step01_duration_kwargs = {}
+    step03_duration_kwargs = {}
+    active_profile = None
+
+    if config.ENABLE_PRODUCTION_PROFILE:
+        try:
+            active_profile = production_profile_integration.ProductionProfileIntegration.load_profile(
+                profile_name=production_profile_name,
+                enabled=True,
+            )
+            duration_target = active_profile["duration_target"]
+            step01_duration_kwargs = {
+                "target_duration": duration_target,
+                "min_acceptable": duration_target - DURATION_TOLERANCE_SECONDS,
+                "max_acceptable": duration_target + DURATION_TOLERANCE_SECONDS,
+            }
+            # Sprint95 - ProductionProfile tts_provider Activation: 값
+            # 전달만 한다 - 내부 provider 라우팅 결과는 tts_provider.py의
+            # 책임이다.
+            step03_duration_kwargs = {
+                "target_duration": duration_target,
+                "tolerance": DURATION_TOLERANCE_SECONDS,
+                "tts_provider": active_profile["tts_provider"],
+            }
+        except Exception as exc:
+            print(f"Production profile step failed: {exc}")
+
     t0 = time.perf_counter()
     data = step01_script.run(
         topic,
         project_path,
+        **step01_duration_kwargs,
     )
     timings["script_generation"] = time.perf_counter() - t0
+
+    if active_profile is not None:
+        data["production_profile"] = active_profile
 
     if config.ENABLE_SCENE_PLANNER:
         try:
@@ -178,6 +218,7 @@ def run_pipeline(
     step03_tts.run(
         data["scenes"],
         project_path,
+        **step03_duration_kwargs,
     )
     timings["tts_generation"] = time.perf_counter() - t0
 

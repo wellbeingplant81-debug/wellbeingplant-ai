@@ -39,18 +39,42 @@ def _save_duration_optimization_metadata(project_path, result):
 def run(
     scenes,
     project_path,
+    target_duration=None,
+    tolerance=None,
+    tts_provider=None,
 ):
+
+    # Sprint95 - ProductionProfile tts_provider Activation: 값이 있으면
+    # create_scene_tts()에 provider=로 전달한다. 없으면(기본값 None)
+    # 지금까지처럼 인자를 생략해 기존 환경변수 기반 라우팅과 완전히
+    # 동일하게 동작한다.
+    create_scene_tts_kwargs = {}
+    if tts_provider is not None:
+        create_scene_tts_kwargs["provider"] = tts_provider
 
     scene_audio_paths = create_scene_tts(
         scenes,
         project_path,
+        **create_scene_tts_kwargs,
     )
 
     # Sprint53 - Duration Optimizer: 합성이 끝난 실제 scene mp3의
     # ffprobe 실측 길이가 43~47초를 벗어나면 마지막 scene 오디오만
     # 후처리한다. concat 전에 실행해야 voice.mp3에 보정된 결과가
     # 반영된다.
-    optimization_result = optimize_scene_audio(scene_audio_paths)
+    #
+    # Sprint94 - ProductionProfile Duration Target Activation:
+    # target_duration/tolerance가 주어지면 그대로 optimize_scene_audio()
+    # 에 전달해 목표를 override한다. 주어지지 않으면(기본값 None)
+    # 지금까지처럼 인자를 생략해 기존 45/2 기본값과 완전히 동일하게
+    # 동작한다.
+    optimizer_kwargs = {}
+    if target_duration is not None:
+        optimizer_kwargs["target_duration"] = target_duration
+    if tolerance is not None:
+        optimizer_kwargs["tolerance"] = tolerance
+
+    optimization_result = optimize_scene_audio(scene_audio_paths, **optimizer_kwargs)
     _save_duration_optimization_metadata(project_path, optimization_result)
 
     voice_path = os.path.join(
