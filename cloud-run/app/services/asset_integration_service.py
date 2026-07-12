@@ -323,6 +323,7 @@ def integrate_asset(
     channel: str = "wellbeing",
     prefer_ai: bool = False,
     visual_profile: dict = None,
+    asset_strategy: str = None,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
@@ -378,7 +379,22 @@ def integrate_asset(
 
     visual_type = scene.get("visual_type")
 
-    if visual_type == VISUAL_TYPE_REAL:
+    if asset_strategy == "upload":
+        # Sprint96.1 Hotfix - UploadAssetStrategy(Sprint88)의 prefer_ai가
+        # visual_type보다 우선한다(visual_type 유무와 무관하게 최종
+        # 결정권을 가짐). asset_strategy가 None/"default"면 이 분기를
+        # 타지 않으므로 기존 visual_type 하드 분기는 그대로 유지된다.
+        if prefer_ai:
+            result, ai_priority_choice = _select_ai_first(
+                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                visual_profile,
+            )
+        else:
+            result, ai_priority_choice = _select_real_first(
+                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                visual_profile,
+            )
+    elif visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, visual_type,
             visual_profile,

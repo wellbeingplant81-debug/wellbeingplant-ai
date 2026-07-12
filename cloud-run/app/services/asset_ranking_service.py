@@ -3,12 +3,17 @@ from app.services.asset_learning_engine import compute_bias
 from app.services.asset_quality_scorer import score_asset
 
 
-def select_best_with_score(candidates: list, is_hook_scene: bool = False):
+def select_best_with_score(
+    candidates: list, is_hook_scene: bool = False, asset_strategy: str = None,
+):
     """
     select_best()와 동일하게 채점하되, 최고 점수 후보와 그 점수를 함께
     반환합니다 (candidates가 비어 있으면 (None, None)). Sprint38 Hybrid
     Asset Engine이 "이 후보가 충분히 고품질인지"를 임계값과 비교해야
     해서 점수 자체가 필요할 때 사용합니다.
+
+    Sprint96.1 Hotfix - asset_strategy를 그대로 score_asset()에 전달만
+    한다(값이 없으면 기존과 동일).
     """
 
     if not candidates:
@@ -22,6 +27,7 @@ def select_best_with_score(candidates: list, is_hook_scene: bool = False):
                 candidate,
                 is_hook_scene=is_hook_scene,
                 learned_bias=compute_bias(records, candidate["source"]),
+                asset_strategy=asset_strategy,
             ),
             candidate,
         )
@@ -33,7 +39,7 @@ def select_best_with_score(candidates: list, is_hook_scene: bool = False):
     return best_candidate, best_score
 
 
-def select_best(candidates: list, is_hook_scene: bool = False):
+def select_best(candidates: list, is_hook_scene: bool = False, asset_strategy: str = None):
     """
     candidate 리스트를 채점하여 가장 점수가 높은 후보 하나를
     반환합니다. candidates가 비어 있으면 None을 반환합니다 -
@@ -47,6 +53,8 @@ def select_best(candidates: list, is_hook_scene: bool = False):
     동일하게 동작합니다.
     """
 
-    best_candidate, _ = select_best_with_score(candidates, is_hook_scene=is_hook_scene)
+    best_candidate, _ = select_best_with_score(
+        candidates, is_hook_scene=is_hook_scene, asset_strategy=asset_strategy,
+    )
 
     return best_candidate

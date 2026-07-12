@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.services.asset_integration_service import integrate_asset
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.asset_priority_classifier import select_ai_priority_scenes
+from app.services.upload_asset_strategy import AssetMode, UploadAssetStrategy
 from app.services.visual_diversity_engine import assign_visual_profiles
 
 
@@ -14,6 +15,7 @@ def collect_assets(
     project_path,
     channel="wellbeing",
     asset_plan=None,
+    asset_strategy=None,
 ):
     """
     기존 step02_image.py의 병렬 처리 구조(ThreadPoolExecutor,
@@ -44,6 +46,11 @@ def collect_assets(
     경로를 그대로 실행합니다 - 완전히 하위 호환입니다.
 
     기존 step02_image.py는 삭제/수정하지 않고 그대로 유지합니다.
+
+    Sprint96 - ProductionProfile asset_strategy Activation: asset_plan이
+    없고 asset_strategy="upload"면 UploadAssetStrategy(Sprint88)로 scene별
+    prefer_ai를 정합니다. 그 외(None/"default"/기타 값)는 기존
+    select_ai_priority_scenes() 경로 그대로입니다.
     """
 
     if asset_plan:
@@ -56,11 +63,29 @@ def collect_assets(
             scene_number: strategy.get("visual_profile")
             for scene_number, strategy in asset_plan.items()
         }
+    elif asset_strategy == "upload":
+        # Sprint96 - ProductionProfile asset_strategy Activation:
+        # asset_plan이 없고 asset_strategy가 "upload"면 scene마다
+        # UploadAssetStrategy(Sprint88)로 prefer_ai를 정한다.
+        # select_ai_priority_scenes()/get_ai_ratio_cap()은 쓰지 않는다.
+        ai_priority_scenes = {
+            scene["scene"]
+            for scene in scenes
+            if UploadAssetStrategy.select_asset_mode(scene, profile="upload") == AssetMode.AI
+        }
+        visual_profiles = assign_visual_profiles(scenes)
     else:
         ai_priority_scenes = select_ai_priority_scenes(
             scenes, get_ai_ratio_cap(),
         )
         visual_profiles = assign_visual_profiles(scenes)
+
+    integrate_asset_kwargs = {}
+    if asset_strategy == "upload":
+        # Sprint96.1 Hotfix - asset_strategy="upload"일 때만
+        # integrate_asset()에 전달한다(그 외에는 기존처럼 kwarg 자체를
+        # 넘기지 않아 완전히 하위 호환).
+        integrate_asset_kwargs["asset_strategy"] = asset_strategy
 
     futures = []
     results = []
@@ -77,6 +102,7 @@ def collect_assets(
                     channel,
                     prefer_ai=scene["scene"] in ai_priority_scenes,
                     visual_profile=visual_profiles.get(scene["scene"]),
+                    **integrate_asset_kwargs,
                 )
             )
 

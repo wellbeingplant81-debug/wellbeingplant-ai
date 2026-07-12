@@ -57,8 +57,8 @@ ENABLE_ASSET_PLANNER = False
 # Sprint93 - ProductionProfile Activation. Off by default. When off,
 # pipeline.run_pipeline() never calls ProductionProfileIntegration and
 # never adds data["production_profile"] - output is byte-for-byte
-# identical to pre-Sprint93. When on, it stores
-# ProductionProfileIntegration.load_profile(enabled=True) under
-# data["production_profile"] for observability; nothing downstream reads
-# it yet.
+# identical to pre-Sprint93. When on, ProductionProfileIntegration.load_
+# profile(enabled=True) result also feeds duration_target (Sprint94),
+# tts_provider (Sprint95) and asset_strategy (Sprint96/96.1) into the
+# real step01/step02/step03 calls.
 ENABLE_PRODUCTION_PROFILE = False

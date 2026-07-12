@@ -67,6 +67,7 @@ def run_pipeline(
     # 동일하다. step01_script.run()보다 먼저 계산해야 duration_target이
     # Duration Gate에도 전달될 수 있다.
     step01_duration_kwargs = {}
+    step02_asset_kwargs = {}
     step03_duration_kwargs = {}
     active_profile = None
 
@@ -89,6 +90,12 @@ def run_pipeline(
                 "target_duration": duration_target,
                 "tolerance": DURATION_TOLERANCE_SECONDS,
                 "tts_provider": active_profile["tts_provider"],
+            }
+            # Sprint96 - ProductionProfile asset_strategy Activation: 값
+            # 전달만 한다 - 내부 Asset 판정 로직은 step02_assets.py의
+            # 책임이다.
+            step02_asset_kwargs = {
+                "asset_strategy": active_profile["asset_strategy"],
             }
         except Exception as exc:
             print(f"Production profile step failed: {exc}")
@@ -200,7 +207,7 @@ def run_pipeline(
         except Exception as exc:
             print(f"Asset planner step failed: {exc}")
 
-    collect_assets_kwargs = {}
+    collect_assets_kwargs = dict(step02_asset_kwargs)
     if data.get("asset_plan"):
         collect_assets_kwargs["asset_plan"] = data["asset_plan"]
 
