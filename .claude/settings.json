@@ -7,10 +7,24 @@
       "Bash(git log:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
       "Bash(python -m unittest:*)",
       "Bash(python -m unittest discover:*)",
       "Bash(.venv/Scripts/python.exe -m unittest:*)",
-      "Bash(.venv/Scripts/python.exe -m unittest discover:*)"
+      "Bash(.venv/Scripts/python.exe -m unittest discover:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pytest:*)",
+      "Bash(.venv/Scripts/python.exe -m pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(ruff check:*)",
+      "Bash(black --check:*)",
+      "Bash(mypy:*)",
+      "Bash(python scripts/run_e2e.py:*)",
+      "Bash(.venv/Scripts/python.exe scripts/run_e2e.py:*)",
+      "Bash(python scripts/qa_report.py:*)",
+      "Bash(.venv/Scripts/python.exe scripts/qa_report.py:*)",
+      "Write(cloud-run/output/**)"
     ]
   }
 }

@@ -20,15 +20,21 @@ def generate_script(
     target_duration: int = 45,
     scene_count: int = 6,
     retry_feedback: str = "",
+    chars_per_second: float = DEFAULT_CHARS_PER_SECOND,
 ):
 
     template = VIRAL_SCRIPT_PROMPT if config.ENABLE_VIRAL_WRITER else SCRIPT_PROMPT
 
     # Sprint69-2 - Duration Gate Adaptive Retry: duration_estimator와
-    # 동일한 계수(DEFAULT_CHARS_PER_SECOND)로 목표 글자 수를 역산해
-    # Writer 프롬프트에 명시한다 - 이전에는 "약 45초"라는 서술적
-    # 문구만 있어 실제 필요한 글자 수에 대한 신호가 없었다.
-    target_chars = round(target_duration * DEFAULT_CHARS_PER_SECOND)
+    # 동일한 계수로 목표 글자 수를 역산해 Writer 프롬프트에 명시한다 -
+    # 이전에는 "약 45초"라는 서술적 문구만 있어 실제 필요한 글자 수에
+    # 대한 신호가 없었다.
+    #
+    # Sprint97 - Provider-Aware Calibration: chars_per_second를 호출부
+    # (duration_gate)가 tts_provider에 맞게 override할 수 있게 한다.
+    # 기본값은 기존 DEFAULT_CHARS_PER_SECOND(Chirp)와 동일해 인자를
+    # 생략하면 지금까지와 완전히 동일하게 동작한다.
+    target_chars = round(target_duration * chars_per_second)
 
     prompt = template.substitute(
         topic=topic,

@@ -154,6 +154,15 @@ class TestMixAudioCommand(unittest.TestCase):
         self.assertIn("[bgm][voice]sidechaincompress", filter_complex)
 
 
+class TestBgmVolumeSprint97Reduction(unittest.TestCase):
+    """Sprint97 - narration 전달력 우선을 위해 BGM 볼륨을 기존 대비
+    약 10% 낮춘다(gain 값만 조정, 믹싱 구조는 그대로 유지)."""
+
+    def test_bgm_volume_is_ten_percent_lower_than_previous(self):
+        PREVIOUS_BGM_VOLUME_DB = -28.0
+        self.assertAlmostEqual(BGM_VOLUME_DB, PREVIOUS_BGM_VOLUME_DB * 1.10, places=1)
+
+
 class RealAudioMixTestCase(unittest.TestCase):
     """실제 ffmpeg로 짧은 무음 mp3 fixture를 만들어 진짜 믹싱 결과를
     검증하는 통합 테스트 베이스."""
@@ -255,7 +264,8 @@ class TestNarrationNotAttenuatedByMix(RealAudioMixTestCase):
 class TestBgmDucking(RealAudioMixTestCase):
     """Sprint54-2 - sidechaincompress 기반 ducking. narration이 나오는
     동안 BGM이 확실히 줄고, narration이 끝나면 release 시간 안에
-    원래(ducking 없는 -28dB 기준) 볼륨으로 자연스럽게 복귀해야 한다."""
+    원래(ducking 없는 BGM_VOLUME_DB 기준) 볼륨으로 자연스럽게
+    복귀해야 한다."""
 
     def _make_voice_then_silence(self, loud_seconds: float, silence_seconds: float) -> str:
         # 처음 loud_seconds는 narration 실측 피크(-1.5dB 근방)에 가깝게
@@ -291,8 +301,8 @@ class TestBgmDucking(RealAudioMixTestCase):
         bgm_path = os.path.join(self.tmp_dir, "bgm.mp3")
         self._make_tone(bgm_path, 8.0, freq=880)
 
-        # ducking이 전혀 없을 때(-28dB 고정)의 BGM 기준 음량
-        baseline_db = self._mean_volume_db_of_filtered(bgm_path, "volume=-28dB")
+        # ducking이 전혀 없을 때(BGM_VOLUME_DB 고정)의 BGM 기준 음량
+        baseline_db = self._mean_volume_db_of_filtered(bgm_path, f"volume={BGM_VOLUME_DB}dB")
 
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
@@ -312,13 +322,13 @@ class TestBgmDucking(RealAudioMixTestCase):
         bgm_path = os.path.join(self.tmp_dir, "bgm.mp3")
         self._make_tone(bgm_path, 8.0, freq=880)
 
-        baseline_db = self._mean_volume_db_of_filtered(bgm_path, "volume=-28dB")
+        baseline_db = self._mean_volume_db_of_filtered(bgm_path, f"volume={BGM_VOLUME_DB}dB")
 
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
         # narration이 끝난(3.0s) 지 release(0.4s)보다 충분히 지난 뒤(5.0~6.5s)
-        # BGM만 분리해서 측정하면 -28dB 기준과 가까워야 한다.
+        # BGM만 분리해서 측정하면 BGM_VOLUME_DB 기준과 가까워야 한다.
         recovered_db = self._duck_only_mean_db(bgm_path, self.project_path, window=(5.0, 6.5))
 
         self.assertAlmostEqual(recovered_db, baseline_db, delta=3.0)

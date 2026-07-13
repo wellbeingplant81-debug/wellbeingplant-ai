@@ -82,6 +82,10 @@ def run_pipeline(
                 "target_duration": duration_target,
                 "min_acceptable": duration_target - DURATION_TOLERANCE_SECONDS,
                 "max_acceptable": duration_target + DURATION_TOLERANCE_SECONDS,
+                # Sprint97 - Duration Gate가 provider별 chars_per_second
+                # (duration_estimator.chars_per_second_for_provider)를
+                # 쓸 수 있도록 tts_provider도 함께 전달한다.
+                "tts_provider": active_profile["tts_provider"],
             }
             # Sprint95 - ProductionProfile tts_provider Activation: 값
             # 전달만 한다 - 내부 provider 라우팅 결과는 tts_provider.py의

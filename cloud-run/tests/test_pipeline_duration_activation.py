@@ -165,6 +165,28 @@ class TestPipelineDurationActivation(unittest.TestCase):
             self.assertEqual(kwargs.get("min_acceptable"), 53)
             self.assertEqual(kwargs.get("max_acceptable"), 57)
 
+    def test_flag_on_development_profile_step01_receives_chirp_tts_provider(self):
+        # Sprint97 - Duration Gate가 provider별 chars_per_second를 쓰려면
+        # step01_script.run()도 active_profile의 tts_provider를 받아야 한다.
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PRODUCTION_PROFILE", True):
+            _wire_defaults(m)
+
+            self._run_pipeline()
+
+            _, kwargs = m["step01"].run.call_args
+            self.assertEqual(kwargs.get("tts_provider"), "chirp")
+
+    def test_flag_on_upload_profile_step01_receives_elevenlabs_tts_provider(self):
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PRODUCTION_PROFILE", True):
+            _wire_defaults(m)
+
+            self._run_pipeline(production_profile_name="upload")
+
+            _, kwargs = m["step01"].run.call_args
+            self.assertEqual(kwargs.get("tts_provider"), "elevenlabs")
+
     def test_flag_on_upload_profile_step03_receives_55_target_and_tolerance_2(self):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PRODUCTION_PROFILE", True):

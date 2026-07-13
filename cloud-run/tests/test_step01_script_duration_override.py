@@ -76,6 +76,34 @@ class TestStep01ScriptDurationOverride(unittest.TestCase):
         "app.steps.step01_script.generate_script_within_duration",
         return_value=FAKE_GATE_OUTCOME,
     )
+    def test_no_tts_provider_omits_tts_provider_kwarg(self, mock_gate):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            step01_script.run("topic", tmp_dir)
+
+        _, kwargs = mock_gate.call_args
+        self.assertNotIn("tts_provider", kwargs)
+
+    @patch(
+        "app.steps.step01_script.generate_script_within_duration",
+        return_value=FAKE_GATE_OUTCOME,
+    )
+    def test_tts_provider_passed_through_to_duration_gate(self, mock_gate):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            step01_script.run(
+                "topic", tmp_dir,
+                target_duration=55,
+                min_acceptable=53.0,
+                max_acceptable=57.0,
+                tts_provider="elevenlabs",
+            )
+
+        _, kwargs = mock_gate.call_args
+        self.assertEqual(kwargs.get("tts_provider"), "elevenlabs")
+
+    @patch(
+        "app.steps.step01_script.generate_script_within_duration",
+        return_value=FAKE_GATE_OUTCOME,
+    )
     def test_override_does_not_change_returned_data_shape(self, mock_gate):
         with tempfile.TemporaryDirectory() as tmp_dir:
             data = step01_script.run(

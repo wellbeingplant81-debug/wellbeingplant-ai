@@ -167,6 +167,19 @@ class TestTargetCharsAndRetryFeedback(unittest.TestCase):
             )
             self.assertIn("[재시도 피드백] 테스트 피드백 문구입니다.", sent_prompt)
 
+    def test_target_chars_uses_custom_chars_per_second_when_given(self):
+        # Sprint97 - ElevenLabs(5.39) 등 provider별 계수가 주어지면
+        # target_chars가 DEFAULT_CHARS_PER_SECOND(5.93)가 아니라 그
+        # 계수로 계산되어야 한다. 5.39 * 45 ≈ 243자.
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(flag, target_duration=45, chars_per_second=5.39)
+            self.assertIn("243", sent_prompt)
+
+    def test_target_chars_defaults_to_default_chars_per_second_when_omitted(self):
+        for flag in (False, True):
+            sent_prompt = self._sent_prompt(flag, target_duration=45)
+            self.assertIn("267", sent_prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

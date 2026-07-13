@@ -5,9 +5,13 @@ from app.services.bgm_service import select_bgm
 from app.services.duration_optimizer import get_audio_duration
 
 # Sprint54-1 - BGM 볼륨/페이드 상수. narration은 그대로(0dB), BGM은
-# 충분히 낮춰서(-28dB) narration을 절대 가리지 않게 한다.
+# 충분히 낮춰서 narration을 절대 가리지 않게 한다.
+#
+# Sprint97 - narration 전달력을 더 우선하기 위해 기존 -28dB 대비 약
+# 10% 더 낮춘다(-28.0 * 1.10 = -30.8). 믹싱 구조(ducking/fade)는
+# 그대로 두고 gain 값만 조정한다.
 NARRATION_VOLUME_DB = 0.0
-BGM_VOLUME_DB = -28.0
+BGM_VOLUME_DB = -30.8
 BGM_FADE_IN_SECONDS = 0.5
 BGM_FADE_OUT_SECONDS = 1.0
 

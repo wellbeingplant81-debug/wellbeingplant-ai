@@ -34,6 +34,17 @@ SENTENCE_PAUSE_SECONDS = 0.53
 COMMA_PAUSE_SECONDS = 0.0
 TARGET_DURATION_SECONDS = 45.0
 
+# Sprint97 - ElevenLabs 실측 계수. Duration Gate/script_service가 항상
+# DEFAULT_CHARS_PER_SECOND(Chirp)로 narration을 추정해, 더 느리게
+# 말하는 ElevenLabs(ProductionProfile "upload"의 tts_provider)에서는
+# 목표(55±2초)보다 실제 오디오가 훨씬 길게(2026-07-13 Production QA:
+# 68.68초) 나오는 문제가 있었다. 이 값은 그 실측 E2E(output/
+# 20260713_084207, narration 341자/문장 14개, Duration Optimizer 후처리
+# 전 실측 audio 합 70.68초)로 역산한 것이다. Chirp 계수(Sprint53-1)처럼
+# narration 3개로 회귀시킨 값이 아니라 표본 1개짜리 역산이므로, 추가
+# 실측이 쌓이면 갱신이 필요하다.
+ELEVENLABS_CHARS_PER_SECOND = 5.39
+
 _NON_SPEECH_PATTERN = re.compile(r"[\s.,!?]+")
 _SENTENCE_END_PATTERN = re.compile(r"[.!?]")
 
@@ -91,6 +102,17 @@ def estimate_script_duration(
         )
         for scene in scenes
     )
+
+
+def chars_per_second_for_provider(tts_provider: str = None) -> float:
+    """ProductionProfile의 tts_provider 값("chirp"/"elevenlabs" - 실제
+    TTS 라우팅과 동일한 문자열)에 맞는 chars_per_second 계수를 고른다.
+    None이거나 "elevenlabs"가 아니면 기존 DEFAULT_CHARS_PER_SECOND
+    (Chirp)를 그대로 반환한다 - 완전히 하위 호환."""
+
+    if tts_provider == "elevenlabs":
+        return ELEVENLABS_CHARS_PER_SECOND
+    return DEFAULT_CHARS_PER_SECOND
 
 
 def duration_deviation(

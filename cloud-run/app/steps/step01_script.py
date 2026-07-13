@@ -10,6 +10,7 @@ def run(
     target_duration=None,
     min_acceptable=None,
     max_acceptable=None,
+    tts_provider=None,
 ):
 
     # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
@@ -29,6 +30,12 @@ def run(
         gate_kwargs["min_acceptable"] = min_acceptable
     if max_acceptable is not None:
         gate_kwargs["max_acceptable"] = max_acceptable
+    # Sprint97 - Provider-Aware Calibration: tts_provider가 주어지면
+    # Duration Gate가 그 provider에 맞는 chars_per_second를 쓰도록
+    # 전달한다. 주어지지 않으면(기본값 None) 지금까지처럼 인자를 아예
+    # 생략해 기존 Chirp 계수 기본값과 완전히 동일하게 동작한다.
+    if tts_provider is not None:
+        gate_kwargs["tts_provider"] = tts_provider
 
     gate_outcome = generate_script_within_duration(topic=topic, **gate_kwargs)
 

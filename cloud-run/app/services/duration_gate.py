@@ -13,6 +13,7 @@ Duration Optimizer(Sprint53-2, TTS 합성 후 오디오 후처리)는 이 게이
 
 from app.services.duration_estimator import (
     DEFAULT_CHARS_PER_SECOND,
+    chars_per_second_for_provider,
     estimate_script_duration,
 )
 from app.services.script_service import generate_script
@@ -68,6 +69,7 @@ def generate_script_within_duration(
     max_attempts: int = MAX_ATTEMPTS,
     min_acceptable: float = MIN_ACCEPTABLE_SECONDS,
     max_acceptable: float = MAX_ACCEPTABLE_SECONDS,
+    tts_provider: str = None,
     generate_fn=generate_script,
     estimate_fn=estimate_script_duration,
 ) -> dict:
@@ -85,11 +87,20 @@ def generate_script_within_duration(
     문자열). 반환 dict에는 target(=min/max 중앙값) 대비 최종 채택된
     시도의 shortfall_seconds(양수=부족, 음수=초과)를 항상 포함해,
     실패 시 QA 로그가 부족 시간을 명확히 남길 수 있게 한다.
+
+    Sprint97 - Provider-Aware Calibration: tts_provider("chirp"/
+    "elevenlabs", ProductionProfile.tts_provider와 동일한 문자열)가
+    주어지면 chars_per_second_for_provider()로 그 provider에 맞는
+    계수를 골라 target_chars 계산(generate_fn)/예상 길이 계산
+    (estimate_fn)/재시도 피드백(_build_retry_feedback) 전부에 일관되게
+    쓴다. 주어지지 않으면(기본값 None) 기존과 동일하게 Chirp 계수를
+    쓴다 - 완전히 하위 호환.
     """
 
     target = (min_acceptable + max_acceptable) / 2
     best = None
     retry_feedback = ""
+    chars_per_second = chars_per_second_for_provider(tts_provider)
 
     for attempt in range(1, max_attempts + 1):
 
@@ -98,10 +109,11 @@ def generate_script_within_duration(
             target_duration=target_duration,
             scene_count=scene_count,
             retry_feedback=retry_feedback,
+            chars_per_second=chars_per_second,
         )
 
         scenes = result["data"]["scenes"]
-        estimated = estimate_fn(scenes)
+        estimated = estimate_fn(scenes, chars_per_second=chars_per_second)
         passed = _is_within_range(estimated, min_acceptable, max_acceptable)
 
         candidate = {
@@ -115,7 +127,9 @@ def generate_script_within_duration(
         if passed:
             return candidate
 
-        retry_feedback = _build_retry_feedback(estimated, target_duration)
+        retry_feedback = _build_retry_feedback(
+            estimated, target_duration, chars_per_second=chars_per_second,
+        )
 
         if best is None or abs(estimated - target) < abs(best["estimated_seconds"] - target):
             best = candidate

@@ -15,7 +15,10 @@ from app.services.duration_gate import (
     _build_retry_feedback,
     generate_script_within_duration,
 )
-from app.services.duration_estimator import DEFAULT_CHARS_PER_SECOND
+from app.services.duration_estimator import (
+    DEFAULT_CHARS_PER_SECOND,
+    ELEVENLABS_CHARS_PER_SECOND,
+)
 
 
 def _scenes(*durations_in_chars):
@@ -33,7 +36,7 @@ def _fake_generate(durations):
 
     calls = {"count": 0, "kwargs": []}
 
-    def _generate(topic, target_duration, scene_count, retry_feedback=""):
+    def _generate(topic, target_duration, scene_count, retry_feedback="", chars_per_second=None):
         index = calls["count"]
         calls["count"] += 1
         calls["kwargs"].append({
@@ -41,6 +44,7 @@ def _fake_generate(durations):
             "target_duration": target_duration,
             "scene_count": scene_count,
             "retry_feedback": retry_feedback,
+            "chars_per_second": chars_per_second,
         })
         return {
             "success": True,
@@ -287,6 +291,72 @@ class TestShortfallSecondsInOutcome(unittest.TestCase):
         )
 
         self.assertAlmostEqual(outcome["shortfall_seconds"], -15.0, places=3)
+
+
+class TestProviderAwareCharsPerSecond(unittest.TestCase):
+    """Sprint97 - tts_provider가 주어지면 estimate_fn/generate_fn/재시도
+    피드백 모두 그 provider에 맞는 chars_per_second(duration_estimator.
+    chars_per_second_for_provider)를 써야 한다. 주어지지 않으면(기본값
+    None) 기존과 동일하게 DEFAULT_CHARS_PER_SECOND(Chirp)를 쓴다."""
+
+    def test_no_tts_provider_uses_default_chars_per_second_for_estimate(self):
+        generate_fn, _ = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+        )
+
+        _, kwargs = estimate_fn.call_args
+        self.assertEqual(kwargs.get("chars_per_second"), DEFAULT_CHARS_PER_SECOND)
+
+    def test_elevenlabs_tts_provider_uses_elevenlabs_chars_per_second_for_estimate(self):
+        generate_fn, _ = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            tts_provider="elevenlabs",
+        )
+
+        _, kwargs = estimate_fn.call_args
+        self.assertEqual(kwargs.get("chars_per_second"), ELEVENLABS_CHARS_PER_SECOND)
+
+    def test_elevenlabs_tts_provider_reaches_generate_fn(self):
+        generate_fn, calls = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            tts_provider="elevenlabs",
+        )
+
+        self.assertEqual(calls["kwargs"][0]["chars_per_second"], ELEVENLABS_CHARS_PER_SECOND)
+
+    def test_chirp_tts_provider_uses_default_chars_per_second(self):
+        generate_fn, calls = _fake_generate([45.0])
+        estimate_fn = MagicMock(side_effect=[45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            tts_provider="chirp",
+        )
+
+        self.assertEqual(calls["kwargs"][0]["chars_per_second"], DEFAULT_CHARS_PER_SECOND)
+
+    def test_retry_feedback_uses_elevenlabs_chars_per_second(self):
+        generate_fn, calls = _fake_generate([30.0, 45.0])
+        estimate_fn = MagicMock(side_effect=[30.0, 45.0])
+
+        generate_script_within_duration(
+            topic="topic", generate_fn=generate_fn, estimate_fn=estimate_fn,
+            tts_provider="elevenlabs",
+        )
+
+        # target_duration 기본값(45, generate_script_within_duration의
+        # target_duration 파라미터 - Writer 프롬프트 목표) 기준.
+        expected_chars = round((45 - 30.0) * ELEVENLABS_CHARS_PER_SECOND)
+        self.assertIn(str(expected_chars), calls["kwargs"][1]["retry_feedback"])
 
 
 if __name__ == "__main__":
