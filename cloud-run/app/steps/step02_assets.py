@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app import config
+from app.services import motion_contract
 from app.services.asset_integration_service import integrate_asset
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.asset_priority_classifier import select_ai_priority_scenes
@@ -53,6 +55,9 @@ def collect_assets(
     select_ai_priority_scenes() 경로 그대로입니다.
     """
 
+    video_priority_scenes = set()
+    contract_by_scene = {}
+
     if asset_plan:
         ai_priority_scenes = {
             scene_number
@@ -68,12 +73,45 @@ def collect_assets(
         # asset_plan이 없고 asset_strategy가 "upload"면 scene마다
         # UploadAssetStrategy(Sprint88)로 prefer_ai를 정한다.
         # select_ai_priority_scenes()/get_ai_ratio_cap()은 쓰지 않는다.
+        # (Motion Contract는 Hook/Conclusion처럼 scene 위치로 motion을
+        # 결정할 때도 AI/Stock 소스 선택 자체는 건드리지 않으므로,
+        # 이 축은 계속 UploadAssetStrategy.select_asset_mode()가 유일한
+        # 판단처다 - 아래 video 판단과 달리 정책 중복/충돌이 없다.)
         ai_priority_scenes = {
             scene["scene"]
             for scene in scenes
             if UploadAssetStrategy.select_asset_mode(scene, profile="upload") == AssetMode.AI
         }
         visual_profiles = assign_visual_profiles(scenes)
+
+        # Sprint100-2 - Motion Contract: scene 배치 전체를 대상으로 한
+        # 번만 계산한다(scene 위치가 필요하므로 개별 scene만 봐선
+        # hook/conclusion을 알 수 없다). config.ENABLE_MOTION_CONTRACT는
+        # 순수 kill switch다 - 기본값 False라 이 블록 전체가 기본적으로
+        # no-op이다.
+        if config.ENABLE_MOTION_CONTRACT:
+            # Sprint100-3 - Motion Contract Single Source of Truth:
+            # 판정은 전부 motion_contract.py 안에서 끝난다. 여기서는
+            # build_motion_contract()가 만든 결과를 index_by_scene_id()/
+            # video_priority_scene_ids()로 조회 가능한 형태로 바꿔
+            # 쓸 뿐, video/static/dynamic을 스스로 다시 판단하지 않는다.
+            contract_list = motion_contract.build_motion_contract(
+                scenes, profile="upload",
+            )
+            contract_by_scene = motion_contract.index_by_scene_id(contract_list)
+            video_priority_scenes = motion_contract.video_priority_scene_ids(
+                contract_list,
+            )
+        else:
+            # Sprint100-3 - Motion Contract가 꺼져 있으면(kill switch
+            # False) Sprint100-2 이전 동작을 100% 그대로 유지한다 -
+            # UploadAssetStrategy.prefers_video()를 scene 전체에 대해
+            # 직접 계산한다(Hook/Conclusion 오버라이드 없음).
+            video_priority_scenes = {
+                scene["scene"]
+                for scene in scenes
+                if UploadAssetStrategy.prefers_video(scene, profile="upload")
+            }
     else:
         ai_priority_scenes = select_ai_priority_scenes(
             scenes, get_ai_ratio_cap(),
@@ -94,15 +132,39 @@ def collect_assets(
 
         for scene in scenes:
 
+            per_scene_kwargs = dict(integrate_asset_kwargs)
+            scene_for_integration = scene
+
+            if asset_strategy == "upload":
+                # Sprint100-3 - prefer_video는 scene마다 다르므로(공유
+                # 딕셔너리인 integrate_asset_kwargs에는 넣을 수 없다)
+                # 매 반복마다 계산해 넣는다.
+                per_scene_kwargs["prefer_video"] = scene["scene"] in video_priority_scenes
+
+                # Sprint100-2 - Motion Contract 오케스트레이션만: 규칙
+                # 판단은 motion_contract.py, max_assets 강제는
+                # asset_integration_service.integrate_asset()의 책임이다.
+                # 여기서는 (a) integrate_asset()이 실제로 캡을 적용할
+                # 수 있도록 max_assets 값만 kwarg로 넘기고, (b) QA
+                # Report가 읽을 수 있도록 scene 사본에 motion_contract
+                # 필드를 얹는다 - integrate_asset()이 enriched =
+                # dict(scene)으로 시작하므로 이 필드가 결과에 그대로
+                # 전달된다(integrate_asset() 시그니처는 건드리지 않음).
+                contract_entry = contract_by_scene.get(scene["scene"])
+                if contract_entry is not None:
+                    per_scene_kwargs["max_assets"] = contract_entry["max_assets"]
+                    scene_for_integration = dict(scene)
+                    scene_for_integration["motion_contract"] = contract_entry
+
             futures.append(
                 executor.submit(
                     integrate_asset,
-                    scene,
+                    scene_for_integration,
                     project_path,
                     channel,
                     prefer_ai=scene["scene"] in ai_priority_scenes,
                     visual_profile=visual_profiles.get(scene["scene"]),
-                    **integrate_asset_kwargs,
+                    **per_scene_kwargs,
                 )
             )
 

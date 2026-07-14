@@ -10,8 +10,12 @@ from app.services.duration_optimizer import get_audio_duration
 # Sprint97 - narration 전달력을 더 우선하기 위해 기존 -28dB 대비 약
 # 10% 더 낮춘다(-28.0 * 1.10 = -30.8). 믹싱 구조(ducking/fade)는
 # 그대로 두고 gain 값만 조정한다.
+#
+# Sprint100-4 - Production QA에서 BGM이 여전히 narration을 살짝
+# 가린다는 피드백으로 -34.0dB로 추가 하향한다. 값만 조정 - 믹싱
+# 구조는 그대로다.
 NARRATION_VOLUME_DB = 0.0
-BGM_VOLUME_DB = -30.8
+BGM_VOLUME_DB = -34.0
 BGM_FADE_IN_SECONDS = 0.5
 BGM_FADE_OUT_SECONDS = 1.0
 

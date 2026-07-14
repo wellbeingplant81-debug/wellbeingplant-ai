@@ -1,14 +1,22 @@
 import json
 import os
 
-from moviepy import AudioFileClip, concatenate_videoclips
+from moviepy import AudioFileClip, VideoFileClip, concatenate_videoclips
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy.video.fx.CrossFadeIn import CrossFadeIn
 from moviepy.video.fx.CrossFadeOut import CrossFadeOut
 from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
+from moviepy.video.fx.Loop import Loop
 
 from app.services import asset_usage_planner
-from app.services.kenburns import _pick_motion, build_kenburns_clip
+from app.services.kenburns import (
+    VIDEO_HEIGHT,
+    VIDEO_WIDTH,
+    _fit_scale,
+    _pick_motion,
+    build_kenburns_clip,
+)
 from app.services.transition_engine import annotate_scenes_with_transitions
 
 
@@ -222,6 +230,64 @@ def _resolve_cut_durations(scene, asset_paths, clip_duration):
     return _split_duration_equally(clip_duration, len(asset_paths))
 
 
+def _resolve_video_only_path(scene):
+    """
+    Sprint100-2 - Video as First-Class Asset. scene["assets"][0]에
+    video_path(실제 mp4 - asset_integration_service가 upload profile +
+    Stock Video Relevance 통과 시에만 채워둠)가 있고 그 파일이 실제로
+    존재하면 그 경로를 반환합니다. 없거나(development/default profile,
+    AI/Stock Image scene) 파일이 사라졌으면(방어적 - mp4 재생 실패
+    상황을 흉내) None - 호출자가 기존 asset_path(PNG) + Ken Burns
+    경로로 자동 폴백합니다.
+    """
+
+    if not scene:
+        return None
+
+    assets = scene.get("assets")
+
+    if not assets:
+        return None
+
+    video_path = assets[0].get("video_path")
+
+    if video_path and os.path.exists(video_path):
+        return video_path
+
+    return None
+
+
+def _build_video_only_clip(video_path: str, duration: float):
+    """
+    Sprint100-2 - Video as First-Class Asset. Stock Video 원본을 Ken
+    Burns pan/zoom 대신 실제 재생으로 렌더링합니다. kenburns._fit_
+    scale()과 동일한 cover-fit 스케일로 1080x1920을 채우고 중앙에
+    위치시킨 뒤 CompositeVideoClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT))가
+    캔버스 밖을 자동으로 잘라냅니다(kenburns.py의 pan 모션이 크롭 없이
+    같은 방식으로 동작하는 것과 동일한 원리). 오디오는 항상 제거합니다
+    (최종 mux는 narration/BGM만 쓴다 - final_video_service.
+    merge_video_audio()가 이미 "-map 1:a:0"으로 원본 영상의 오디오
+    트랙을 아예 쓰지 않습니다). 원본 길이가 duration보다 짧으면
+    반복 재생(Loop)하고, 길거나 같으면 앞부분만 자릅니다(subclipped) -
+    Ken Burns의 "narration 길이에 정확히 맞춘다" 원칙과 동일합니다.
+    """
+
+    clip = VideoFileClip(video_path).without_audio()
+
+    if clip.duration < duration:
+        clip = clip.with_effects([Loop(duration=duration)])
+    else:
+        clip = clip.subclipped(0, duration)
+
+    fit_scale = _fit_scale(clip.w, clip.h)
+
+    clip = clip.resized(fit_scale).with_position("center")
+
+    return CompositeVideoClip(
+        [clip], size=(VIDEO_WIDTH, VIDEO_HEIGHT),
+    ).with_duration(duration)
+
+
 def _build_scene_clip(asset_paths, clip_duration, scene=None):
     """
     Sprint62-3 - Scene 하나를 구성하는 clip을 만듭니다. asset이 1개면
@@ -242,9 +308,31 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
     scene 경계 crossfade(CROSSFADE_DURATION)와 동일한 방식으로 겹침
     만큼만 렌더 길이를 늘렸다가 padding=-overlap으로 상쇄한다 - 이
     clip 전체의 총 재생 길이(=clip_duration)는 그대로 보존된다.
+
+    Sprint100-2 - Video as First-Class Asset: 단일 asset이고
+    _resolve_video_only_path(scene)가 실제 mp4 경로를 찾으면(upload
+    profile의 Video Only Motion Contract scene만 해당), Ken Burns
+    대신 _build_video_only_clip()으로 실제 비디오를 재생한다. scene이
+    없거나(기존 호출부 다수) video_path가 없으면(development/default
+    profile 전체, AI/Stock Image scene) 100% 기존 경로 그대로다.
     """
 
     if len(asset_paths) == 1:
+        video_only_path = _resolve_video_only_path(scene)
+        if video_only_path:
+            try:
+                return _build_video_only_clip(
+                    video_only_path, clip_duration,
+                ).with_fps(30)
+            except Exception as exc:
+                # Sprint100-2 - Video 재생 실패(손상된 mp4 등) 시
+                # 기존 asset_path(PNG) + Ken Burns 경로로 자동
+                # 폴백한다 - os.path.exists()만으로는 잡을 수 없는
+                # 런타임 실패(디코딩 오류 등)에 대한 안전망이다.
+                print(
+                    f"[VideoBuilder] video_path 재생 실패, "
+                    f"이미지로 폴백: {exc}"
+                )
         return build_kenburns_clip(asset_paths[0], clip_duration).with_fps(30)
 
     cut_durations = (

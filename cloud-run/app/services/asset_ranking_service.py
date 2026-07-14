@@ -5,6 +5,7 @@ from app.services.asset_quality_scorer import score_asset
 
 def select_best_with_score(
     candidates: list, is_hook_scene: bool = False, asset_strategy: str = None,
+    prefer_video: bool = False,
 ):
     """
     select_best()와 동일하게 채점하되, 최고 점수 후보와 그 점수를 함께
@@ -14,6 +15,9 @@ def select_best_with_score(
 
     Sprint96.1 Hotfix - asset_strategy를 그대로 score_asset()에 전달만
     한다(값이 없으면 기존과 동일).
+
+    Sprint100-3 Stock Video Intelligence - prefer_video도 그대로
+    score_asset()에 전달만 한다(기본값 False는 기존과 동일).
     """
 
     if not candidates:
@@ -28,6 +32,7 @@ def select_best_with_score(
                 is_hook_scene=is_hook_scene,
                 learned_bias=compute_bias(records, candidate["source"]),
                 asset_strategy=asset_strategy,
+                prefer_video=prefer_video,
             ),
             candidate,
         )
@@ -39,7 +44,10 @@ def select_best_with_score(
     return best_candidate, best_score
 
 
-def select_best(candidates: list, is_hook_scene: bool = False, asset_strategy: str = None):
+def select_best(
+    candidates: list, is_hook_scene: bool = False, asset_strategy: str = None,
+    prefer_video: bool = False,
+):
     """
     candidate 리스트를 채점하여 가장 점수가 높은 후보 하나를
     반환합니다. candidates가 비어 있으면 None을 반환합니다 -
@@ -55,6 +63,7 @@ def select_best(candidates: list, is_hook_scene: bool = False, asset_strategy: s
 
     best_candidate, _ = select_best_with_score(
         candidates, is_hook_scene=is_hook_scene, asset_strategy=asset_strategy,
+        prefer_video=prefer_video,
     )
 
     return best_candidate

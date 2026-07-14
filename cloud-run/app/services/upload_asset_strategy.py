@@ -30,16 +30,17 @@ AI_PRIORITY_KEYWORDS = {
     "anatomy": ["내부 구조"],
 }
 
-# 업로드 프로파일 - Stock 우선 키워드 (카테고리별 1개씩)
+# 업로드 프로파일 - Stock 우선 키워드 (카테고리별로 여러 동의어 가능)
 STOCK_PRIORITY_KEYWORDS = {
     "doctor": ["의사"],
     "hospital": ["병원"],
     "patient": ["환자"],
     "exercise": ["운동"],
-    "walking": ["산책"],
+    "walking": ["산책", "걷기"],
     "meal": ["식사"],
     "food": ["음식"],
-    "lifestyle": ["일상생활"],
+    "lifestyle": ["일상생활", "생활습관"],
+    "nature": ["풍경", "자연"],
 }
 
 
@@ -72,3 +73,21 @@ class UploadAssetStrategy:
             return AssetMode.AI
 
         return AssetMode.STOCK
+
+    @staticmethod
+    def prefers_video(scene_metadata, profile=DEFAULT_PROFILE) -> bool:
+        """
+        Sprint100-3 - Stock Video Intelligence. STOCK_PRIORITY_KEYWORDS
+        (병원/의사/환자/운동/걷기/식사/음식/생활습관/풍경 - 실사 촬영이
+        자연스러운 "real world" scene)에 해당하면 Stock Video를 Stock
+        Image보다 우선하도록 True를 반환한다. profile != "upload"이거나
+        AI 우선(의학 설명) scene이면 항상 False - Scene Intent 판단은
+        select_asset_mode()와 동일한 텍스트/키워드 규칙을 재사용한다.
+        """
+
+        if profile != "upload":
+            return False
+
+        text = _extract_text(scene_metadata)
+
+        return any(keyword in text for keyword in _flatten(STOCK_PRIORITY_KEYWORDS))

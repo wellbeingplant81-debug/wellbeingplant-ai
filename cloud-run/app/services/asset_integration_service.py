@@ -2,15 +2,40 @@ import os
 import subprocess
 
 from app.services import asset_feedback_service
+from app.services import motion_contract
 from app.services.asset_mode_config import get_pexels_quality_threshold
 from app.services.asset_priority_classifier import effective_pexels_threshold
 from app.services.asset_ranking_service import select_best_with_score
-from app.services.asset_selector import download_candidate, get_candidates
+from app.services.asset_selector import (
+    download_candidate,
+    get_candidates,
+    select_with_relevance,
+)
 from app.services.image_service import generate_image
-from app.services.search_query_extractor import extract_search_query
+from app.services.search_query_extractor import (
+    extract_intent_aware_search_query,
+    extract_search_query,
+)
 from app.services import subprompt_service
+from app.services import video_relevance_service
 from app.services.visual_diversity_engine import apply_profile_to_prompt
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
+
+
+# Sprint100-3.1 - Stock Video Visual Relevance. 후보를 무제한 다운로드/
+# 채점하면 Pexels 다운로드+Gemini Vision 호출 비용이 scene당 무한히
+# 늘어날 수 있어, 원래 랭킹(score_asset) 순서로 상위 N개까지만 채점한다.
+MAX_RELEVANCE_CANDIDATES = 3
+
+# 0.0~1.0 중 이 값 미만이면 "narration/image_prompt와 무관"으로 보고
+# 후보에서 제외한다 - 통과하는 후보가 하나도 없으면 호출자가 AI/Stock
+# Image로 자연스럽게 폴백한다.
+RELEVANCE_THRESHOLD = 0.6
+
+# 프레임 추출 지점(영상 길이 대비 비율). 0(첫 프레임)은 Pexels 영상의
+# 인트로/전환 컷을 대표 프레임으로 잘못 고르기 쉬워(Production QA
+# 2026-07-13 실측), 본문 구간일 가능성이 높은 30% 지점을 쓴다.
+RELEVANCE_FRAME_FRACTION = 0.3
 
 
 # Sprint62-4 - Visual Diversity 첫 단계: AI로 생성된 scene 하나당
@@ -61,40 +86,85 @@ def _ai_result(
 
 def _select_real_first(
     image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
-    visual_profile=None,
+    visual_profile=None, asset_strategy=None, prefer_video=False, narration=None,
 ):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
     자체가 실패한 경우(네트워크 오류 등) 둘 다 포함한다.
+
+    Sprint100-3 Stock Video Intelligence - asset_strategy/prefer_video를
+    select_best_with_score()에 전달한다. 이전에는 integrate_asset()이
+    asset_strategy를 받으면서도 이 호출에는 넘기지 않아, Sprint96.1
+    Hotfix(video 근소 우대)가 upload profile 실사용 경로에서 한 번도
+    적용되지 않았다 - 이 배선 누락을 함께 고친다.
+
+    Sprint100-3.1 Stock Video Visual Relevance - asset_strategy="upload"
+    and prefer_video=True면, video 후보에 한해 먼저 _select_relevant_
+    video_candidate()로 실제 대표 프레임이 narration/image_prompt와
+    맞는지 채점해 선택한다. 통과하는 후보가 없으면(전부 무관하거나
+    video 후보 자체가 없으면) 기존 select_best_with_score() 랭킹으로
+    폴백한다 - 이 경우 이미지가 자연스럽게 이길 수 있다. 어느 경로든
+    trace는 result["video_relevance_trace"]에 담아 QA가 "왜 이
+    asset이 선택됐는지" 확인할 수 있게 한다.
+
+    video 후보가 있었는데 전부 관련성 기준을 통과하지 못했다면, 폴백
+    랭킹에서 video 후보 자체를 아예 제외하고 prefer_video도 끈다 -
+    그러지 않으면 SCENE_INTENT_VIDEO_BONUS가 다시 적용되어 방금
+    "무관하다"고 판정한 video가 (다른 후보라도) 또 이겨버리는 문제가
+    있었다(2026-07-13 Production QA에서 실측).
     """
 
     stock_candidates = get_candidates(image_prompt, allow_video=True)
+
+    video_relevance_trace = None
+
+    if asset_strategy == "upload" and prefer_video:
+        video_candidates = [c for c in stock_candidates if "video" in c["source"]]
+        if video_candidates:
+            relevant_result, video_relevance_trace = _select_relevant_video_candidate(
+                video_candidates, narration or "", image_prompt, staging_path,
+            )
+            if relevant_result is not None:
+                relevant_result["video_relevance_trace"] = video_relevance_trace
+                return relevant_result, False
+
+            # 전부 무관 판정 - video를 완전히 배제하고 image/AI로 넘긴다.
+            stock_candidates = [
+                c for c in stock_candidates if "video" not in c["source"]
+            ]
+            prefer_video = False
+
     best_candidate, _ = select_best_with_score(
         stock_candidates, is_hook_scene=is_hook_scene,
+        asset_strategy=asset_strategy, prefer_video=prefer_video,
     )
 
     if best_candidate is not None:
         try:
-            return download_candidate(best_candidate, staging_path), False
+            result = download_candidate(best_candidate, staging_path)
+            if video_relevance_trace is not None:
+                result["video_relevance_trace"] = video_relevance_trace
+            return result, False
         except Exception as exc:
             print(
                 f"[AssetIntegration] visual_type=real, Pexels 다운로드 "
                 f"실패, Imagen으로 폴백: {exc}"
             )
 
-    return (
-        _ai_result(
-            image_prompt, staging_path, channel, is_hook_scene, visual_type,
-            visual_profile,
-        ),
-        False,
+    ai_result = _ai_result(
+        image_prompt, staging_path, channel, is_hook_scene, visual_type,
+        visual_profile,
     )
+    if video_relevance_trace is not None:
+        ai_result["video_relevance_trace"] = video_relevance_trace
+
+    return ai_result, False
 
 
 def _select_ai_first(
     image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
-    visual_profile=None,
+    visual_profile=None, asset_strategy=None, prefer_video=False,
 ):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
@@ -103,6 +173,10 @@ def _select_ai_first(
     choice는 Imagen이 첫 시도에서 바로 성공했는지(True) - 스톡 검색
     실패로 인한 어쩔 수 없는 폴백(False)과 구분해 feedback outcome을
     정확히 기록하기 위함이다.
+
+    Sprint100-3 Stock Video Intelligence - Pexels 폴백 시에도
+    asset_strategy/prefer_video를 그대로 전달한다([[_select_real_first]]
+    와 동일한 배선 누락 수정).
     """
 
     try:
@@ -122,6 +196,7 @@ def _select_ai_first(
     stock_candidates = get_candidates(image_prompt, allow_video=True)
     best_candidate, _ = select_best_with_score(
         stock_candidates, is_hook_scene=is_hook_scene,
+        asset_strategy=asset_strategy, prefer_video=prefer_video,
     )
 
     if best_candidate is None:
@@ -161,6 +236,276 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
     return output_image_path
 
 
+def _get_video_duration_seconds(video_path: str) -> float:
+    """ffprobe로 비디오 길이(초)를 구합니다."""
+
+    command = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        video_path,
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    return float(result.stdout.strip())
+
+
+def _extract_frame_at_fraction(
+    video_path: str, output_image_path: str, fraction: float = 0.3,
+) -> str:
+    """
+    Sprint100-3.1 - Stock Video Visual Relevance. 비디오의 fraction
+    지점(기본 30%) 프레임을 추출합니다. _extract_first_frame()(항상
+    0초)과 달리, Pexels 영상이 인트로/전환 컷으로 시작해 실제 주제를
+    대표하지 못하는 문제(Production QA 2026-07-13 실측: "shocked
+    korean woman" 검색 결과의 첫 프레임이 머리카락 클로즈업)를
+    완화하기 위해 relevance 채점용으로만 쓰입니다.
+    """
+
+    timestamp = max(0.0, _get_video_duration_seconds(video_path) * fraction)
+
+    command = [
+        "ffmpeg", "-y",
+        "-ss", f"{timestamp:.2f}",
+        "-i", video_path,
+        "-frames:v", "1",
+        "-q:v", "2",
+        output_image_path,
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        raise Exception(f"대표 프레임 추출 실패: {result.stderr}")
+
+    return output_image_path
+
+
+def _remove_if_exists(path: str) -> None:
+    if path and os.path.exists(path):
+        os.remove(path)
+
+
+# ---------------------------------------------------------------------
+# Sprint100-4 - Visual Intelligence Completion.
+#
+# Motion Contract가 붙은 scene(asset_strategy="upload" and config.
+# ENABLE_MOTION_CONTRACT)에서만 쓰이는 새 통합 선택 경로. 이 함수들은
+# "선택된 결과를 다운로드/통합/폴백"하는 asset_integration_service.py
+# 본연의 책임 안에서, Motion Contract(허용 여부)/Search Query(생성
+# 결과)/Asset Selector(채점·선택)가 이미 결정한 것을 그대로 실행할
+# 뿐이다 - 이 파일은 motion 정책도 검색어 생성도 다시 판단하지 않는다.
+# Motion Contract가 없는 scene(kill switch off/개발 profile)은 이
+# 경로를 전혀 타지 않고 기존 _select_real_first()/_select_ai_first()
+# 가 100% 그대로 쓰인다.
+# ---------------------------------------------------------------------
+
+
+def _build_ai_candidate(
+    image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+):
+    """
+    AI Image를 실제로 생성해, asset_selector.select_with_relevance()가
+    Stock 후보와 동일하게 다룰 수 있는 candidate 형태로 감싼다.
+    "local_path"가 이미 있으므로 그 함수가 다시 다운로드를 시도하지
+    않는다.
+    """
+
+    ai_path = f"{staging_path}.ai.png"
+
+    ai_result = _ai_result(
+        image_prompt, ai_path, channel, is_hook_scene, visual_type, visual_profile,
+    )
+
+    return {
+        "source": "ai_image",
+        "local_path": ai_result["local_path"],
+        "query": ai_result["metadata"].get("query"),
+    }
+
+
+def _select_with_visual_relevance(
+    image_prompt, staging_path, channel, is_hook_scene, visual_type,
+    visual_profile, narration, prefer_ai, allow_video, search_query_override,
+    video_intent=None,
+):
+    """
+    AI Image/Stock Image/Stock Video 전부 asset_selector.
+    select_with_relevance()라는 동일한 Visual Relevance 기준으로
+    평가한다. prefer_ai면 AI를 먼저 평가해 통과하면 그대로 채택하고
+    (기존 _select_ai_first()의 "AI 우선" 의미 유지), 실패하면 Stock을
+    평가한다. prefer_ai가 아니면 Stock을 먼저 평가하고, 전부 실패
+    했을 때만(select_with_relevance가 후보 전부를 이미 다 평가한
+    뒤에만 반환하므로 "다음 후보 평가" 요구사항은 그 함수 내부에서
+    보장된다) AI를 최후 수단으로 생성해 평가한다 - AI 생성은 비용이
+    크므로 stock이 이미 통과했으면 호출하지 않는다.
+
+    Sprint101 - video_intent(Motion Contract가 이미 결정한 VideoIntent
+    dict 전체 - intent/confidence/reason/source)는 여기서 새 선택
+    정책을 만드는 데 쓰지 않는다 - Selection Trace의 모든 항목에
+    그대로 태깅해 QA가 "이 scene의 Motion Contract 판정이 무엇이고
+    왜(reason)/어디서(source) 나왔는지"를 확인할 수 있게 하는
+    Orchestration 전달 용도일 뿐이다. 실제 승자 결정은 지금처럼
+    select_with_relevance()의 점수 비교만으로 이뤄진다.
+
+    반환값: (result, ai_priority_choice, selection_trace, relevance_all_failed)
+    """
+
+    stock_candidates = get_candidates(
+        image_prompt, allow_video=allow_video, search_query_override=search_query_override,
+    )
+
+    def _discard(result):
+        # 두 단계(AI/Stock) 중 최종 채택되지 않은 쪽의 결과 파일을
+        # 정리한다 - select_with_relevance()는 자기 안에서 진 후보만
+        # 정리하고, "이 함수의 결과 전체가 버려지는 경우"는 호출자
+        # 책임이다. 버그 실측: 2026-07-14 Production QA에서 discard된
+        # stock 결과 파일(scene5.raw.candidate0.png 등)이 정리되지
+        # 않고 images/ 아래 그대로 남아있었다.
+        if result is None:
+            return
+        _remove_if_exists(result.get("local_path"))
+        _remove_if_exists(result.get("video_path"))
+
+    def _tag_fallback(trace, fallback):
+        for entry in trace:
+            entry["fallback"] = fallback
+            entry["video_intent"] = video_intent
+        return trace
+
+    if prefer_ai:
+        ai_candidate = _build_ai_candidate(
+            image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+        )
+        ai_result, ai_trace, ai_all_failed = select_with_relevance(
+            [ai_candidate], narration or "", image_prompt, staging_path,
+        )
+        _tag_fallback(ai_trace, False)
+
+        if ai_result is not None and not ai_all_failed:
+            return ai_result, True, ai_trace, False
+
+        stock_result, stock_trace, stock_all_failed = select_with_relevance(
+            stock_candidates, narration or "", image_prompt, staging_path,
+        )
+        _tag_fallback(stock_trace, True)
+        combined_trace = ai_trace + stock_trace
+
+        if stock_result is not None and not stock_all_failed:
+            _discard(ai_result)
+            return stock_result, False, combined_trace, False
+
+        # 요구사항 6 - 후보가 모두 실패하면 NOT READY. 그래도 파이프
+        # 라인은 항상 asset 하나를 반환해야 하므로, 이미 생성해둔 AI
+        # 결과를 최종 채택하되 relevance_all_failed=True로 표시한다.
+        _discard(stock_result)
+        return ai_result, True, combined_trace, True
+
+    stock_result, stock_trace, stock_all_failed = select_with_relevance(
+        stock_candidates, narration or "", image_prompt, staging_path,
+    )
+    _tag_fallback(stock_trace, False)
+
+    if stock_result is not None and not stock_all_failed:
+        return stock_result, False, stock_trace, False
+
+    ai_candidate = _build_ai_candidate(
+        image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+    )
+    ai_result, ai_trace, ai_all_failed = select_with_relevance(
+        [ai_candidate], narration or "", image_prompt, staging_path,
+    )
+    _tag_fallback(ai_trace, True)
+    combined_trace = stock_trace + ai_trace
+
+    _discard(stock_result)
+    return ai_result, True, combined_trace, ai_all_failed
+
+
+def _select_relevant_video_candidate(
+    video_candidates: list, narration: str, image_prompt: str,
+    staging_path_prefix: str,
+) -> tuple:
+    """
+    Sprint100-3.1 - Stock Video Visual Relevance. video_candidates를
+    (원래 랭킹 순서 그대로) 최대 MAX_RELEVANCE_CANDIDATES개까지 순회
+    하며 각각 다운로드 -> 대표 프레임(RELEVANCE_FRAME_FRACTION 지점)
+    추출 -> video_relevance_service.score_relevance()로 채점한다.
+    RELEVANCE_THRESHOLD 이상인 후보 중 최고점을 골라 (result, trace)로
+    반환한다. 통과하는 후보가 없으면 (None, trace) - 호출자가 다른
+    소스(AI/Stock Image)로 폴백한다. 개별 후보의 다운로드/추출/채점이
+    실패해도 trace에 error로 남기고 다음 후보로 계속 진행한다.
+
+    Sprint100-2 - Video as First-Class Asset. 이전에는 채점용으로
+    다운로드한 원본 mp4를 (승자 포함) 매 후보마다 즉시 삭제했다 -
+    result에는 대표 프레임(already_frame=True)만 담겨, 실제 Stock
+    Video가 파이프라인 끝까지 살아남을 방법이 없었다. 이제 순위가
+    확정될 때까지(scored에 담아) 삭제를 미루고, 패자만 정리한 뒤
+    승자의 mp4는 staging_path_prefix 옆(`.video.mp4`)으로 옮겨
+    result["video_path"]에 담는다 - video_builder.py가 있으면 실제
+    재생, 없으면(기존과 동일하게) 대표 프레임 + Ken Burns로 폴백한다.
+    """
+
+    trace = []
+    scored = []
+
+    for index, candidate in enumerate(video_candidates[:MAX_RELEVANCE_CANDIDATES]):
+
+        candidate_video_path = f"{staging_path_prefix}.candidate{index}.raw"
+        candidate_frame_path = f"{staging_path_prefix}.candidate{index}.png"
+
+        try:
+            downloaded = download_candidate(candidate, candidate_video_path)
+            _extract_frame_at_fraction(
+                downloaded["local_path"], candidate_frame_path,
+                fraction=RELEVANCE_FRAME_FRACTION,
+            )
+            relevance = video_relevance_service.score_relevance(
+                candidate_frame_path, narration, image_prompt,
+            )
+        except Exception as exc:
+            trace.append({"candidate": candidate.get("query"), "error": str(exc)})
+            _remove_if_exists(candidate_video_path)
+            continue
+
+        trace.append({
+            "candidate": candidate.get("query"),
+            "score": relevance.score,
+            "reasoning": relevance.reasoning,
+        })
+        scored.append(
+            (relevance.score, candidate, candidate_frame_path, candidate_video_path)
+        )
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    if not scored or scored[0][0] < RELEVANCE_THRESHOLD:
+        for _, _, frame_path, video_path in scored:
+            _remove_if_exists(frame_path)
+            _remove_if_exists(video_path)
+        return None, trace
+
+    best_score, best_candidate, best_frame_path, best_video_path = scored[0]
+
+    for _, _, frame_path, video_path in scored[1:]:
+        _remove_if_exists(frame_path)
+        _remove_if_exists(video_path)
+
+    final_video_path = f"{staging_path_prefix}.video.mp4"
+    os.replace(best_video_path, final_video_path)
+
+    result = {
+        "source": best_candidate["source"],
+        "local_path": best_frame_path,
+        "metadata": {"query": best_candidate.get("query")},
+        "already_frame": True,
+        "video_path": final_video_path,
+    }
+
+    return result, trace
+
+
 def _finalize_downloaded_asset(result: dict, output_path: str) -> None:
     """
     Sprint71-2 - download_candidate()의 반환값을 최종 이미지 경로에
@@ -169,7 +514,15 @@ def _finalize_downloaded_asset(result: dict, output_path: str) -> None:
     경로와 _download_stock_asset()(Hybrid extra 슬롯)이 공유하는
     헬퍼입니다 - 기존에 integrate_asset() 안에 있던 동일 로직을
     추출했을 뿐, 동작은 바뀌지 않습니다.
+
+    Sprint100-3.1 - result에 already_frame=True가 있으면(Visual
+    Relevance 채점 과정에서 대표 프레임을 이미 추출해둔 경우)
+    재추출 없이 그 프레임 파일을 그대로 옮깁니다.
     """
+
+    if result.get("already_frame"):
+        os.replace(result["local_path"], output_path)
+        return
 
     source = result["source"]
 
@@ -216,11 +569,18 @@ def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_pat
 
 def _generate_extra_ai_assets(
     image_prompt, images_dir, scene_number, channel, is_hook_scene, visual_type,
-    visual_profile=None,
+    visual_profile=None, max_assets=None,
 ):
     """
     Sprint62-4 - 1차 asset이 이미 AI(Imagen)로 생성된 scene에 한해,
     추가 이미지를 순차 생성합니다(AI_ASSET_COUNT - 1개).
+
+    Sprint100-2 - Motion Contract: max_assets(기본 None -> 기존
+    AI_ASSET_COUNT=4)를 주면 그 개수까지만 생성합니다. role은 항상
+    ASSET_ROLES 순서의 접두사이므로(예: max_assets=3 -> environment/
+    subject/detail) qa_report_service._validate_roles()도 접두사
+    매칭을 허용하도록 함께 확장했습니다. integrate_asset()이
+    max_assets=1이면 이 함수 자체를 호출하지 않습니다(extra 없음).
 
     Sprint62-5 - 동일 prompt를 반복하는 대신, subprompt_service로
     image_prompt를 시각적으로 다른 AI_ASSET_COUNT개의 서브프롬프트로
@@ -262,15 +622,17 @@ def _generate_extra_ai_assets(
     # 경우에도 다른 호출의 진단 정보가 잘못 남아있는 일이 없다.
     subprompt_service.reset_diagnostics()
 
+    count = max_assets or AI_ASSET_COUNT
+
     subprompts = subprompt_service.generate_subprompts(
-        enriched_prompt, count=AI_ASSET_COUNT,
+        enriched_prompt, count=count,
     )
 
     subprompt_diagnostics = subprompt_service.get_last_diagnostics()
 
     extra_assets = []
 
-    for i in range(2, AI_ASSET_COUNT + 1):
+    for i in range(2, count + 1):
 
         asset_prompt = subprompts[i - 1]
         role = ASSET_ROLES[i - 1]
@@ -324,9 +686,17 @@ def integrate_asset(
     prefer_ai: bool = False,
     visual_profile: dict = None,
     asset_strategy: str = None,
+    prefer_video: bool = False,
+    max_assets: int = None,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
+    Sprint100-2 - Motion Contract: max_assets(기본 None -> 기존
+    AI_ASSET_COUNT=4와 동일)를 주면 AI 1차 asset의 추가 생성 개수를
+    그 값까지로 제한합니다(1이면 추가 생성 자체를 건너뜁니다). 스톡
+    (이미지/비디오) 1차 asset은 원래도 assets 1개뿐이라 영향받지
+    않습니다. 완전히 하위 호환 - 호출자가 넘기지 않으면 이전과 100%
+    동일하게 동작합니다.
     Sprint38 - Hybrid Asset Engine: prefer_ai 품질 게이트.
     Sprint60 - Smart Visual Selection v1: scene["visual_type"]("real"/
     "ai", visual_type_classifier.apply_visual_type()이 미리 채워둠)이
@@ -379,7 +749,33 @@ def integrate_asset(
 
     visual_type = scene.get("visual_type")
 
-    if asset_strategy == "upload":
+    # Sprint100-4 - Visual Intelligence Completion. selection_trace/
+    # relevance_all_failed는 새 통합 경로(motion_contract가 있는
+    # scene)에서만 채워진다 - 다른 모든 분기는 그대로 None/False로
+    # 남아 기존과 동일하게 아무 필드도 추가되지 않는다.
+    selection_trace = None
+    relevance_all_failed = False
+
+    motion_contract_entry = scene.get("motion_contract")
+
+    if motion_contract_entry is not None:
+        # Sprint101 - Motion Contract가 이미 결정한 값(video_intent -
+        # video 허용 여부 + 우선순위)과 Search Query가 이미 생성한
+        # 값을 그대로 실행만 한다 - 이 파일은 motion/video_intent
+        # 정책도 검색어 생성도 다시 판단하지 않는다.
+        video_intent = motion_contract_entry["video_intent"]
+        allow_video = motion_contract.allows_video(video_intent["intent"])
+        search_query_override = extract_intent_aware_search_query(
+            image_prompt, motion_contract_entry.get("visual_intent"),
+        )
+        result, ai_priority_choice, selection_trace, relevance_all_failed = (
+            _select_with_visual_relevance(
+                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                visual_profile, scene.get("narration"), prefer_ai, allow_video,
+                search_query_override, video_intent,
+            )
+        )
+    elif asset_strategy == "upload":
         # Sprint96.1 Hotfix - UploadAssetStrategy(Sprint88)의 prefer_ai가
         # visual_type보다 우선한다(visual_type 유무와 무관하게 최종
         # 결정권을 가짐). asset_strategy가 None/"default"면 이 분기를
@@ -387,12 +783,13 @@ def integrate_asset(
         if prefer_ai:
             result, ai_priority_choice = _select_ai_first(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
-                visual_profile,
+                visual_profile, asset_strategy=asset_strategy, prefer_video=prefer_video,
             )
         else:
             result, ai_priority_choice = _select_real_first(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
-                visual_profile,
+                visual_profile, asset_strategy=asset_strategy, prefer_video=prefer_video,
+                narration=scene.get("narration"),
             )
     elif visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
@@ -427,6 +824,17 @@ def integrate_asset(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
                 visual_profile,
             )
+
+    # Sprint100-3.1 - _finalize_downloaded_asset()에 넘기기 전에 꺼내
+    # 둔다(그 함수의 인자 계약을 바꾸지 않기 위함) - QA가 "왜 이 asset이
+    # 선택됐는지" 확인할 수 있도록 scene 레벨에만 별도로 기록한다.
+    video_relevance_trace = result.pop("video_relevance_trace", None)
+
+    # Sprint100-2 - Video as First-Class Asset. 있을 때만(실제 Stock
+    # Video가 Relevance 채점을 통과해 원본 mp4가 보존된 경우) 꺼내서
+    # primary_asset에 추가 필드로 얹는다 - 기존 asset_path(PNG) 생성
+    # 경로/값은 전혀 바뀌지 않는다.
+    video_path = result.pop("video_path", None)
 
     source = result["source"]
     asset_type = "video" if "video" in source else "image"
@@ -466,6 +874,22 @@ def integrate_asset(
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
 
+    # Sprint100-3.1 - Stock Video Visual Relevance Selection Trace.
+    # video 후보를 채점했을 때만(asset_strategy="upload" and prefer_
+    # video=True and video 후보가 하나 이상 있었을 때) 추가된다 - 그
+    # 외에는 기존과 동일하게 필드 자체가 없다.
+    if video_relevance_trace is not None:
+        enriched["video_relevance_trace"] = video_relevance_trace
+
+    # Sprint100-4 - Visual Intelligence Completion Selection Trace.
+    # motion_contract가 있는 scene(새 통합 선택 경로)에서만 채워진다 -
+    # video_relevance_trace(Sprint100-3.1, video 전용, 구 경로)와는
+    # 서로 배타적이다 - 한 scene은 둘 중 하나만 갖는다.
+    if selection_trace is not None:
+        enriched["selection_trace"] = selection_trace
+        enriched["relevance_all_failed"] = relevance_all_failed
+        enriched["search_query_used"] = search_query_override
+
     # Sprint72-2 - Visual Diversity Engine Observability: "배정된"
     # profile은 실제로 AI가 그 profile을 썼는지와 무관하게 scene
     # 레벨에 항상 기록한다(QA가 diversity 배정 자체를 볼 수 있어야
@@ -482,20 +906,35 @@ def integrate_asset(
         "prompt": image_prompt,
     }
 
+    if video_path is not None:
+        # Sprint100-2 - Video as First-Class Asset: asset_path(PNG)는
+        # Fallback/Thumbnail 용도로 계속 유지하고, video_path를 새
+        # 필드로만 추가한다. video_builder.py는 이 필드가 있고 실제
+        # 파일이 존재할 때만 VideoFileClip 경로를 타고, 없으면(또는
+        # 이 필드 자체가 없으면) 기존 Ken Burns 경로를 그대로 쓴다.
+        primary_asset["video_path"] = video_path
+
     if source == "ai_image":
         # Sprint62-4 - 1차 asset이 AI로 생성된 scene만 동일 prompt로
         # 추가 이미지를 생성한다. 스톡(Pexels/Pixabay) 선택 scene은
         # 이번 스프린트에서 손대지 않는다(assets 1개 그대로 유지).
-        # Sprint64-2 - AI 4-asset 경로에서만 role을 부여한다.
-        primary_asset["role"] = ASSET_ROLES[0]
-        # Sprint72-2 - 1차 asset이 실제로 AI 생성됐을 때만(즉 여기,
-        # source == "ai_image") profile을 asset 메타데이터에도 남긴다.
-        if visual_profile is not None:
-            primary_asset["visual_profile"] = visual_profile
-        extra_assets, subprompt_diagnostics = _generate_extra_ai_assets(
-            image_prompt, images_dir, scene_number, channel, is_hook_scene,
-            visual_type, visual_profile,
-        )
+        if max_assets == 1:
+            # Sprint100-2 - Motion Contract Static Scene: role 기반
+            # 멀티 asset 구성 자체를 쓰지 않으므로 role을 부여하지
+            # 않는다(단일 asset) - qa_report_service._validate_roles()의
+            # 기존 "role 전부 없음=정상" 분기를 그대로 탄다.
+            extra_assets, subprompt_diagnostics = [], None
+        else:
+            # Sprint64-2 - AI 멀티 asset 경로에서만 role을 부여한다.
+            primary_asset["role"] = ASSET_ROLES[0]
+            # Sprint72-2 - 1차 asset이 실제로 AI 생성됐을 때만(즉 여기,
+            # source == "ai_image") profile을 asset 메타데이터에도 남긴다.
+            if visual_profile is not None:
+                primary_asset["visual_profile"] = visual_profile
+            extra_assets, subprompt_diagnostics = _generate_extra_ai_assets(
+                image_prompt, images_dir, scene_number, channel, is_hook_scene,
+                visual_type, visual_profile, max_assets=max_assets,
+            )
         # Sprint73 - Subprompt Quality Gate Observability: 이 scene의
         # subprompt 생성이 폴백했는지/왜 폴백했는지를 scene 레벨에
         # 기록한다 - step07_quality.py가 quality_report.json에 그대로

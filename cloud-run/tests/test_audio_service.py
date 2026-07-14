@@ -155,12 +155,27 @@ class TestMixAudioCommand(unittest.TestCase):
 
 
 class TestBgmVolumeSprint97Reduction(unittest.TestCase):
-    """Sprint97 - narration 전달력 우선을 위해 BGM 볼륨을 기존 대비
-    약 10% 낮춘다(gain 값만 조정, 믹싱 구조는 그대로 유지)."""
+    """Sprint97 - narration 전달력 우선을 위해 BGM 볼륨을 기존(-28.0dB)
+    대비 약 10% 낮췄다(-30.8dB). Sprint100-4가 그 값을 다시 낮췄으므로
+    (아래 TestBgmVolumeSprint100_4Reduction), 이 테스트는 그 중간
+    단계(-30.8dB)가 실제로 -28.0dB보다 낮다는 방향성만 고정한다."""
 
-    def test_bgm_volume_is_ten_percent_lower_than_previous(self):
-        PREVIOUS_BGM_VOLUME_DB = -28.0
-        self.assertAlmostEqual(BGM_VOLUME_DB, PREVIOUS_BGM_VOLUME_DB * 1.10, places=1)
+    def test_bgm_volume_is_lower_than_sprint97_baseline(self):
+        PRE_SPRINT97_BGM_VOLUME_DB = -28.0
+        self.assertLess(BGM_VOLUME_DB, PRE_SPRINT97_BGM_VOLUME_DB)
+
+
+class TestBgmVolumeSprint100_4Reduction(unittest.TestCase):
+    """Sprint100-4 - Production QA에서 BGM이 여전히 narration을 살짝
+    가린다는 피드백으로 Sprint97의 -30.8dB에서 -34.0dB로 추가
+    하향한다(gain 값만 조정, 믹싱 구조는 그대로 유지)."""
+
+    def test_bgm_volume_is_negative_34_db(self):
+        self.assertAlmostEqual(BGM_VOLUME_DB, -34.0, places=1)
+
+    def test_bgm_volume_is_lower_than_sprint97_value(self):
+        SPRINT97_BGM_VOLUME_DB = -30.8
+        self.assertLess(BGM_VOLUME_DB, SPRINT97_BGM_VOLUME_DB)
 
 
 class RealAudioMixTestCase(unittest.TestCase):

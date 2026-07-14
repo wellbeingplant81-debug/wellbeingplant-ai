@@ -62,3 +62,14 @@ ENABLE_ASSET_PLANNER = False
 # tts_provider (Sprint95) and asset_strategy (Sprint96/96.1) into the
 # real step01/step02/step03 calls.
 ENABLE_PRODUCTION_PROFILE = False
+
+# Sprint100-2 - Motion Contract. Off by default, same convention as
+# every other ENABLE_* flag above. step02_assets.collect_assets() only
+# calls motion_contract.build_motion_contract() when BOTH this flag is
+# True AND asset_strategy=="upload" - development/default profiles are
+# unaffected regardless of this flag. Never mutated globally per
+# request (same reasoning as the Sprint100-2 Explicit Profile Opt-In
+# comment in pipeline.py) - scripts/run_e2e.py flips it True in-process
+# only when --profile upload is passed, mirroring how it already does
+# this for ENABLE_PRODUCTION_PROFILE.
+ENABLE_MOTION_CONTRACT = False

@@ -17,7 +17,11 @@ def generate_batch(request: BatchRequest):
 
     for topic in request.topics:
 
-        result = generate_short_video(topic)
+        # Sprint100-2 - factory.py와 동일하게 wellbeing 채널(batch는
+        # 항상 wellbeing)에 upload profile을 기본으로 쓴다.
+        result = generate_short_video(
+            topic=topic, channel="wellbeing", production_profile_name="upload",
+        )
 
         results.append(result)
 

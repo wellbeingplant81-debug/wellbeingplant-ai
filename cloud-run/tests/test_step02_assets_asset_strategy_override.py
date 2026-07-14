@@ -35,7 +35,7 @@ SAMPLE_SCENES = [
 
 def _fake_integrate_asset(
     scene, project_path, channel="wellbeing", prefer_ai=False, visual_profile=None,
-    asset_strategy=None,
+    asset_strategy=None, prefer_video=False,
 ):
     enriched = dict(scene)
     enriched["asset_path"] = f"{project_path}/images/scene{scene['scene']}.png"

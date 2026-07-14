@@ -71,7 +71,15 @@ def run_pipeline(
     step03_duration_kwargs = {}
     active_profile = None
 
-    if config.ENABLE_PRODUCTION_PROFILE:
+    # Sprint100-2 - Explicit Profile Opt-In: 전역 플래그(config.
+    # ENABLE_PRODUCTION_PROFILE, 기본 False)를 켜지 않고도, 호출자가
+    # production_profile_name을 명시적으로 주면 그 요청 1건에 한해
+    # profile을 활성화한다. 서버 프로세스 전체에 영향을 주는 전역
+    # mutable state를 요청마다 뒤집는 것은 동시 요청 간 경쟁 상태를
+    # 만들 수 있어 안전하지 않다 - 실제 활성화 스위치는 항상 이
+    # 요청의 인자다. 아무도 opt-in하지 않으면(둘 다 기본값) 기존과
+    # 완전히 동일하다.
+    if config.ENABLE_PRODUCTION_PROFILE or production_profile_name is not None:
         try:
             active_profile = production_profile_integration.ProductionProfileIntegration.load_profile(
                 profile_name=production_profile_name,

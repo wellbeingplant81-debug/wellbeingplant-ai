@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 import requests
 
@@ -7,7 +8,24 @@ from app.providers import pixabay_provider
 from app.services.image_service import generate_image
 from app.services.provider_factory import build_provider_chain
 from app.services.search_query_extractor import extract_search_query
+from app.services import video_relevance_service
 from app.utils import asset_cache
+
+
+# Sprint100-4 - Visual Intelligence Completion. 후보 하나가 통과로
+# 인정되는 최소 관련성 점수(0.0~1.0). Sprint100-3.1에서 Stock Video
+# 전용으로 쓰던 값과 동일하다 - AI Image/Stock Image까지 동일 기준을
+# 적용하는 것이 이번 스프린트의 목표이므로 하나의 값만 쓴다.
+RELEVANCE_THRESHOLD = 0.6
+
+# 대표 프레임 추출 지점(영상 길이 대비 비율). 0(첫 프레임)은 인트로/
+# 전환 컷을 대표 프레임으로 잘못 고르기 쉽다(Sprint100-3.1 실측).
+RELEVANCE_FRAME_FRACTION = 0.3
+
+# 후보를 무제한 평가하면 다운로드/AI 생성/Gemini Vision 호출 비용이
+# scene당 무한히 늘어날 수 있어, 넘겨받은 후보 리스트 중 앞에서부터
+# 이 개수까지만 평가한다.
+MAX_RELEVANCE_CANDIDATES = 3
 
 
 def _has_api_key(source: str) -> bool:
@@ -163,9 +181,17 @@ def get_candidates(
     image_prompt: str,
     allow_video: bool = True,
     max_per_provider: int = MAX_CANDIDATES_PER_PROVIDER,
+    search_query_override: str = None,
 ) -> list:
     """
     Sprint30 - Multi-Candidate 수집.
+
+    Sprint100-4 - search_query_override를 주면(기본 None) 내부에서
+    extract_search_query(image_prompt)를 다시 계산하지 않고 그 값을
+    그대로 검색어로 쓴다. 호출자(asset_integration_service.py)가
+    Scene Intent 기반으로 더 정교하게 뽑은 검색어(search_query_
+    extractor.extract_intent_aware_search_query())를 쓰고 싶을 때
+    사용한다. 넘기지 않으면(기본값 None) 기존과 100% 동일하다.
 
     select_asset()과 달리 첫 성공 provider에서 멈추지 않고, provider
     체인 전체를 순회하며 각 provider당 최대 max_per_provider개의
@@ -185,7 +211,14 @@ def get_candidates(
     유효한 후보를 찾지 못했는지를 명확히 구분한 요약 로그를 남깁니다.
     """
 
-    query = extract_search_query(image_prompt)
+    # Sprint100-4 버그 수정 - search_query_override 파라미터가 추가만
+    # 되고 실제로는 읽히지 않아(dead parameter), Scene Intent 기반
+    # 검색어(extract_intent_aware_search_query())가 한 번도 실제
+    # Pexels/Pixabay 호출에 반영되지 않았다(2026-07-14 Production QA
+    # 실측: search_query_used와 실제 후보의 검색어가 서로 달랐음).
+    # override가 있으면 그대로 쓰고, 없으면(기본값 None) 기존과 100%
+    # 동일하게 image_prompt에서 다시 계산한다.
+    query = search_query_override or extract_search_query(image_prompt)
 
     if not query:
         print(
@@ -294,3 +327,223 @@ def download_candidate(candidate: dict, output_file: str) -> dict:
         "local_path": output_file,
         "metadata": meta,
     }
+
+
+# ---------------------------------------------------------------------
+# Sprint100-4 - Visual Intelligence Completion.
+#
+# 이 아래는 순수 "Selection Engine" 책임만 담당한다: 주어진 후보
+# 리스트(Stock Video/Stock Image/이미 생성된 AI Image가 섞여 있을 수
+# 있음)를 동일한 기준(Gemini Visual Relevance)으로 채점해 최선의
+# 하나를 고른다. 어떤 Asset Type을 후보로 넣을지(Motion Contract가
+# Video를 허용하는지 등)는 호출자(asset_integration_service.py)의
+# 책임이고, 렌더링(Video Builder)도 이 파일이 전혀 알지 못한다.
+# ---------------------------------------------------------------------
+
+
+def _get_video_duration_seconds(video_path: str) -> float:
+    """ffprobe로 비디오 길이(초)를 구합니다."""
+
+    command = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        video_path,
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    return float(result.stdout.strip())
+
+
+def _extract_frame_at_fraction(
+    video_path: str, output_image_path: str, fraction: float = RELEVANCE_FRAME_FRACTION,
+) -> str:
+    """비디오의 fraction 지점 프레임을 추출합니다(관련성 채점용)."""
+
+    timestamp = max(0.0, _get_video_duration_seconds(video_path) * fraction)
+
+    command = [
+        "ffmpeg", "-y",
+        "-ss", f"{timestamp:.2f}",
+        "-i", video_path,
+        "-frames:v", "1",
+        "-q:v", "2",
+        output_image_path,
+    ]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        raise Exception(f"대표 프레임 추출 실패: {result.stderr}")
+
+    return output_image_path
+
+
+def _remove_if_exists(path: str) -> None:
+    if path and os.path.exists(path):
+        os.remove(path)
+
+
+def _candidate_type(candidate: dict) -> str:
+
+    if candidate.get("local_path"):
+        return "ai_image"
+
+    return "video" if "video" in candidate["source"] else "image"
+
+
+def _prepare_candidate_frame(candidate: dict, raw_path: str, frame_path: str) -> tuple:
+    """
+    candidate 하나를 채점 가능한 정지 이미지 경로로 바꿉니다.
+
+    candidate에 이미 "local_path"가 있으면(이미 생성/확보된 자산 -
+    예: AI Image, 호출자가 generate_image()로 미리 만들어 넘긴 경우)
+    그 파일을 그대로 쓰고 다운로드하지 않습니다. 없으면 download_
+    candidate()로 받아옵니다 - 비디오면 대표 프레임을 추출하고,
+    이미지면 다운로드 결과 자체를 그대로 씁니다.
+
+    반환값: (scorable_image_path, raw_video_path_or_None). raw_video_
+    path는 candidate_type=="video"이고 승자로 뽑혔을 때만 최종
+    보존됩니다(선택 후 select_with_relevance()가 처리).
+    """
+
+    if candidate.get("local_path"):
+        return candidate["local_path"], None
+
+    is_video = "video" in candidate["source"]
+    download_target = raw_path if is_video else frame_path
+
+    downloaded = download_candidate(candidate, download_target)
+
+    if is_video:
+        _extract_frame_at_fraction(
+            downloaded["local_path"], frame_path, fraction=RELEVANCE_FRAME_FRACTION,
+        )
+        return frame_path, downloaded["local_path"]
+
+    return frame_path, None
+
+
+def select_with_relevance(
+    candidates: list,
+    narration: str,
+    image_prompt: str,
+    staging_path_prefix: str,
+    max_candidates: int = MAX_RELEVANCE_CANDIDATES,
+) -> tuple:
+    """
+    Sprint100-4 - Visual Intelligence Completion.
+
+    candidates(호출자가 원하는 평가 순서대로 이미 정렬해 넘긴 리스트 -
+    Stock Video/Stock Image/이미 생성된 AI Image 어떤 조합이든 무관)를
+    앞에서부터 max_candidates개까지 전부 평가한 뒤(중간에 통과하는
+    후보가 나와도 멈추지 않는다 - "후보를 끝까지 평가한 뒤에만 최종
+    선택/폴백") 그중 최고점 하나를 고릅니다. AI Image/Stock Image/
+    Stock Video 모두 video_relevance_service.score_relevance()라는
+    동일한 채점 기준을 거칩니다.
+
+    반환값: (result, trace, all_failed)
+      - result: 후보가 하나도 없으면 None. 있으면 {"source",
+        "local_path"(대표 이미지, already_frame=True로 재추출 없이
+        그대로 옮길 수 있음), "metadata", "already_frame": True,
+        "video_path"(승자가 video였을 때만)}.
+      - trace: 후보별 {"candidate", "type", "score", "reasoning",
+        "passed", "selected"} 또는 실패시 {"candidate", "type",
+        "error"} 리스트.
+      - all_failed: 평가된 후보 중 RELEVANCE_THRESHOLD를 넘긴 것이
+        하나도 없으면 True(그래도 result는 최고점 후보를 담아 반환 -
+        파이프라인은 항상 asset 하나를 반환해야 하므로 렌더링을
+        막지는 않는다. 호출자가 QA Upload Readiness에 반영한다).
+
+    패자로 남은 후보의 다운로드/추출 파일은 즉시 정리합니다(단,
+    candidate_type=="ai_image"는 애초에 다운로드한 적이 없으므로
+    지우지 않습니다 - 그 파일은 호출자가 생성한 자산으로, 소유권이
+    이 함수에 있지 않습니다).
+    """
+
+    trace = []
+    scored = []
+
+    for index, candidate in enumerate(candidates[:max_candidates]):
+
+        candidate_type = _candidate_type(candidate)
+        label = candidate.get("query") or candidate_type
+
+        raw_path = f"{staging_path_prefix}.candidate{index}.raw"
+        frame_path = f"{staging_path_prefix}.candidate{index}.png"
+
+        try:
+            resolved_frame_path, raw_video_path = _prepare_candidate_frame(
+                candidate, raw_path, frame_path,
+            )
+            relevance = video_relevance_service.score_relevance(
+                resolved_frame_path, narration, image_prompt,
+            )
+        except Exception as exc:
+            trace.append({
+                "candidate": label,
+                "type": candidate_type,
+                "threshold": RELEVANCE_THRESHOLD,
+                "error": str(exc),
+                "reason": f"평가 실패(다운로드/추출/채점 오류): {exc}",
+            })
+            _remove_if_exists(raw_path)
+            _remove_if_exists(frame_path)
+            continue
+
+        passed = relevance.score >= RELEVANCE_THRESHOLD
+
+        trace.append({
+            "candidate": label,
+            "type": candidate_type,
+            "score": relevance.score,
+            "threshold": RELEVANCE_THRESHOLD,
+            "reasoning": relevance.reasoning,
+            "passed": passed,
+            "selected": False,
+            "reason": (
+                f"relevance {relevance.score:.2f} < threshold {RELEVANCE_THRESHOLD} - 탈락"
+                if not passed
+                else f"relevance {relevance.score:.2f} >= threshold {RELEVANCE_THRESHOLD} - 통과"
+            ),
+        })
+        scored.append((
+            relevance.score, candidate, candidate_type,
+            resolved_frame_path, raw_video_path, len(trace) - 1,
+        ))
+
+    if not scored:
+        return None, trace, True
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    (
+        best_score, best_candidate, best_type,
+        best_frame_path, best_raw_video_path, best_trace_index,
+    ) = scored[0]
+
+    for _, _, candidate_type, frame_path, raw_video_path, _ in scored[1:]:
+        if candidate_type != "ai_image":
+            _remove_if_exists(frame_path)
+        _remove_if_exists(raw_video_path)
+
+    trace[best_trace_index]["selected"] = True
+    trace[best_trace_index]["reason"] = (
+        f"최종 선택 - 평가된 후보 중 최고점(relevance {best_score:.2f})"
+        + ("" if best_score >= RELEVANCE_THRESHOLD else f", threshold {RELEVANCE_THRESHOLD} 미달이지만 폴백으로 채택")
+    )
+
+    result = {
+        "source": best_candidate.get("source", "ai_image"),
+        "local_path": best_frame_path,
+        "metadata": {"query": best_candidate.get("query")},
+        "already_frame": True,
+    }
+
+    if best_type == "video" and best_raw_video_path:
+        final_video_path = f"{staging_path_prefix}.video.mp4"
+        os.replace(best_raw_video_path, final_video_path)
+        result["video_path"] = final_video_path
+
+    return result, trace, best_score < RELEVANCE_THRESHOLD

@@ -21,6 +21,17 @@ HOOK_SCENE_BONUS = 0.1
 # 명시적으로 더한다.
 UPLOAD_VIDEO_PREFERENCE_BONUS = 0.01
 
+# Sprint100-3 - Stock Video Intelligence. UPLOAD_VIDEO_PREFERENCE_BONUS
+# (0.01)는 동점 tie-breaker일 뿐이라 stock_image 기본 점수(0.85)를
+# 이기지 못한다(video_frame 0.80+0.01=0.81 < 0.85) - Production QA에서
+# Pexels Video가 한 번도 선택되지 않은 근본 원인 중 하나. 호출자(scene
+# 텍스트를 UploadAssetStrategy.prefers_video()로 판단한 asset_
+# integration_service/step02_assets)가 이 scene은 실사 촬영이 자연스러운
+# "Scene Intent"라고 명시적으로 표시(prefer_video=True)했을 때만, 최악의
+# 경우(video landscape/무관련성 vs image portrait/최대 관련성)에도 항상
+# video가 이기도록 결정적인 가산치를 더한다.
+SCENE_INTENT_VIDEO_BONUS = 0.15
+
 # 후보 데이터에는 태그/설명 등 의미적 메타데이터가 없어(Sprint28
 # 설계 문서의 열린 이슈), 실제로 계산 가능한 신호인 세로 비율
 # 일치 여부만 relevance 지표로 사용합니다.
@@ -55,6 +66,7 @@ def score_asset(
     is_hook_scene: bool = False,
     learned_bias: float = 0.0,
     asset_strategy: str = None,
+    prefer_video: bool = False,
 ) -> float:
     """
     후보 자산 하나의 점수를 계산합니다. 순수 함수입니다 - feedback
@@ -75,6 +87,12 @@ def score_asset(
     기본 점수를 stock_image + UPLOAD_VIDEO_PREFERENCE_BONUS로 근소하게
     올린다. ASSET_TYPE_BASE_SCORE 테이블 자체는 건드리지 않으므로
     asset_strategy가 없거나 "upload"가 아니면 기존과 완전히 동일하다.
+
+    Sprint100-3 Stock Video Intelligence - prefer_video=True(호출자가
+    scene 텍스트로 이미 "이 scene은 실사 촬영이 어울린다"고 판단했을
+    때만 명시)면 SCENE_INTENT_VIDEO_BONUS를 추가로 더해, 관련성/hook
+    보너스 조건이 같다면 video_frame이 stock_image를 항상 이기게
+    한다. prefer_video 기본값 False는 기존과 완전히 동일하다.
     """
 
     source = candidate["source"]
@@ -88,5 +106,13 @@ def score_asset(
     relevance = _relevance_score(candidate)
     provider_weight = PROVIDER_WEIGHTS.get(source, 0.0)
     hook_bonus = HOOK_SCENE_BONUS if is_hook_scene else 0.0
+    scene_intent_bonus = (
+        SCENE_INTENT_VIDEO_BONUS
+        if asset_strategy == "upload" and prefer_video and asset_type == "video_frame"
+        else 0.0
+    )
 
-    return base + relevance + provider_weight + hook_bonus + learned_bias
+    return (
+        base + relevance + provider_weight + hook_bonus
+        + scene_intent_bonus + learned_bias
+    )

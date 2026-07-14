@@ -21,6 +21,12 @@ from app.services.visual_diversity_engine import summarize_visual_diversity
 TARGET_MIN_SECONDS = 43.0
 TARGET_MAX_SECONDS = 47.0
 
+# Sprint100-1 - pipeline.py의 DURATION_TOLERANCE_SECONDS(Sprint93+
+# ProductionProfile Activation)와 동일한 값. 이 모듈은 pipeline.py를
+# import하지 않고 상수만 그대로 복제한다 - QA 리포트는 순수 읽기
+# 전용이라 파이프라인 모듈에 의존할 이유가 없다.
+DURATION_TOLERANCE_SECONDS = 2
+
 _SCENE_NUMBER_PATTERN = re.compile(r"scene(\d+)\.mp3$")
 
 
@@ -82,15 +88,22 @@ def _validate_roles(roles: list) -> bool:
     """
     role이 하나도 없으면(레거시/스톡 - 하위 호환) 위반이 아니라
     정상으로 취급한다. role이 있다면 asset_integration_service.
-    ASSET_ROLES(environment/subject/detail/transition) 순서와 정확히
-    일치해야 한다. 새로운 판정 규칙이 아니라 기존 ASSET_ROLES 상수를
-    그대로 재사용한 단순 비교다.
+    ASSET_ROLES(environment/subject/detail/transition) 순서의
+    접두사여야 한다. 새로운 판정 규칙이 아니라 기존 ASSET_ROLES
+    상수를 그대로 재사용한 단순 비교다.
+
+    Sprint100-2 - Motion Contract: max_assets로 AI 추가 asset 개수를
+    캡핑하면(Hook=3 등) role 개수가 4개 미만일 수 있다 - 정확히
+    ASSET_ROLES와 같아야 한다는 기존 조건은 그대로 두되(len(roles)==4
+    인 기존 케이스는 100% 동일하게 판정됨), len(roles)<4인 경우도
+    "순서대로 앞에서부터 잘린 것"이면 정상으로 인정하도록 접두사
+    비교로 일반화했다.
     """
 
     if all(role is None for role in roles):
         return True
 
-    return roles == ASSET_ROLES
+    return roles == ASSET_ROLES[:len(roles)]
 
 
 def build_asset_intelligence_summary(project_path: str) -> list:
@@ -159,6 +172,12 @@ def build_asset_intelligence_summary(project_path: str) -> list:
             # 읽기 전용으로 그대로 보고한다 - 필드가 없는 scene(Sprint
             # 72-2 이전 데이터/스톡 전용 파이프라인)은 None으로 보고한다.
             "visual_profile": scene.get("visual_profile"),
+            # Sprint100-3.1 - Stock Video Visual Relevance Selection
+            # Trace. asset_integration_service.integrate_asset()이
+            # video 후보를 채점했을 때만(asset_strategy="upload" and
+            # prefer_video=True and video 후보 존재) scene에 남긴
+            # 값을 읽기 전용으로 그대로 보고한다 - 없으면 None.
+            "video_relevance_trace": scene.get("video_relevance_trace"),
         })
 
     return summary
@@ -187,26 +206,67 @@ def build_visual_diversity_summary(asset_intelligence: list) -> dict:
     return summary
 
 
+def get_target_range(project_path: str) -> tuple:
+    """
+    Sprint100-1 - Production Profile-aware target range.
+
+    script.json에 production_profile(pipeline.py가 ENABLE_PRODUCTION_
+    PROFILE일 때 채우는 Sprint93+ 필드)이 있으면 그 duration_target ±
+    DURATION_TOLERANCE_SECONDS를 목표 범위로 쓴다 - 그래야 upload
+    profile(ElevenLabs, 55초 목표)로 만든 영상이 development profile
+    기준(43~47초)으로 잘못 "OUT OF RANGE" 판정받지 않는다.
+
+    production_profile이 없으면(레거시 데이터/플래그 꺼짐) 기존
+    TARGET_MIN_SECONDS~TARGET_MAX_SECONDS(43~47)를 그대로 반환한다 -
+    완전히 하위 호환.
+    """
+
+    script_path = os.path.join(project_path, "script.json")
+
+    if os.path.exists(script_path):
+        with open(script_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        profile = data.get("production_profile")
+
+        if profile and "duration_target" in profile:
+            target = profile["duration_target"]
+            return (
+                target - DURATION_TOLERANCE_SECONDS,
+                target + DURATION_TOLERANCE_SECONDS,
+            )
+
+    return TARGET_MIN_SECONDS, TARGET_MAX_SECONDS
+
+
 def build_qa_report(project_path: str) -> dict:
     """get_real_durations + load_quality_summary를 합치고,
-    Sprint53 Duration Gate/Optimizer의 목표 범위(43~47초) 안에
-    실제 최종 길이가 들어오는지 판정한 값을 더한 종합 리포트.
+    Sprint53 Duration Gate/Optimizer의 목표 범위(기본 43~47초, Sprint100-1
+    부터는 get_target_range()로 Production Profile-aware) 안에 실제
+    최종 길이가 들어오는지 판정한 값을 더한 종합 리포트.
 
     Sprint64-5 - asset_intelligence(멀티에셋/role/중복/기대 duration)
     를 추가한다. 기존 키(durations/quality/target_range_ok)는 전혀
     바뀌지 않는다.
 
     Sprint72-3 - visual_diversity(scene별 카메라/구도/조명 분포 및
-    다양성 점수)를 추가한다. 기존 키는 전혀 바뀌지 않는다."""
+    다양성 점수)를 추가한다. 기존 키는 전혀 바뀌지 않는다.
+
+    Sprint100-1 - target_min_seconds/target_max_seconds 키를 추가한다.
+    기존 target_range_ok는 이제 이 값들로 판정되지만, 값 자체(True/
+    False)는 production_profile이 없는 기존 프로젝트에 한해 이전과
+    동일하다."""
 
     durations = get_real_durations(project_path)
     quality = load_quality_summary(project_path)
 
     final_duration = durations["final_video"] or durations["voice"]
 
+    target_min, target_max = get_target_range(project_path)
+
     target_range_ok = (
         final_duration is not None
-        and TARGET_MIN_SECONDS <= final_duration <= TARGET_MAX_SECONDS
+        and target_min <= final_duration <= target_max
     )
 
     asset_intelligence = build_asset_intelligence_summary(project_path)
@@ -215,6 +275,8 @@ def build_qa_report(project_path: str) -> dict:
         "project_path": project_path,
         "durations": durations,
         "quality": quality,
+        "target_min_seconds": target_min,
+        "target_max_seconds": target_max,
         "target_range_ok": target_range_ok,
         "asset_intelligence": asset_intelligence,
         "visual_diversity": build_visual_diversity_summary(asset_intelligence),
@@ -239,8 +301,11 @@ def format_report(report: dict) -> str:
     lines.append(f"voice.mp3        : {durations['voice']}")
     lines.append(f"final_audio.mp3  : {durations['final_audio']}")
     lines.append(f"final_short.mp4  : {durations['final_video']}")
+    target_min = report["target_min_seconds"]
+    target_max = report["target_max_seconds"]
     lines.append(
-        f"target range (43-47s): {'OK' if report['target_range_ok'] else 'OUT OF RANGE'}"
+        f"target range ({target_min:g}-{target_max:g}s): "
+        f"{'OK' if report['target_range_ok'] else 'OUT OF RANGE'}"
     )
 
     quality = report["quality"]
@@ -266,6 +331,30 @@ def format_report(report: dict) -> str:
                 f"expected_durations={entry['expected_durations']} "
                 f"visual_profile={entry['visual_profile']}"
             )
+
+    # Sprint100-3.1 - Stock Video Visual Relevance Selection Trace.
+    # video 후보를 채점한 scene에 한해서만 출력한다(그 외 scene은
+    # trace가 없으므로 자동으로 건너뛴다).
+    trace_entries = [
+        entry for entry in (asset_intelligence or [])
+        if entry.get("video_relevance_trace")
+    ]
+
+    if trace_entries:
+        lines.append("")
+        lines.append("Stock Video Relevance Trace (Sprint100-3.1):")
+        for entry in trace_entries:
+            lines.append(f"  Scene{entry['scene']}")
+            for i, candidate in enumerate(entry["video_relevance_trace"], start=1):
+                if "error" in candidate:
+                    lines.append(
+                        f"    {i}. {candidate.get('candidate')} - error: {candidate['error']}"
+                    )
+                else:
+                    lines.append(
+                        f"    {i}. {candidate.get('candidate')} "
+                        f"Score {candidate['score']:.2f} ({candidate['reasoning']})"
+                    )
 
     diversity = report.get("visual_diversity")
 

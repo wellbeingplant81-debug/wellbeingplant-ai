@@ -11,6 +11,11 @@ run_in_background=true로 이 스크립트 자체를 호출하면, 셸 레벨
 
 사용법:
   .venv/Scripts/python.exe scripts/run_e2e.py "주제 문자열" --channel wellbeing
+  .venv/Scripts/python.exe scripts/run_e2e.py "주제 문자열" --profile upload
+
+Sprint100-1 - --profile을 주면 ProductionProfile(ENABLE_PRODUCTION_
+PROFILE)을 이 프로세스 안에서만 켜고 그 이름으로 생성한다(development/
+upload). 생략하면 이전과 완전히 동일하게(ProductionProfile 비활성) 동작한다.
 """
 
 import argparse
@@ -22,6 +27,7 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from app import config  # noqa: E402
 from app.services.factory_service import generate_short_video  # noqa: E402
 from app.services.qa_report_service import build_qa_report, format_report  # noqa: E402
 
@@ -40,9 +46,27 @@ def main():
     parser = build_parser()
     parser.add_argument("topic", help="영상 주제")
     parser.add_argument("--channel", default="wellbeing")
+    parser.add_argument(
+        "--profile",
+        default=None,
+        choices=["development", "upload"],
+        help="ProductionProfile 이름. 주면 ENABLE_PRODUCTION_PROFILE을 켠다.",
+    )
     args = parser.parse_args()
 
-    result = generate_short_video(args.topic, channel=args.channel)
+    if args.profile is not None:
+        config.ENABLE_PRODUCTION_PROFILE = True
+
+    if args.profile == "upload":
+        # Sprint100-2 - Motion Contract는 기본 False인 kill switch다.
+        # --profile upload로 명시적으로 실행할 때만 이 프로세스 안에서
+        # 켠다 - ENABLE_PRODUCTION_PROFILE과 동일한 in-process opt-in
+        # 패턴(전역 상태를 서버 요청 간에 뒤집지 않음).
+        config.ENABLE_MOTION_CONTRACT = True
+
+    result = generate_short_video(
+        args.topic, channel=args.channel, production_profile_name=args.profile,
+    )
 
     print("RESULT:", result)
 

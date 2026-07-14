@@ -259,6 +259,54 @@ class TestGetCandidates(unittest.TestCase):
     @patch("app.providers.pixabay_provider.search_videos", return_value=[])
     @patch("app.providers.pexels_provider.search_photos", return_value=[])
     @patch("app.providers.pexels_provider.search_videos", return_value=[])
+    def test_search_query_override_is_used_when_provided(
+        self,
+        mock_pexels_video,
+        mock_pexels_photo,
+        mock_pixabay_video,
+        mock_pixabay_image,
+    ):
+        """
+        Sprint100-4 버그 수정 - search_query_override가 실제 provider
+        search_fn 호출의 query 인자로 전달되는지 확인한다(이전에는
+        파라미터만 있고 함수 본문에서 읽지 않아 항상 extract_search_
+        query(image_prompt)로 덮어써졌다).
+        """
+
+        asset_selector.get_candidates(
+            PROMPT, search_query_override="healthy vegetables potassium diet",
+        )
+
+        mock_pexels_video.assert_called_once_with("healthy vegetables potassium diet")
+        mock_pexels_photo.assert_called_once_with("healthy vegetables potassium diet")
+        mock_pixabay_video.assert_called_once_with("healthy vegetables potassium diet")
+        mock_pixabay_image.assert_called_once_with("healthy vegetables potassium diet")
+
+    @patch("app.providers.pixabay_provider.search_images", return_value=[])
+    @patch("app.providers.pixabay_provider.search_videos", return_value=[])
+    @patch("app.providers.pexels_provider.search_photos", return_value=[])
+    @patch("app.providers.pexels_provider.search_videos", return_value=[])
+    def test_no_override_falls_back_to_extract_search_query(
+        self,
+        mock_pexels_video,
+        mock_pexels_photo,
+        mock_pixabay_video,
+        mock_pixabay_image,
+    ):
+        """override를 넘기지 않으면(기본값 None) 기존과 100% 동일하게
+        extract_search_query(image_prompt) 결과를 쓴다."""
+
+        from app.services.search_query_extractor import extract_search_query
+
+        asset_selector.get_candidates(PROMPT)
+
+        expected_query = extract_search_query(PROMPT)
+        mock_pexels_video.assert_called_once_with(expected_query)
+
+    @patch("app.providers.pixabay_provider.search_images", return_value=[])
+    @patch("app.providers.pixabay_provider.search_videos", return_value=[])
+    @patch("app.providers.pexels_provider.search_photos", return_value=[])
+    @patch("app.providers.pexels_provider.search_videos", return_value=[])
     def test_all_empty_returns_empty_list(
         self,
         mock_pexels_video,
