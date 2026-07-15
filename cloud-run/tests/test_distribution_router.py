@@ -171,6 +171,59 @@ class TestAnalyticsEndpoint(DistributionEnabledTestCase):
         self.assertEqual(result["platform_success_rate"], {})
 
 
+class TestDecisionEndpoint(DistributionEnabledTestCase):
+    """Sprint107 - GET /distribution/decision. analytics()와 동일한 위임 패턴."""
+
+    @patch("app.routers.distribution.distribution_decision.compute_decision")
+    @patch("app.routers.distribution.distribution_analytics.compute_analytics")
+    @patch("app.routers.distribution.distribution_history.load_all")
+    @patch("app.routers.distribution.distribution_store.list_entries")
+    def test_decision_delegates_through_analytics(
+        self, mock_list, mock_load_all, mock_compute_analytics, mock_compute_decision,
+    ):
+        mock_list.return_value = [{"video_id": "v1"}]
+        mock_load_all.return_value = [{"video_id": "v1", "platform": "youtube"}]
+        mock_compute_analytics.return_value = {
+            "platform_success_rate": {"youtube": {"attempts": 10, "successes": 9, "rate": 0.9}},
+            "retry_stats": {},
+            "quality_correlation": {},
+        }
+        mock_compute_decision.return_value = {
+            "platform_health": {}, "recommendations": [], "overall_status": "healthy",
+        }
+
+        result = router.decision()
+
+        mock_list.assert_called_once_with()
+        mock_load_all.assert_called_once_with()
+        mock_compute_analytics.assert_called_once_with(
+            [{"video_id": "v1"}], [{"video_id": "v1", "platform": "youtube"}],
+        )
+        mock_compute_decision.assert_called_once_with(mock_compute_analytics.return_value)
+        self.assertEqual(result["overall_status"], "healthy")
+
+    @patch("app.routers.distribution.distribution_decision.compute_decision")
+    @patch("app.routers.distribution.distribution_analytics.compute_analytics")
+    @patch("app.routers.distribution.distribution_history.load_all")
+    @patch("app.routers.distribution.distribution_store.list_entries")
+    def test_decision_works_even_when_distribution_disabled(
+        self, mock_list, mock_load_all, mock_compute_analytics, mock_compute_decision,
+    ):
+        config.ENABLE_DISTRIBUTION = False
+        mock_list.return_value = []
+        mock_load_all.return_value = []
+        mock_compute_analytics.return_value = {
+            "platform_success_rate": {}, "retry_stats": {}, "quality_correlation": {},
+        }
+        mock_compute_decision.return_value = {
+            "platform_health": {}, "recommendations": [], "overall_status": "insufficient_data",
+        }
+
+        result = router.decision()
+
+        self.assertEqual(result["overall_status"], "insufficient_data")
+
+
 class TestListQueueExtendedFilters(DistributionEnabledTestCase):
 
     @patch("app.routers.distribution.distribution_store.list_entries")

@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException
 from app import config
 from app.models.distribution_request import ApproveRequest, EnqueueRequest
 from app.services import distribution_analytics
+from app.services import distribution_decision
 from app.services import distribution_history
 from app.services import distribution_queue as dq
 from app.services import distribution_service
@@ -97,6 +98,20 @@ def analytics():
     queue_entries = distribution_store.list_entries()
     history_records = distribution_history.load_all()
     return distribution_analytics.compute_analytics(queue_entries, history_records)
+
+
+@router.get("/distribution/decision")
+def decision():
+    """
+    Sprint107 - analytics를 해석한 platform_health/recommendations/
+    overall_status를 반환한다. 조회 전용이라 플래그와 무관하게 항상
+    동작(dashboard()/analytics()와 동일 원칙). 어떤 발행/보류 액션도
+    자동으로 트리거하지 않는다 - 사람이 참고하는 보조 신호일 뿐이다.
+    """
+    queue_entries = distribution_store.list_entries()
+    history_records = distribution_history.load_all()
+    analytics = distribution_analytics.compute_analytics(queue_entries, history_records)
+    return distribution_decision.compute_decision(analytics)
 
 
 @router.get("/distribution/queue")
