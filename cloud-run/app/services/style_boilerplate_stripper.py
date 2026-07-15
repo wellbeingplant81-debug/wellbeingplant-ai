@@ -1,4 +1,15 @@
 """
+Sprint103 - Semantic Query Intelligence의 Semantic Filter 단계.
+image_prompt_rules.py가 강제하는 "카메라 앵글이 문장 맨 앞" 구조
+(예: "High angle, camera positioned above the subject looking
+downward")와 search_query_extractor.py의 위치 기반(첫 N단어) 절단이
+결합하면, shot/angle/wide/medium/close-up/framing/showing/capturing
+같은 촬영 메타 어휘가 Query 예산의 절반 가까이(Sprint102 실측 평균
+48%, 최악 75%)를 차지해 실제 피사체/행동 명사를 밀어낸다. 이 모듈은
+기존 스타일/화질/조명 상투어 제거 책임에 촬영 메타 어휘 제거까지
+확장해, 뒤이은 Semantic Compression 단계가 절단 없이도 의미어만
+넘겨받도록 한다.
+
 Sprint102-2 - Style Boilerplate Strip.
 
 image_prompt는 Imagen 생성용으로 항상 같은 스타일 문구(실측 예:
@@ -63,6 +74,36 @@ STYLE_WORDS = {
     "aesthetic",
     "detailed",
     "backlit",
+    "dramatic",
+    "lighting",
+    "mood",
+}
+
+# Sprint103 - image_prompt_rules.py L70-88이 나열한 카메라 앵글/샷
+# 예시(Close-up, Medium shot, Wide shot, Over-the-shoulder, Low/High
+# angle, Top-down, Eye-level)에서 직접 도출한 촬영 메타 어휘. 토픽/
+# 카테고리 사전이 아니라 이 리포의 image_prompt 작성 규칙 자체에서
+# 나온 닫힌 목록이다 - "showing"/"capturing"/"framing"은 실제 장면의
+# 행동이 아니라 카메라의 행동을 서술하는 의사(疑似) 동사라 검색어로서
+# 가치가 없어 함께 포함한다.
+CAMERA_META_WORDS = {
+    "shot",
+    "angle",
+    "high",
+    "low",
+    "wide",
+    "medium",
+    "close",
+    "up",
+    "framing",
+    "showing",
+    "capturing",
+    "over",
+    "shoulder",
+    "top",
+    "down",
+    "eye",
+    "level",
 }
 
 
@@ -80,10 +121,15 @@ def strip_style_boilerplate(image_prompt: str) -> str:
     text = image_prompt.lower()
 
     for phrase in sorted(STYLE_PHRASES, key=len, reverse=True):
-        text = text.replace(phrase, " ")
+        # Sprint103 - 단어 경계(\b) 없이 substring replace를 쓰면
+        # "dramatic light"가 "dramatic lighting" 안에서 부분 매칭돼
+        # "ing" 같은 조각 토큰이 남는다(실측). \b로 phrase 전체가
+        # 독립된 단어 나열일 때만 제거되도록 한다.
+        text = re.sub(r"\b" + re.escape(phrase) + r"\b", " ", text)
 
     words = re.findall(r"[a-z0-9']+", text)
 
-    semantic_words = [word for word in words if word not in STYLE_WORDS]
+    boilerplate_words = STYLE_WORDS | CAMERA_META_WORDS
+    semantic_words = [word for word in words if word not in boilerplate_words]
 
     return " ".join(semantic_words)

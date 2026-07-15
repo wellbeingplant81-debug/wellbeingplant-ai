@@ -14,8 +14,8 @@ from app.services.asset_selector import (
 )
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import (
-    extract_intent_aware_search_query,
     extract_search_query,
+    generate_semantic_primary_query,
 )
 from app.services import subprompt_service
 from app.services import video_relevance_service
@@ -850,9 +850,13 @@ def integrate_asset(
         # 정책도 검색어 생성도 다시 판단하지 않는다.
         video_intent = motion_contract_entry["video_intent"]
         allow_video = motion_contract.allows_video(video_intent["intent"])
-        search_query_override = extract_intent_aware_search_query(
-            image_prompt, motion_contract_entry.get("visual_intent"),
-        )
+        # Sprint103 - Semantic Query Intelligence. 이전에는
+        # extract_intent_aware_search_query()로 카테고리 단어장에 등록된
+        # 단어만 앞당겼지만, 여전히 위치 기반 8단어 절단이 남아있어
+        # 근본 해결책이 아니었다(Sprint102 Root Cause 분석). 카메라 메타
+        # 어휘 자체를 제거하는 generate_semantic_primary_query()로
+        # 교체한다 - 카테고리/토픽 단어장에 의존하지 않는다.
+        search_query_override = generate_semantic_primary_query(image_prompt)
         result, ai_priority_choice, selection_trace, relevance_all_failed = (
             _select_with_visual_relevance(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,

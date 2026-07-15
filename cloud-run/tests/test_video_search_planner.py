@@ -26,7 +26,7 @@ sys.path.insert(
 )
 
 from app.services import video_search_planner
-from app.services.search_query_extractor import extract_search_query
+from app.services.search_query_extractor import generate_semantic_primary_query
 
 
 class TestPlanVideoSearchQueriesBasics(unittest.TestCase):
@@ -42,7 +42,7 @@ class TestPlanVideoSearchQueriesBasics(unittest.TestCase):
         result = video_search_planner.plan_video_search_queries(
             "매일 30분씩 가벼운 산책을 해보세요", image_prompt,
         )
-        self.assertEqual(result[0], extract_search_query(image_prompt))
+        self.assertEqual(result[0], generate_semantic_primary_query(image_prompt))
 
     def test_at_least_one_query_always_returned(self):
         result = video_search_planner.plan_video_search_queries(
@@ -55,7 +55,7 @@ class TestPlanVideoSearchQueriesBasics(unittest.TestCase):
         result = video_search_planner.plan_video_search_queries(
             "오늘의 주제를 시작하겠습니다", image_prompt,
         )
-        self.assertEqual(result, [extract_search_query(image_prompt)])
+        self.assertEqual(result, [generate_semantic_primary_query(image_prompt)])
 
     def test_does_not_mutate_inputs(self):
         narration = "매일 30분씩 가벼운 산책을 해보세요"
@@ -105,7 +105,7 @@ class TestWalkingCategoryQueries(unittest.TestCase):
         self.assertEqual(fallback_indices, sorted(fallback_indices))
 
     def test_primary_comes_before_fallbacks(self):
-        primary = extract_search_query(self.image_prompt)
+        primary = generate_semantic_primary_query(self.image_prompt)
         self.assertEqual(self.result[0], primary)
         self.assertLess(self.result.index(primary), self.result.index("healthy walking"))
 
@@ -168,7 +168,7 @@ class TestCategoryMatchingUsesImagePromptNotNarration(unittest.TestCase):
 
         result = video_search_planner.plan_video_search_queries(narration, image_prompt)
 
-        self.assertEqual(result, [extract_search_query(image_prompt)])
+        self.assertEqual(result, [generate_semantic_primary_query(image_prompt)])
 
 
 class TestStyleBoilerplateDoesNotFalselyMatchLifestyle(unittest.TestCase):
@@ -195,7 +195,7 @@ class TestStyleBoilerplateDoesNotFalselyMatchLifestyle(unittest.TestCase):
 
         self.assertNotIn("daily lifestyle routine", result)
         self.assertNotIn("healthy lifestyle", result)
-        self.assertEqual(result, [extract_search_query(image_prompt)])
+        self.assertEqual(result, [generate_semantic_primary_query(image_prompt)])
 
     def test_genuinely_lifestyle_scene_still_matches_despite_style_suffix(self):
         image_prompt = (
@@ -215,7 +215,7 @@ class TestStyleBoilerplateDoesNotFalselyMatchLifestyle(unittest.TestCase):
         # 구성한다.
         image_prompt = "a wooden walkway through a historic town square structure"
         result = video_search_planner.plan_video_search_queries("", image_prompt)
-        self.assertEqual(result, [extract_search_query(image_prompt)])
+        self.assertEqual(result, [generate_semantic_primary_query(image_prompt)])
 
 
 if __name__ == "__main__":

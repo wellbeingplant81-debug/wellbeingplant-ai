@@ -1,5 +1,7 @@
 import re
 
+from app.services.style_boilerplate_stripper import strip_style_boilerplate
+
 FILLER_PHRASES = [
     "ultra realistic",
     "photorealistic",
@@ -129,3 +131,52 @@ def extract_intent_aware_search_query(
             ordered.append(word)
 
     return " ".join(ordered[:max_words])
+
+
+# Sprint103 - Semantic Query Intelligence. extract_search_query()와
+# extract_intent_aware_search_query()는 둘 다 위치 기반(앞 N단어)
+# 절단을 한다는 점이 같다 - image_prompt_rules.py가 카메라 앵글을
+# 문장 맨 앞에 두도록 강제하는 것과 결합해, Query 예산의 상당 부분이
+# 촬영 메타 어휘(shot/angle/showing/capturing 등)로 소모되고 정작
+# 뒷부분의 핵심 명사(salad/spinach/bananas 등)가 통째로 잘려나간다는
+# 것이 Sprint102 Root Cause 분석 결과였다.
+#
+# 이 값은 절단 기준이 아니라 안전장치(safety cap)다 - Semantic
+# Filter(strip_style_boilerplate())가 촬영 메타/스타일 어휘를 이미
+# 제거했으므로 남은 단어는 대부분 의미어이고, 대부분의 image_prompt는
+# 이 상한에 도달하지 않는다.
+SEMANTIC_MAX_WORDS = 12
+
+
+def generate_semantic_primary_query(
+    image_prompt: str,
+    max_words: int = SEMANTIC_MAX_WORDS,
+) -> str:
+    """
+    Sprint103 - Semantic Query Intelligence 파이프라인의 Primary
+    Query 산출 함수(Semantic Filter -> Semantic Compression).
+
+    extract_search_query()/extract_intent_aware_search_query()와
+    달리 "문장 앞부분 N단어"를 취하지 않는다. 먼저
+    strip_style_boilerplate()(Sprint103부터 카메라 메타 어휘까지
+    포함하도록 확장됨)로 촬영/스타일 상투어를 제거해 Subject/Action/
+    Object/Context만 남긴 뒤, 남은 단어를 원본 상대 순서 그대로
+    보존한다("plaque buildup", "sliced bananas" 같은 인접 명사구가
+    깨지지 않도록 재배열하지 않는다). max_words는 이례적으로 긴
+    프롬프트에 대한 안전장치일 뿐, 일반적인 절단 기준이 아니다.
+
+    카테고리/토픽 단어장(CATEGORY_QUERY_TEMPLATES,
+    INTENT_PRIORITY_KEYWORDS)에 의존하지 않는다 - Sprint103 SPEC은
+    카테고리 사전 확장을 우선순위에서 제외했다.
+
+    기존 extract_search_query()/extract_intent_aware_search_query()는
+    하위 호환을 위해 변경하지 않는다(다른 호출부가 의존 중).
+    """
+
+    if not image_prompt:
+        return ""
+
+    semantic_prompt = strip_style_boilerplate(image_prompt)
+    words = _clean_words(semantic_prompt)
+
+    return " ".join(words[:max_words])
