@@ -24,6 +24,8 @@ from fastapi import APIRouter, HTTPException
 
 from app import config
 from app.models.distribution_request import ApproveRequest, EnqueueRequest
+from app.services import distribution_analytics
+from app.services import distribution_history
 from app.services import distribution_queue as dq
 from app.services import distribution_service
 from app.services import distribution_store
@@ -82,6 +84,19 @@ def enqueue(request: EnqueueRequest):
 def dashboard():
     """Sprint105 §3 - 상태별 카운트만 반환한다. 플래그와 무관하게 항상 동작."""
     return distribution_store.get_dashboard_stats()
+
+
+@router.get("/distribution/analytics")
+def analytics():
+    """
+    Sprint106 - platform_success_rate/retry_stats/quality_correlation을
+    반환한다. 조회 전용이라 플래그와 무관하게 항상 동작(dashboard()와
+    동일 원칙). 신규 저장/로깅 없이 기존 queue.json/history.json에서
+    온디맨드로 집계한다.
+    """
+    queue_entries = distribution_store.list_entries()
+    history_records = distribution_history.load_all()
+    return distribution_analytics.compute_analytics(queue_entries, history_records)
 
 
 @router.get("/distribution/queue")

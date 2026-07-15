@@ -130,6 +130,47 @@ class TestDashboardEndpoint(DistributionEnabledTestCase):
         self.assertEqual(result["total"], 0)
 
 
+class TestAnalyticsEndpoint(DistributionEnabledTestCase):
+
+    @patch("app.routers.distribution.distribution_analytics.compute_analytics")
+    @patch("app.routers.distribution.distribution_history.load_all")
+    @patch("app.routers.distribution.distribution_store.list_entries")
+    def test_analytics_delegates_with_entries_and_history(
+        self, mock_list, mock_load_all, mock_compute,
+    ):
+        mock_list.return_value = [{"video_id": "v1"}]
+        mock_load_all.return_value = [{"video_id": "v1", "platform": "youtube"}]
+        mock_compute.return_value = {
+            "platform_success_rate": {}, "retry_stats": {}, "quality_correlation": {},
+        }
+
+        result = router.analytics()
+
+        mock_list.assert_called_once_with()
+        mock_load_all.assert_called_once_with()
+        mock_compute.assert_called_once_with(
+            [{"video_id": "v1"}], [{"video_id": "v1", "platform": "youtube"}],
+        )
+        self.assertIn("platform_success_rate", result)
+
+    @patch("app.routers.distribution.distribution_analytics.compute_analytics")
+    @patch("app.routers.distribution.distribution_history.load_all")
+    @patch("app.routers.distribution.distribution_store.list_entries")
+    def test_analytics_works_even_when_distribution_disabled(
+        self, mock_list, mock_load_all, mock_compute,
+    ):
+        config.ENABLE_DISTRIBUTION = False
+        mock_list.return_value = []
+        mock_load_all.return_value = []
+        mock_compute.return_value = {
+            "platform_success_rate": {}, "retry_stats": {}, "quality_correlation": {},
+        }
+
+        result = router.analytics()
+
+        self.assertEqual(result["platform_success_rate"], {})
+
+
 class TestListQueueExtendedFilters(DistributionEnabledTestCase):
 
     @patch("app.routers.distribution.distribution_store.list_entries")
