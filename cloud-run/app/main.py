@@ -10,6 +10,7 @@ from app.routers.tts import router as tts_router
 from app.routers.final_video import router as final_video_router
 from app.routers.batch import router as batch_router
 from app.routers.topic import router as topic_router
+from app.routers.distribution import router as distribution_router
 
 app = FastAPI(
     title="WellbeingPlant AI Factory",
@@ -27,6 +28,7 @@ app.include_router(tts_router)
 app.include_router(final_video_router)
 app.include_router(batch_router)
 app.include_router(topic_router)
+app.include_router(distribution_router)
 
 @app.get("/")
 def root():

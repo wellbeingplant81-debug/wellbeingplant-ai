@@ -85,3 +85,23 @@ ENABLE_MOTION_CONTRACT = False
 # True in-process only when --profile upload is passed, mirroring
 # ENABLE_MOTION_CONTRACT/ENABLE_PRODUCTION_PROFILE.
 ENABLE_VIDEO_SEARCH_PLANNER = False
+
+# Sprint104 - Video Distribution Intelligence. Off by default, same
+# convention as every other ENABLE_* flag above. Distribution Layer is
+# fully additive - no existing pipeline code (Script Generation/TTS/
+# Asset Selection/Video Builder/Quality Gate) reads this flag, and
+# there is no automatic enqueue hook anywhere in the generation
+# pipeline. With this off, /distribution/queue's mutation endpoints
+# (enqueue/approve/reject/re-review/cancel/publish) refuse to run -
+# read endpoints (list/get) still work but the queue stays empty since
+# nothing can ever be enqueued while this is False.
+ENABLE_DISTRIBUTION = False
+
+# Sprint104 - per-platform real API kill switches. All default False -
+# turning ENABLE_DISTRIBUTION on by itself never calls any real
+# platform API. Each Adapter checks its own flag and raises
+# NotImplementedError instead of silently returning a mock result when
+# its flag is True (real integration is out of scope for Sprint104).
+ENABLE_YOUTUBE_REAL_API = False
+ENABLE_INSTAGRAM_REAL_API = False
+ENABLE_TIKTOK_REAL_API = False
