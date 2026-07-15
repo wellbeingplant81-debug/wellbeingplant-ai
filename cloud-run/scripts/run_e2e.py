@@ -63,6 +63,9 @@ def main():
         # 켠다 - ENABLE_PRODUCTION_PROFILE과 동일한 in-process opt-in
         # 패턴(전역 상태를 서버 요청 간에 뒤집지 않음).
         config.ENABLE_MOTION_CONTRACT = True
+        # Sprint102 - Video Search Planner도 동일한 kill switch/opt-in
+        # 패턴을 따른다.
+        config.ENABLE_VIDEO_SEARCH_PLANNER = True
 
     result = generate_short_video(
         args.topic, channel=args.channel, production_profile_name=args.profile,

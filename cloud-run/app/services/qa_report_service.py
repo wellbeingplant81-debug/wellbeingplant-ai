@@ -206,6 +206,70 @@ def build_visual_diversity_summary(asset_intelligence: list) -> dict:
     return summary
 
 
+def build_video_coverage_summary(project_path: str) -> dict:
+    """
+    Sprint102 - Video Coverage Intelligence QA. scene별 Motion
+    Contract의 video_intent 판정과 실제 Render Mode(VideoFileClip인지
+    Ken Burns(Image)인지 - assets[0].video_path 존재 여부로 판정,
+    video_builder.py의 _resolve_video_only_path()와 동일한 신호)를
+    대조하고, Video/Image Scene 수를 집계한다. selection_trace에서
+    scene마다 실제로 시도된 검색어 cascade(Primary -> Action ->
+    Fallback...)도 중복 없이 순서대로 뽑는다.
+
+    script.json이 없거나 scene에 motion_contract/selection_trace가
+    없는 경우(Motion Contract 비활성 profile)는 새 판정 없이 None/
+    빈 값으로 읽기 전용 보고한다 - 렌더링/선택 로직에는 전혀 영향을
+    주지 않는다.
+    """
+
+    script_path = os.path.join(project_path, "script.json")
+
+    if not os.path.exists(script_path):
+        return {"video_scene_count": 0, "image_scene_count": 0, "scenes": []}
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    scenes_summary = []
+    video_count = 0
+    image_count = 0
+
+    for scene in data.get("scenes", []):
+
+        assets = scene.get("assets") or []
+        primary_asset = assets[0] if assets else {}
+        video_path = primary_asset.get("video_path")
+        render_mode = "VideoFileClip" if video_path else "Ken Burns (Image)"
+
+        if video_path:
+            video_count += 1
+        else:
+            image_count += 1
+
+        video_intent = (scene.get("motion_contract") or {}).get("video_intent") or {}
+
+        search_query_cascade = []
+        for entry in (scene.get("selection_trace") or []):
+            query = entry.get("search_query")
+            if query and query not in search_query_cascade:
+                search_query_cascade.append(query)
+
+        scenes_summary.append({
+            "scene": scene["scene"],
+            "provider": scene.get("provider"),
+            "render_mode": render_mode,
+            "video_intent": video_intent.get("intent"),
+            "video_intent_source": video_intent.get("source"),
+            "search_query_cascade": search_query_cascade,
+        })
+
+    return {
+        "video_scene_count": video_count,
+        "image_scene_count": image_count,
+        "scenes": scenes_summary,
+    }
+
+
 def get_target_range(project_path: str) -> tuple:
     """
     Sprint100-1 - Production Profile-aware target range.
@@ -280,6 +344,7 @@ def build_qa_report(project_path: str) -> dict:
         "target_range_ok": target_range_ok,
         "asset_intelligence": asset_intelligence,
         "visual_diversity": build_visual_diversity_summary(asset_intelligence),
+        "video_coverage": build_video_coverage_summary(project_path),
     }
 
 
@@ -381,5 +446,21 @@ def format_report(report: dict) -> str:
             f"lighting={diversity['lighting_diversity_count']}"
         )
         lines.append(f"  Diversity Score: {diversity['diversity_score']}/100")
+
+    video_coverage = report.get("video_coverage")
+
+    if video_coverage and video_coverage["scenes"]:
+        lines.append("")
+        lines.append("Video Coverage (Sprint102):")
+        lines.append(f"  Video: {video_coverage['video_scene_count']} Scene")
+        lines.append(f"  Image: {video_coverage['image_scene_count']} Scene")
+        for entry in video_coverage["scenes"]:
+            lines.append(
+                f"  scene{entry['scene']}: render={entry['render_mode']} "
+                f"video_intent={entry['video_intent']}({entry['video_intent_source']}) "
+                f"provider={entry['provider']}"
+            )
+            if entry["search_query_cascade"]:
+                lines.append(f"    query cascade: {entry['search_query_cascade']}")
 
     return "\n".join(lines)

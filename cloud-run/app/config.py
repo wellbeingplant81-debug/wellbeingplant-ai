@@ -73,3 +73,15 @@ ENABLE_PRODUCTION_PROFILE = False
 # only when --profile upload is passed, mirroring how it already does
 # this for ENABLE_PRODUCTION_PROFILE.
 ENABLE_MOTION_CONTRACT = False
+
+# Sprint102 - Video Coverage Intelligence. Off by default, same
+# convention as every other ENABLE_* flag above. asset_integration_
+# service._select_with_visual_relevance() only tries the extra
+# Action/Fallback/Broad queries from video_search_planner.
+# plan_video_search_queries() when BOTH this flag is True AND the
+# scene allows video (Motion Contract's video_intent != required_
+# image) - with this off, exactly one search query is tried per
+# scene, identical to Sprint101 behavior. scripts/run_e2e.py flips it
+# True in-process only when --profile upload is passed, mirroring
+# ENABLE_MOTION_CONTRACT/ENABLE_PRODUCTION_PROFILE.
+ENABLE_VIDEO_SEARCH_PLANNER = False

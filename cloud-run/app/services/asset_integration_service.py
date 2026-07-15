@@ -1,6 +1,7 @@
 import os
 import subprocess
 
+from app import config
 from app.services import asset_feedback_service
 from app.services import motion_contract
 from app.services.asset_mode_config import get_pexels_quality_threshold
@@ -18,8 +19,16 @@ from app.services.search_query_extractor import (
 )
 from app.services import subprompt_service
 from app.services import video_relevance_service
+from app.services import video_search_planner
 from app.services.visual_diversity_engine import apply_profile_to_prompt
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
+
+
+# Sprint102 - Video Coverage Intelligence. _gather_stock_result()가
+# video_search_planner.plan_video_search_queries()에서 최대 이
+# 개수까지만 검색어를 시도한다 - 무제한으로 시도하면 scene당 다운로드/
+# Gemini Vision 호출 비용이 무한히 늘어날 수 있다.
+MAX_QUERY_ATTEMPTS = 3
 
 
 # Sprint100-3.1 - Stock Video Visual Relevance. 후보를 무제한 다운로드/
@@ -325,6 +334,93 @@ def _build_ai_candidate(
     }
 
 
+def _discard(result):
+    # 최종 채택되지 않은 쪽의 결과 파일을 정리한다 - select_with_
+    # relevance()는 자기 안에서 진 후보만 정리하고, "이 함수 호출
+    # 전체의 결과가 버려지는 경우"는 호출자 책임이다. 버그 실측:
+    # 2026-07-14 Production QA에서 discard된 stock 결과 파일
+    # (scene5.raw.candidate0.png 등)이 정리되지 않고 images/ 아래
+    # 그대로 남아있었다.
+    if result is None:
+        return
+    _remove_if_exists(result.get("local_path"))
+    _remove_if_exists(result.get("video_path"))
+
+
+def _gather_stock_result(image_prompt, allow_video, search_query_override, narration, staging_path):
+    """
+    Sprint102 - Video Coverage Intelligence.
+
+    config.ENABLE_VIDEO_SEARCH_PLANNER가 켜져 있고 allow_video면,
+    video_search_planner.plan_video_search_queries()가 만든 검색어를
+    Primary(search_query_override - 이미 Sprint100-4의 Scene Intent
+    기반 값, 첫 시도로 그대로 쓴다) 다음으로 최대 MAX_QUERY_ATTEMPTS
+    개까지 순서대로 시도한다.
+
+    "충분한 품질의 후보를 확보했는지"는 새 채점 로직을 만들지 않고
+    select_with_relevance()가 이미 판정하는 "통과하는 후보가 있는가"
+    (all_failed=False)를 그대로 기준으로 쓴다 - 통과하면 그 자리에서
+    멈추고 그 select_with_relevance() 호출 자체를 "최종 선택"으로
+    반환한다. 전부 실패하면 마지막 시도의 결과를 반환해 호출자가
+    AI로 이어가게 한다. 시도했다가 버려진 후보 파일은 즉시 정리한다.
+
+    플래그가 꺼져 있거나 allow_video가 아니면 기존과 100% 동일하게
+    search_query_override 하나만 시도한다(하위 호환).
+
+    반환값: (result, combined_trace, all_failed) - select_with_
+    relevance()와 동일한 모양이라 호출부의 기존 처리 로직을 그대로
+    재사용할 수 있다.
+    """
+
+    queries = [search_query_override]
+
+    if config.ENABLE_VIDEO_SEARCH_PLANNER and allow_video:
+        planned = video_search_planner.plan_video_search_queries(narration or "", image_prompt)
+        # planned[0]은 plan_video_search_queries() 자체의 Primary다 -
+        # search_query_override를 이미 1번 시도로 쓰므로 중복 시도를
+        # 피하기 위해 건너뛴다.
+        for query in planned[1:]:
+            if query not in queries:
+                queries.append(query)
+        queries = queries[:MAX_QUERY_ATTEMPTS]
+
+    combined_trace = []
+    best_result, best_all_failed = None, True
+
+    for attempt_index, query in enumerate(queries):
+
+        # Sprint102 하드닝 - 시도마다 고유한 staging 경로를 쓴다. 모든
+        # 시도가 같은 staging_path를 공유하면, select_with_relevance()
+        # 내부의 candidate{index} 파일명이 시도마다 0부터 다시 시작해
+        # 이전 시도의 아직 discard되지 않은 결과 파일을 다음 시도가
+        # 덮어쓸 수 있다(최종 반환값 자체는 항상 마지막 시도 결과라
+        # 결과가 틀리게 나오진 않지만, 중간 상태가 불필요하게 서로
+        # 간섭하는 것은 피한다).
+        attempt_staging_path = f"{staging_path}.q{attempt_index}"
+
+        candidates = get_candidates(
+            image_prompt, allow_video=allow_video, search_query_override=query,
+        )
+        result, trace, all_failed = select_with_relevance(
+            candidates, narration or "", image_prompt, attempt_staging_path,
+        )
+
+        for entry in trace:
+            entry["search_query"] = query
+
+        combined_trace.extend(trace)
+
+        if best_result is not None:
+            _discard(best_result)
+
+        best_result, best_all_failed = result, all_failed
+
+        if result is not None and not all_failed:
+            break
+
+    return best_result, combined_trace, best_all_failed
+
+
 def _select_with_visual_relevance(
     image_prompt, staging_path, channel, is_hook_scene, visual_type,
     visual_profile, narration, prefer_ai, allow_video, search_query_override,
@@ -341,6 +437,11 @@ def _select_with_visual_relevance(
     보장된다) AI를 최후 수단으로 생성해 평가한다 - AI 생성은 비용이
     크므로 stock이 이미 통과했으면 호출하지 않는다.
 
+    Sprint102 - "Stock을 평가"하는 부분은 이제 _gather_stock_result()
+    를 거친다 - Video Search Planner가 켜져 있으면 검색어를 여러 개
+    시도해 후보 풀 자체를 보강하고, 꺼져 있으면 기존과 동일하게 검색어
+    하나만 시도한다.
+
     Sprint101 - video_intent(Motion Contract가 이미 결정한 VideoIntent
     dict 전체 - intent/confidence/reason/source)는 여기서 새 선택
     정책을 만드는 데 쓰지 않는다 - Selection Trace의 모든 항목에
@@ -351,22 +452,6 @@ def _select_with_visual_relevance(
 
     반환값: (result, ai_priority_choice, selection_trace, relevance_all_failed)
     """
-
-    stock_candidates = get_candidates(
-        image_prompt, allow_video=allow_video, search_query_override=search_query_override,
-    )
-
-    def _discard(result):
-        # 두 단계(AI/Stock) 중 최종 채택되지 않은 쪽의 결과 파일을
-        # 정리한다 - select_with_relevance()는 자기 안에서 진 후보만
-        # 정리하고, "이 함수의 결과 전체가 버려지는 경우"는 호출자
-        # 책임이다. 버그 실측: 2026-07-14 Production QA에서 discard된
-        # stock 결과 파일(scene5.raw.candidate0.png 등)이 정리되지
-        # 않고 images/ 아래 그대로 남아있었다.
-        if result is None:
-            return
-        _remove_if_exists(result.get("local_path"))
-        _remove_if_exists(result.get("video_path"))
 
     def _tag_fallback(trace, fallback):
         for entry in trace:
@@ -386,8 +471,8 @@ def _select_with_visual_relevance(
         if ai_result is not None and not ai_all_failed:
             return ai_result, True, ai_trace, False
 
-        stock_result, stock_trace, stock_all_failed = select_with_relevance(
-            stock_candidates, narration or "", image_prompt, staging_path,
+        stock_result, stock_trace, stock_all_failed = _gather_stock_result(
+            image_prompt, allow_video, search_query_override, narration, staging_path,
         )
         _tag_fallback(stock_trace, True)
         combined_trace = ai_trace + stock_trace
@@ -402,8 +487,8 @@ def _select_with_visual_relevance(
         _discard(stock_result)
         return ai_result, True, combined_trace, True
 
-    stock_result, stock_trace, stock_all_failed = select_with_relevance(
-        stock_candidates, narration or "", image_prompt, staging_path,
+    stock_result, stock_trace, stock_all_failed = _gather_stock_result(
+        image_prompt, allow_video, search_query_override, narration, staging_path,
     )
     _tag_fallback(stock_trace, False)
 
