@@ -7,7 +7,10 @@ from app.providers import pexels_provider
 from app.providers import pixabay_provider
 from app.services.image_service import generate_image
 from app.services.provider_factory import build_provider_chain
-from app.services.search_query_extractor import extract_search_query
+from app.services.search_query_extractor import (
+    extract_search_query,
+    generate_semantic_primary_query,
+)
 from app.services import video_relevance_service
 from app.utils import asset_cache
 
@@ -216,9 +219,20 @@ def get_candidates(
     # 검색어(extract_intent_aware_search_query())가 한 번도 실제
     # Pexels/Pixabay 호출에 반영되지 않았다(2026-07-14 Production QA
     # 실측: search_query_used와 실제 후보의 검색어가 서로 달랐음).
-    # override가 있으면 그대로 쓰고, 없으면(기본값 None) 기존과 100%
-    # 동일하게 image_prompt에서 다시 계산한다.
-    query = search_query_override or extract_search_query(image_prompt)
+    # override가 있으면 그대로 쓴다.
+    #
+    # Sprint103 후속 Hotfix - override가 없을 때(기본값 None)의
+    # fallback을 extract_search_query()(위치 기반 8단어 절단)에서
+    # generate_semantic_primary_query()로 바꾼다. motion_contract가
+    # 없는 scene(라이브 서버의 ENABLE_MOTION_CONTRACT=False 상태에서는
+    # _select_real_first()/_select_ai_first()/레거시 분기 전부가 이
+    # override 없이 get_candidates()를 호출) 전부가 이 fallback을
+    # 타므로, Sprint103이 배선한 motion_contract 경로와 무관하게 실제
+    # 프로덕션 검색 경로 전체에 Semantic Query Compression이 적용되게
+    # 한다. Motion Contract 활성화 여부/VideoIntent/Asset Selection
+    # 로직/Threshold는 전혀 건드리지 않는다 - 검색어 문자열 생성
+    # 함수만 교체한다.
+    query = search_query_override or generate_semantic_primary_query(image_prompt)
 
     if not query:
         print(

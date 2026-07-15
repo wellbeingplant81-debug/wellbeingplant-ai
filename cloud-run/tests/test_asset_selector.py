@@ -286,22 +286,61 @@ class TestGetCandidates(unittest.TestCase):
     @patch("app.providers.pixabay_provider.search_videos", return_value=[])
     @patch("app.providers.pexels_provider.search_photos", return_value=[])
     @patch("app.providers.pexels_provider.search_videos", return_value=[])
-    def test_no_override_falls_back_to_extract_search_query(
+    def test_no_override_falls_back_to_generate_semantic_primary_query(
         self,
         mock_pexels_video,
         mock_pexels_photo,
         mock_pixabay_video,
         mock_pixabay_image,
     ):
-        """override를 넘기지 않으면(기본값 None) 기존과 100% 동일하게
-        extract_search_query(image_prompt) 결과를 쓴다."""
+        """
+        Sprint103 후속 Hotfix - override를 넘기지 않으면(기본값 None)
+        generate_semantic_primary_query(image_prompt) 결과를 쓴다.
+        이전에는 extract_search_query()(위치 기반 8단어 절단)로
+        폴백했다 - motion_contract가 없는 scene(라이브 서버의
+        ENABLE_MOTION_CONTRACT=False 상태에서는 전부 여기 해당)은
+        전부 이 fallback을 타므로, 실제 프로덕션 검색 경로가 여전히
+        구 알고리즘을 쓰고 있었다(Sprint103 배선 검토 분석 결과).
+        """
 
-        from app.services.search_query_extractor import extract_search_query
+        from app.services.search_query_extractor import (
+            generate_semantic_primary_query,
+        )
 
         asset_selector.get_candidates(PROMPT)
 
-        expected_query = extract_search_query(PROMPT)
+        expected_query = generate_semantic_primary_query(PROMPT)
         mock_pexels_video.assert_called_once_with(expected_query)
+
+    @patch("app.providers.pixabay_provider.search_images", return_value=[])
+    @patch("app.providers.pixabay_provider.search_videos", return_value=[])
+    @patch("app.providers.pexels_provider.search_photos", return_value=[])
+    @patch("app.providers.pexels_provider.search_videos", return_value=[])
+    def test_no_override_camera_meta_words_do_not_survive(
+        self,
+        mock_pexels_video,
+        mock_pexels_photo,
+        mock_pixabay_video,
+        mock_pixabay_image,
+    ):
+        """
+        Sprint103 후속 Hotfix 회귀 방지 - 카메라 앵글이 문장 앞에 오는
+        image_prompt에서, fallback 검색어가 더 이상 위치 기반 절단으로
+        카메라 메타 어휘에 예산을 뺏기지 않는지 확인한다.
+        """
+
+        camera_first_prompt = (
+            "high angle shot showing an artery gradually narrowing due "
+            "to plaque buildup"
+        )
+
+        asset_selector.get_candidates(camera_first_prompt)
+
+        used_query = mock_pexels_video.call_args.args[0]
+        for camera_word in ["high", "angle", "shot", "showing"]:
+            self.assertNotIn(camera_word, used_query.split())
+        self.assertIn("plaque", used_query)
+        self.assertIn("buildup", used_query)
 
     @patch("app.providers.pixabay_provider.search_images", return_value=[])
     @patch("app.providers.pixabay_provider.search_videos", return_value=[])
@@ -348,7 +387,18 @@ class TestGetCandidates(unittest.TestCase):
         self.assertEqual(len(candidates), 2)
 
     def test_empty_query_returns_empty_list_without_calling_providers(self):
-        filler_only_prompt = "Ultra realistic, cinematic photography, no text, no watermark."
+        # Sprint103 후속 Hotfix - 원래 이 테스트에 쓰던 프롬프트("Ultra
+        # realistic, cinematic photography, no text, no watermark.")는
+        # generate_semantic_primary_query()에서는 더 이상 빈 문자열이
+        # 아니다("photography"가 남는다) - style_boilerplate_stripper가
+        # "cinematic"만 먼저 제거해버려서, search_query_extractor의
+        # FILLER_PHRASES에 있는 "cinematic photography"(2단어 결합)가
+        # 더 이상 매칭되지 않기 때문(실측 확인됨, Sprint103 자체
+        # 로직은 이번 Hotfix 범위 밖이라 수정하지 않는다). 이 테스트가
+        # 검증하려는 것(빈 쿼리면 provider를 아예 안 부른다)은 여전히
+        # 유효한 동작이므로, 새 함수에서도 빈 문자열이 나오는 프롬프트로
+        # 바꿔 같은 분기를 계속 커버한다.
+        filler_only_prompt = "Ultra realistic, no text, no watermark, no logo."
 
         with patch("app.providers.pexels_provider.search_videos") as mock_video:
             candidates = asset_selector.get_candidates(filler_only_prompt)
