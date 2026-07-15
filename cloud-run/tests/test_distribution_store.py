@@ -290,5 +290,220 @@ class TestApplyAction(TestDistributionStoreBase):
         self.assertEqual(retried["status"], dq.STATUS_PUBLISHING)
 
 
+class TestDuplicateEnqueuePrevention(TestDistributionStoreBase):
+    """
+    Sprint105 §7 - 동일 video_id로 create_entry()를 두 번 호출하면
+    기존 항목(어떤 상태든, 예: approved까지 진행된 항목)을 조용히
+    덮어쓰는 대신 DuplicateEntryError를 raise한다.
+    """
+
+    def test_duplicate_video_id_raises(self):
+        self._create_sample_entry(video_id="v1")
+
+        with self.assertRaises(distribution_store.DuplicateEntryError):
+            self._create_sample_entry(video_id="v1")
+
+    def test_duplicate_attempt_does_not_overwrite_existing_entry(self):
+        self._create_sample_entry(video_id="v1", title="원본 제목")
+        distribution_store.apply_action(
+            "v1", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+
+        try:
+            self._create_sample_entry(video_id="v1", title="덮어쓰기 시도")
+        except distribution_store.DuplicateEntryError:
+            pass
+
+        entry = distribution_store.get_entry("v1", queue_path=self.queue_path)
+        self.assertEqual(entry["title"], "원본 제목")
+        self.assertEqual(entry["status"], dq.STATUS_APPROVED)
+
+    def test_different_video_ids_do_not_collide(self):
+        self._create_sample_entry(video_id="v1")
+        self._create_sample_entry(video_id="v2")  # 예외 없이 통과해야 함
+
+        self.assertEqual(
+            len(distribution_store.list_entries(queue_path=self.queue_path)), 2,
+        )
+
+
+class TestReviewMetadataSnapshot(TestDistributionStoreBase):
+    """
+    Sprint105 §5 - Pipeline을 직접 조회하지 않고, enqueue 호출자가
+    넘긴 값을 그대로 저장하는 snapshot 필드. thumbnail_preview는
+    §8-1 결정에 따라 추가하지 않고 기존 thumbnail_path를 재사용한다.
+    """
+
+    def test_snapshot_fields_are_stored_when_provided(self):
+        entry = self._create_sample_entry(
+            video_id="v1",
+            video_duration=45.2,
+            quality_score=0.91,
+            generation_time=132.5,
+            source_project="output/20260715_120000",
+        )
+
+        self.assertEqual(entry["video_duration"], 45.2)
+        self.assertEqual(entry["quality_score"], 0.91)
+        self.assertEqual(entry["generation_time"], 132.5)
+        self.assertEqual(entry["source_project"], "output/20260715_120000")
+
+    def test_snapshot_fields_default_to_none_when_omitted(self):
+        entry = self._create_sample_entry(video_id="v1")
+
+        for field in [
+            "video_duration", "quality_score", "generation_time", "source_project",
+        ]:
+            with self.subTest(field=field):
+                self.assertIsNone(entry[field])
+
+    def test_no_thumbnail_preview_field_exists(self):
+        # §8-1 확정 - thumbnail_preview는 신규 필드로 추가하지 않는다.
+        entry = self._create_sample_entry(video_id="v1")
+        self.assertNotIn("thumbnail_preview", entry)
+
+
+class TestDashboardStats(TestDistributionStoreBase):
+
+    def test_empty_queue_all_zero(self):
+        stats = distribution_store.get_dashboard_stats(queue_path=self.queue_path)
+
+        self.assertEqual(stats["total"], 0)
+        for status in [
+            dq.STATUS_GENERATED, dq.STATUS_WAITING_REVIEW, dq.STATUS_APPROVED,
+            dq.STATUS_PUBLISHING, dq.STATUS_PUBLISHED, dq.STATUS_FAILED,
+            dq.STATUS_REJECTED,
+        ]:
+            with self.subTest(status=status):
+                self.assertEqual(stats[status], 0)
+
+    def test_counts_reflect_actual_statuses(self):
+        self._create_sample_entry(video_id="v1")  # waiting_review
+        self._create_sample_entry(video_id="v2")  # waiting_review
+        distribution_store.apply_action(
+            "v2", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+        self._create_sample_entry(video_id="v3")
+        distribution_store.apply_action(
+            "v3", dq.ACTION_REJECT, queue_path=self.queue_path,
+        )
+
+        stats = distribution_store.get_dashboard_stats(queue_path=self.queue_path)
+
+        self.assertEqual(stats["total"], 3)
+        self.assertEqual(stats[dq.STATUS_WAITING_REVIEW], 1)
+        self.assertEqual(stats[dq.STATUS_APPROVED], 1)
+        self.assertEqual(stats[dq.STATUS_REJECTED], 1)
+
+
+class TestQueueFilteringExtended(TestDistributionStoreBase):
+
+    def test_filter_by_platform(self):
+        self._create_sample_entry(video_id="v1", target_platforms=["youtube"])
+        self._create_sample_entry(video_id="v2", target_platforms=["instagram"])
+        self._create_sample_entry(
+            video_id="v3", target_platforms=["youtube", "tiktok"],
+        )
+
+        youtube_entries = distribution_store.list_entries(
+            platform="youtube", queue_path=self.queue_path,
+        )
+
+        self.assertEqual(
+            {e["video_id"] for e in youtube_entries}, {"v1", "v3"},
+        )
+
+    def test_filter_by_publish_mode(self):
+        self._create_sample_entry(video_id="v1", publish_mode="immediate")
+        self._create_sample_entry(video_id="v2", publish_mode="scheduled")
+
+        scheduled = distribution_store.list_entries(
+            publish_mode="scheduled", queue_path=self.queue_path,
+        )
+
+        self.assertEqual([e["video_id"] for e in scheduled], ["v2"])
+
+    def test_filters_combine_with_and_semantics(self):
+        self._create_sample_entry(
+            video_id="v1", target_platforms=["youtube"], publish_mode="immediate",
+        )
+        self._create_sample_entry(
+            video_id="v2", target_platforms=["youtube"], publish_mode="scheduled",
+        )
+
+        result = distribution_store.list_entries(
+            platform="youtube", publish_mode="scheduled", queue_path=self.queue_path,
+        )
+
+        self.assertEqual([e["video_id"] for e in result], ["v2"])
+
+    def test_status_and_platform_filters_combine(self):
+        self._create_sample_entry(video_id="v1", target_platforms=["youtube"])
+        self._create_sample_entry(video_id="v2", target_platforms=["youtube"])
+        distribution_store.apply_action(
+            "v2", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+
+        result = distribution_store.list_entries(
+            status=dq.STATUS_APPROVED, platform="youtube", queue_path=self.queue_path,
+        )
+
+        self.assertEqual([e["video_id"] for e in result], ["v2"])
+
+
+class TestRetryCountTracking(TestDistributionStoreBase):
+    """Sprint105 §6 - retry_count는 failed에서 publish로 재시도할 때만 증가한다."""
+
+    def test_new_entry_starts_at_zero(self):
+        entry = self._create_sample_entry(video_id="v1")
+        self.assertEqual(entry["retry_count"], 0)
+
+    def test_first_publish_attempt_does_not_increment(self):
+        self._create_sample_entry(video_id="v1")
+        distribution_store.apply_action(
+            "v1", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+        entry = distribution_store.apply_action(
+            "v1", dq.ACTION_PUBLISH, queue_path=self.queue_path,
+        )
+        self.assertEqual(entry["retry_count"], 0)
+
+    def test_retry_after_failure_increments(self):
+        self._create_sample_entry(video_id="v1")
+        distribution_store.apply_action(
+            "v1", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+        distribution_store.apply_action(
+            "v1", dq.ACTION_PUBLISH, queue_path=self.queue_path,
+        )
+        distribution_store.apply_action(
+            "v1", dq.ACTION_MARK_FAILED, queue_path=self.queue_path,
+        )
+
+        retried = distribution_store.apply_action(
+            "v1", dq.ACTION_PUBLISH, queue_path=self.queue_path,
+        )
+        self.assertEqual(retried["retry_count"], 1)
+
+    def test_multiple_retries_increment_each_time(self):
+        self._create_sample_entry(video_id="v1")
+        distribution_store.apply_action(
+            "v1", dq.ACTION_APPROVE, queue_path=self.queue_path,
+        )
+
+        for _ in range(3):
+            distribution_store.apply_action(
+                "v1", dq.ACTION_PUBLISH, queue_path=self.queue_path,
+            )
+            entry = distribution_store.apply_action(
+                "v1", dq.ACTION_MARK_FAILED, queue_path=self.queue_path,
+            )
+
+        final = distribution_store.apply_action(
+            "v1", dq.ACTION_PUBLISH, queue_path=self.queue_path,
+        )
+        self.assertEqual(final["retry_count"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()

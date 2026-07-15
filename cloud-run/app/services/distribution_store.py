@@ -32,6 +32,10 @@ class FieldEditNotAllowedError(Exception):
     pass
 
 
+class DuplicateEntryError(Exception):
+    pass
+
+
 def _load_queue(queue_path: str) -> dict:
 
     if not os.path.exists(queue_path):
@@ -58,6 +62,10 @@ def create_entry(
     target_platforms: list,
     publish_mode: str = "immediate",
     scheduled_at: str = None,
+    video_duration: float = None,
+    quality_score: float = None,
+    generation_time: float = None,
+    source_project: str = None,
     queue_path: str = DEFAULT_QUEUE_PATH,
 ) -> dict:
     """
@@ -66,7 +74,20 @@ def create_entry(
     "explicit API -> generated -> waiting_review, 즉시 같은 호출
     내에서"). 자동 enqueue 훅은 없다 - 이 함수가 유일한 큐 생성
     경로이고, 반드시 명시적으로 호출돼야 한다.
+
+    같은 video_id로 이미 항목이 존재하면(어떤 상태든) DuplicateEntryError
+    를 raise한다 - 조용히 덮어쓰지 않는다(Sprint105 §7).
+
+    video_duration/quality_score/generation_time/source_project는
+    Review Metadata snapshot이다(Sprint105 §5) - 호출자가 enqueue
+    시점에 넘긴 값을 그대로 저장할 뿐, Pipeline을 직접 조회하지
+    않는다.
     """
+
+    queue = _load_queue(queue_path)
+
+    if video_id in queue:
+        raise DuplicateEntryError(video_id)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -80,15 +101,19 @@ def create_entry(
         "target_platforms": target_platforms,
         "publish_mode": publish_mode,
         "scheduled_at": scheduled_at,
+        "video_duration": video_duration,
+        "quality_score": quality_score,
+        "generation_time": generation_time,
+        "source_project": source_project,
         "status": dq.STATUS_GENERATED,
         "created_at": now,
         "updated_at": now,
         "publish_result": None,
+        "retry_count": 0,
     }
 
     entry["status"] = dq.transition(entry["status"], dq.ACTION_SUBMIT_FOR_REVIEW)
 
-    queue = _load_queue(queue_path)
     queue[video_id] = entry
     _save_queue(queue, queue_path)
 
@@ -99,14 +124,52 @@ def get_entry(video_id: str, queue_path: str = DEFAULT_QUEUE_PATH) -> dict:
     return _load_queue(queue_path).get(video_id)
 
 
-def list_entries(status: str = None, queue_path: str = DEFAULT_QUEUE_PATH) -> list:
+def list_entries(
+    status: str = None,
+    platform: str = None,
+    publish_mode: str = None,
+    queue_path: str = DEFAULT_QUEUE_PATH,
+) -> list:
+    """
+    Sprint105 §4 - status에 이어 platform/publish_mode 필터를
+    추가한다. 셋 다 지정하면 AND 조합(전부 만족해야 함)이다.
+    """
 
     entries = list(_load_queue(queue_path).values())
 
     if status is not None:
         entries = [entry for entry in entries if entry["status"] == status]
 
+    if platform is not None:
+        entries = [
+            entry for entry in entries if platform in entry["target_platforms"]
+        ]
+
+    if publish_mode is not None:
+        entries = [
+            entry for entry in entries if entry["publish_mode"] == publish_mode
+        ]
+
     return entries
+
+
+def get_dashboard_stats(queue_path: str = DEFAULT_QUEUE_PATH) -> dict:
+    """
+    Sprint105 §3 - 상태별 카운트만 반환한다(목록 자체는 반환하지
+    않는다 - list_entries()와 책임이 겹치지 않도록). dq.STATUS_* 7개
+    전부를 항상 포함해, 어떤 상태도 조용히 누락되지 않는다.
+    """
+
+    entries = list(_load_queue(queue_path).values())
+
+    stats = {status: 0 for status in dq.ALL_STATUSES}
+
+    for entry in entries:
+        stats[entry["status"]] = stats.get(entry["status"], 0) + 1
+
+    stats["total"] = len(entries)
+
+    return stats
 
 
 def apply_action(
@@ -150,6 +213,13 @@ def apply_action(
 
     if publish_result is not None:
         entry["publish_result"] = publish_result
+
+    # Sprint105 §6 - failed에서 publish로 재시도할 때만 retry_count를
+    # 올린다(최초 approved -> publishing 시도는 재시도가 아니므로
+    # 올리지 않는다). can_edit_fields() 잠금과 무관한 시스템 기록용
+    # 필드다(publish_result와 동일한 취급).
+    if action == dq.ACTION_PUBLISH and previous_status == dq.STATUS_FAILED:
+        entry["retry_count"] = entry.get("retry_count", 0) + 1
 
     entry["status"] = new_status
     entry["updated_at"] = datetime.now(timezone.utc).isoformat()

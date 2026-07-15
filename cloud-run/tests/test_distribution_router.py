@@ -63,6 +63,85 @@ class TestEnqueueEndpoint(DistributionEnabledTestCase):
         self.assertEqual(call_kwargs["target_platforms"], ["youtube"])
         self.assertEqual(result["status"], "waiting_review")
 
+    @patch("app.routers.distribution.distribution_store.create_entry")
+    def test_enqueue_passes_review_metadata_snapshot_fields(self, mock_create):
+        # Sprint105 §5 - video_duration/quality_score/generation_time/
+        # source_project는 호출자가 넘긴 값을 그대로 create_entry()에
+        # 전달한다(Pipeline을 직접 조회하지 않는다).
+        mock_create.return_value = {"video_id": "v1", "status": "waiting_review"}
+
+        request = EnqueueRequest(
+            video_id="v1",
+            output_path="output/v1",
+            title="제목",
+            description="설명",
+            hashtags=["health"],
+            thumbnail_path="output/v1/thumbnail.png",
+            target_platforms=["youtube"],
+            video_duration=45.2,
+            quality_score=0.91,
+            generation_time=132.5,
+            source_project="output/v1",
+        )
+
+        router.enqueue(request)
+
+        call_kwargs = mock_create.call_args.kwargs
+        self.assertEqual(call_kwargs["video_duration"], 45.2)
+        self.assertEqual(call_kwargs["quality_score"], 0.91)
+        self.assertEqual(call_kwargs["generation_time"], 132.5)
+        self.assertEqual(call_kwargs["source_project"], "output/v1")
+
+    @patch(
+        "app.routers.distribution.distribution_store.create_entry",
+        side_effect=distribution_store.DuplicateEntryError("v1"),
+    )
+    def test_enqueue_409_on_duplicate_video_id(self, mock_create):
+        from fastapi import HTTPException
+
+        with self.assertRaises(HTTPException) as ctx:
+            router.enqueue(SAMPLE_ENQUEUE_REQUEST)
+
+        self.assertEqual(ctx.exception.status_code, 409)
+
+
+class TestDashboardEndpoint(DistributionEnabledTestCase):
+
+    @patch("app.routers.distribution.distribution_store.get_dashboard_stats")
+    def test_dashboard_delegates_to_store(self, mock_stats):
+        mock_stats.return_value = {
+            "total": 20, "generated": 0, "waiting_review": 8, "approved": 5,
+            "publishing": 2, "published": 5, "failed": 0, "rejected": 0,
+        }
+
+        result = router.dashboard()
+
+        mock_stats.assert_called_once()
+        self.assertEqual(result["total"], 20)
+        self.assertEqual(result["waiting_review"], 8)
+
+    @patch("app.routers.distribution.distribution_store.get_dashboard_stats")
+    def test_dashboard_works_even_when_distribution_disabled(self, mock_stats):
+        config.ENABLE_DISTRIBUTION = False
+        mock_stats.return_value = {"total": 0}
+
+        result = router.dashboard()
+
+        self.assertEqual(result["total"], 0)
+
+
+class TestListQueueExtendedFilters(DistributionEnabledTestCase):
+
+    @patch("app.routers.distribution.distribution_store.list_entries")
+    def test_list_queue_passes_platform_and_publish_mode_filters(self, mock_list):
+        mock_list.return_value = []
+
+        router.list_queue(status=None, platform="youtube", publish_mode="scheduled")
+
+        mock_list.assert_called_once_with(
+            status=None, platform="youtube", publish_mode="scheduled",
+        )
+
 
 class TestListAndGetEndpoints(DistributionEnabledTestCase):
 
@@ -72,7 +151,9 @@ class TestListAndGetEndpoints(DistributionEnabledTestCase):
 
         router.list_queue(status="waiting_review")
 
-        mock_list.assert_called_once_with(status="waiting_review")
+        mock_list.assert_called_once_with(
+            status="waiting_review", platform=None, publish_mode=None,
+        )
 
     @patch("app.routers.distribution.distribution_store.list_entries")
     def test_list_queue_without_filter(self, mock_list):
@@ -80,7 +161,7 @@ class TestListAndGetEndpoints(DistributionEnabledTestCase):
 
         router.list_queue(status=None)
 
-        mock_list.assert_called_once_with(status=None)
+        mock_list.assert_called_once_with(status=None, platform=None, publish_mode=None)
 
     @patch("app.routers.distribution.distribution_store.get_entry")
     def test_get_queue_item_returns_entry(self, mock_get):

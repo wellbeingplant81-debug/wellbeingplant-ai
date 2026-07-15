@@ -57,6 +57,18 @@ _TRANSITIONS = {
 # 가능 상태에 포함해둔다.
 EDITABLE_STATUSES = {STATUS_GENERATED, STATUS_WAITING_REVIEW, STATUS_REJECTED}
 
+# Sprint105 - Dashboard API(distribution_store.get_dashboard_stats())가
+# 7개 상태를 전부 카운트에 포함시키기 위한 목록.
+ALL_STATUSES = [
+    STATUS_GENERATED,
+    STATUS_WAITING_REVIEW,
+    STATUS_APPROVED,
+    STATUS_PUBLISHING,
+    STATUS_PUBLISHED,
+    STATUS_FAILED,
+    STATUS_REJECTED,
+]
+
 
 class InvalidTransitionError(Exception):
     pass

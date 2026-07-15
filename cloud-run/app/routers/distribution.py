@@ -55,22 +55,44 @@ def enqueue(request: EnqueueRequest):
 
     _require_enabled()
 
-    return distribution_store.create_entry(
-        video_id=request.video_id,
-        output_path=request.output_path,
-        title=request.title,
-        description=request.description,
-        hashtags=request.hashtags,
-        thumbnail_path=request.thumbnail_path,
-        target_platforms=request.target_platforms,
-        publish_mode=request.publish_mode,
-        scheduled_at=request.scheduled_at,
-    )
+    try:
+        return distribution_store.create_entry(
+            video_id=request.video_id,
+            output_path=request.output_path,
+            title=request.title,
+            description=request.description,
+            hashtags=request.hashtags,
+            thumbnail_path=request.thumbnail_path,
+            target_platforms=request.target_platforms,
+            publish_mode=request.publish_mode,
+            scheduled_at=request.scheduled_at,
+            video_duration=request.video_duration,
+            quality_score=request.quality_score,
+            generation_time=request.generation_time,
+            source_project=request.source_project,
+        )
+    except distribution_store.DuplicateEntryError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"video_id={request.video_id} is already enqueued",
+        )
+
+
+@router.get("/distribution/dashboard")
+def dashboard():
+    """Sprint105 §3 - 상태별 카운트만 반환한다. 플래그와 무관하게 항상 동작."""
+    return distribution_store.get_dashboard_stats()
 
 
 @router.get("/distribution/queue")
-def list_queue(status: Optional[str] = None):
-    return distribution_store.list_entries(status=status)
+def list_queue(
+    status: Optional[str] = None,
+    platform: Optional[str] = None,
+    publish_mode: Optional[str] = None,
+):
+    return distribution_store.list_entries(
+        status=status, platform=platform, publish_mode=publish_mode,
+    )
 
 
 @router.get("/distribution/queue/{video_id}")

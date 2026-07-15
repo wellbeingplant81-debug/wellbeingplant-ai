@@ -12,8 +12,15 @@ target_platforms 중 하나라도 실패하면 전체를 failed로 기록한다(
 Adapter가 예외를 던져도(예: real API 플래그가 실수로 켜졌지만 실제
 구현이 없는 경우) 그 플랫폼만 실패로 기록될 뿐 publish() 전체가
 죽지 않는다.
+
+Sprint105 - 각 플랫폼 발행 시도마다 distribution_history.record()로
+이력을 append한다. retry_count 자체의 증가는 distribution_store.
+apply_action()이 담당하므로(failed -> publish 재시도일 때만 증가),
+이 모듈은 그 결과값(entry["retry_count"])을 그대로 history 기록에
+실어 나르기만 한다 - 재시도 판정 로직을 중복으로 갖지 않는다.
 """
 
+from app.services import distribution_history
 from app.services import distribution_queue as dq
 from app.services import distribution_store
 from app.services import platform_adapter
@@ -42,6 +49,15 @@ def publish(video_id: str) -> dict:
             "platform_post_id": result.platform_post_id,
             "error": result.error,
         }
+
+        distribution_history.record(
+            video_id=video_id,
+            platform=platform,
+            success=result.success,
+            platform_post_id=result.platform_post_id,
+            error=result.error,
+            retry_count=entry["retry_count"],
+        )
 
         if not result.success:
             all_succeeded = False
