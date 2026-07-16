@@ -1,7 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app import config
+from app.services import duration_estimator
 from app.services import motion_contract
+from app.services import scene_stability_policy
 from app.services.asset_integration_service import integrate_asset
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.asset_priority_classifier import select_ai_priority_scenes
@@ -57,6 +59,7 @@ def collect_assets(
 
     video_priority_scenes = set()
     contract_by_scene = {}
+    stock_video_priority_active = False
 
     if asset_plan:
         ai_priority_scenes = {
@@ -112,18 +115,45 @@ def collect_assets(
                 for scene in scenes
                 if UploadAssetStrategy.prefers_video(scene, profile="upload")
             }
+    elif config.ENABLE_STOCK_VIDEO_PRIORITY and any(
+        scene.get("visual_type") for scene in scenes
+    ):
+        # Sprint121 - Stock Video Priority. 이미 확정된
+        # scene["visual_type"]만 신뢰한다 - UploadAssetStrategy.
+        # select_asset_mode()(AI/Real 재분류 로직)는 절대 호출하지
+        # 않는다(승인된 Visual Planning 보호). Stock Video 채택
+        # 여부만 검증된 asset_strategy="upload" 스코어링/관련성 체크
+        # 메커니즘(아래 use_upload_wiring)을 재사용해서 결정하고,
+        # 적합한 후보가 없으면 그 메커니즘 자체의 기존 폴백으로
+        # Stock Image/AI에 자연스럽게 떨어진다.
+        ai_priority_scenes = {
+            scene["scene"] for scene in scenes if scene.get("visual_type") == "ai"
+        }
+        visual_profiles = assign_visual_profiles(scenes)
+        video_priority_scenes = {
+            scene["scene"] for scene in scenes if scene.get("visual_type") == "real"
+        }
+        stock_video_priority_active = True
     else:
         ai_priority_scenes = select_ai_priority_scenes(
             scenes, get_ai_ratio_cap(),
         )
         visual_profiles = assign_visual_profiles(scenes)
 
+    # Sprint121 - Stock Video Priority 전용 분기도 asset_strategy=
+    # "upload"와 동일한 스코어링/관련성 체크 배선을 재사용한다(AI/Real
+    # 분류는 위에서 이미 scene["visual_type"]로 고정됨). 호출자가
+    # 명시적으로 넘긴 asset_strategy(Motion Contract 등 실제 upload
+    # ProductionProfile 전용 로직)는 아래에서 원래 값 그대로만 참조해
+    # 이 분기와 절대 섞이지 않는다.
+    use_upload_wiring = asset_strategy == "upload" or stock_video_priority_active
+
     integrate_asset_kwargs = {}
-    if asset_strategy == "upload":
+    if use_upload_wiring:
         # Sprint96.1 Hotfix - asset_strategy="upload"일 때만
         # integrate_asset()에 전달한다(그 외에는 기존처럼 kwarg 자체를
         # 넘기지 않아 완전히 하위 호환).
-        integrate_asset_kwargs["asset_strategy"] = asset_strategy
+        integrate_asset_kwargs["asset_strategy"] = "upload"
 
     futures = []
     results = []
@@ -135,26 +165,50 @@ def collect_assets(
             per_scene_kwargs = dict(integrate_asset_kwargs)
             scene_for_integration = scene
 
-            if asset_strategy == "upload":
+            if use_upload_wiring:
                 # Sprint100-3 - prefer_video는 scene마다 다르므로(공유
                 # 딕셔너리인 integrate_asset_kwargs에는 넣을 수 없다)
                 # 매 반복마다 계산해 넣는다.
                 per_scene_kwargs["prefer_video"] = scene["scene"] in video_priority_scenes
 
-                # Sprint100-2 - Motion Contract 오케스트레이션만: 규칙
-                # 판단은 motion_contract.py, max_assets 강제는
-                # asset_integration_service.integrate_asset()의 책임이다.
-                # 여기서는 (a) integrate_asset()이 실제로 캡을 적용할
-                # 수 있도록 max_assets 값만 kwarg로 넘기고, (b) QA
-                # Report가 읽을 수 있도록 scene 사본에 motion_contract
-                # 필드를 얹는다 - integrate_asset()이 enriched =
-                # dict(scene)으로 시작하므로 이 필드가 결과에 그대로
-                # 전달된다(integrate_asset() 시그니처는 건드리지 않음).
-                contract_entry = contract_by_scene.get(scene["scene"])
-                if contract_entry is not None:
-                    per_scene_kwargs["max_assets"] = contract_entry["max_assets"]
-                    scene_for_integration = dict(scene)
-                    scene_for_integration["motion_contract"] = contract_entry
+                if asset_strategy == "upload":
+                    # Sprint100-2 - Motion Contract 오케스트레이션만:
+                    # 실제 upload ProductionProfile 경로에서만 동작한다
+                    # (Sprint121 Stock Video Priority 분기는 여기 타지
+                    # 않는다 - 기존 동작 변경 금지). 규칙 판단은
+                    # motion_contract.py, max_assets 강제는
+                    # asset_integration_service.integrate_asset()의
+                    # 책임이다. 여기서는 (a) integrate_asset()이 실제로
+                    # 캡을 적용할 수 있도록 max_assets 값만 kwarg로
+                    # 넘기고, (b) QA Report가 읽을 수 있도록 scene
+                    # 사본에 motion_contract 필드를 얹는다 -
+                    # integrate_asset()이 enriched = dict(scene)으로
+                    # 시작하므로 이 필드가 결과에 그대로 전달된다
+                    # (integrate_asset() 시그니처는 건드리지 않음).
+                    contract_entry = contract_by_scene.get(scene["scene"])
+                    if contract_entry is not None:
+                        per_scene_kwargs["max_assets"] = contract_entry["max_assets"]
+                        scene_for_integration = dict(scene)
+                        scene_for_integration["motion_contract"] = contract_entry
+
+            if config.ENABLE_SCENE_ASSET_LIMIT and "max_assets" not in per_scene_kwargs:
+                # Sprint121 - Scene Stability. Motion Contract가 이미
+                # max_assets를 정한 경우(위 분기)는 덮어쓰지 않는다.
+                # narration 예상 길이(TTS 이전 단계라 실제 audio 길이는
+                # 아직 알 수 없음 - duration_estimator로 추정)를
+                # scene_stability_policy에 넘겨 Scene 길이에 맞는 최대
+                # asset 개수를 정한다. 실제로는 primary asset이 AI
+                # 생성일 때만 영향을 준다(Stock scene은 원래도 asset
+                # 1개 - 기존 Sprint62-4 불변식, 이 Sprint에서 건드리지
+                # 않음).
+                estimated_duration = duration_estimator.estimate_duration(
+                    scene.get("narration", ""),
+                )
+                per_scene_kwargs["max_assets"] = (
+                    scene_stability_policy.max_assets_for_duration(
+                        estimated_duration,
+                    )
+                )
 
             futures.append(
                 executor.submit(

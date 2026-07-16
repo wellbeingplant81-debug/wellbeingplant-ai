@@ -105,3 +105,19 @@ ENABLE_DISTRIBUTION = False
 ENABLE_YOUTUBE_REAL_API = False
 ENABLE_INSTAGRAM_REAL_API = False
 ENABLE_TIKTOK_REAL_API = False
+
+# Sprint121 - Scene Stability & Stock Video Priority. 둘 다 기본 False
+# (Regression Zero) - 각각 독립적으로 켤 수 있는 kill switch다.
+#
+# ENABLE_STOCK_VIDEO_PRIORITY: Real scene에서 이미 확정된
+# scene["visual_type"]은 그대로 두고, asset_strategy="upload"의
+# 검증된 스코어링/관련성 체크 메커니즘만 재사용해 Stock Video를
+# Stock Image보다 우선한다. UploadAssetStrategy의 AI/Real 재분류
+# 로직은 호출하지 않는다(step02_assets.collect_assets() 참고).
+#
+# ENABLE_SCENE_ASSET_LIMIT: scene마다 narration 예상 길이 기반으로
+# scene_stability_policy.max_assets_for_duration()이 정한 값을
+# max_assets로 전달해, AI scene의 다중 asset(기존 AI_ASSET_COUNT=4
+# 고정)을 Scene 길이에 맞게 제한한다.
+ENABLE_STOCK_VIDEO_PRIORITY = False
+ENABLE_SCENE_ASSET_LIMIT = False
