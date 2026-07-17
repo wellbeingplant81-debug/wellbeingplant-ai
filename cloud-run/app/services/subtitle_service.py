@@ -43,12 +43,24 @@ _MEASURED_PX_PER_UNIT = 43.83
 # 화면 폭 중 자막에 실제로 쓸 안전 영역 비율(좌우 각 7.5% 여백).
 SAFE_AREA_WIDTH_RATIO = 0.85
 
+
+def safe_area_max_line_width(width: int = VIDEO_WIDTH) -> int:
+    """
+    Sprint122 - Longform Foundation. 기존 SAFE_AREA_MAX_LINE_WIDTH
+    계산식을 순수 함수로 일반화한다 - width를 안 넘기면(기본값
+    VIDEO_WIDTH) 기존 모듈 상수와 100% 동일한 값을 반환한다.
+    render_profile의 width(예: Longform 1920)를 넘기면 그 폭 기준
+    안전 영역 최대 표시 폭을 계산한다.
+    """
+
+    return int(width * SAFE_AREA_WIDTH_RATIO / _MEASURED_PX_PER_UNIT)
+
+
 # 화면 1줄 안전 영역에 들어갈 수 있는 최대 표시 폭(전각=2/반각=1 단위,
-# _display_width 참고) - VIDEO_WIDTH가 바뀌어도(예: 다른 해상도)
-# 자동으로 다시 계산되도록 상수가 아니라 계산식으로 둔다.
-SAFE_AREA_MAX_LINE_WIDTH = int(
-    VIDEO_WIDTH * SAFE_AREA_WIDTH_RATIO / _MEASURED_PX_PER_UNIT
-)
+# _display_width 참고) - Shorts(VIDEO_WIDTH) 기준 기본값. 완전히
+# 하위 호환을 위해 그대로 남겨둔다 - 아래 safe_area_max_line_width()와
+# 항상 같은 값이다.
+SAFE_AREA_MAX_LINE_WIDTH = safe_area_max_line_width(VIDEO_WIDTH)
 
 MAX_LINES_PER_CUE = 2
 
@@ -469,7 +481,7 @@ def _snap_last_cue_to_final_audio_duration(
     last_cue["end"] = target_duration
 
 
-def create_subtitle(project_path: str):
+def create_subtitle(project_path: str, render_profile: dict = None):
 
     script_path = os.path.join(
         project_path,
@@ -520,6 +532,15 @@ def create_subtitle(project_path: str):
     srt_path = os.path.join(
         subtitle_dir,
         "subtitle.srt",
+    )
+
+    # Sprint122 - Longform Foundation: render_profile의 width가 있으면
+    # 그 기준으로, 없으면(기본값 None) 기존 VIDEO_WIDTH 기준
+    # SAFE_AREA_MAX_LINE_WIDTH를 그대로 쓴다.
+    max_line_width = (
+        safe_area_max_line_width(render_profile["width"])
+        if render_profile is not None
+        else SAFE_AREA_MAX_LINE_WIDTH
     )
 
     current = 0
@@ -597,7 +618,7 @@ def create_subtitle(project_path: str):
             cues.append({
                 "start": start,
                 "end": end,
-                "text": wrap_to_safe_lines(subtitle),
+                "text": wrap_to_safe_lines(subtitle, max_line_width=max_line_width),
             })
 
             local_time += part_duration

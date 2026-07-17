@@ -13,6 +13,7 @@ from app.models.quality_report import (
 )
 from app.services import quality_service
 from app.services import technical_validation_service
+from app.services.render_profile import final_video_filename, thumbnail_filename
 from app.services.visual_diversity_engine import summarize_visual_diversity
 
 
@@ -139,11 +140,14 @@ def evaluate(project_path):
     pipeline-internal `timings`/`pipeline_start` parameters.
     """
 
+    script_data = _load_script(project_path)
+
     return run(
         project_path,
-        _load_script(project_path),
+        script_data,
         timings={},
         pipeline_start=time.perf_counter(),
+        render_profile=script_data.get("render_profile"),
     )
 
 
@@ -152,6 +156,7 @@ def run(
     data,
     timings,
     pipeline_start,
+    render_profile=None,
 ):
 
     project_id = os.path.basename(project_path.rstrip("/\\"))
@@ -159,6 +164,7 @@ def run(
     validation_result = technical_validation_service.validate(
         project_path,
         data,
+        render_profile,
     )
 
     ai_quality_evaluation = None
@@ -172,6 +178,7 @@ def run(
             ai_quality_evaluation = quality_service.evaluate(
                 project_path,
                 data,
+                render_profile,
             )
         except Exception as exc:
             ai_evaluation_skipped_reason = f"AI evaluation failed: {exc}"
@@ -185,8 +192,8 @@ def run(
     timings["quality_evaluation"] = time.perf_counter() - quality_eval_start
     timings["total_generation_time"] = time.perf_counter() - pipeline_start
 
-    final_video_path = os.path.join(project_path, "video", "final_short.mp4")
-    thumbnail_path = os.path.join(project_path, "thumbnail.png")
+    final_video_path = os.path.join(project_path, "video", final_video_filename(render_profile))
+    thumbnail_path = os.path.join(project_path, thumbnail_filename(render_profile))
 
     performance_metrics = PerformanceMetrics(
         project_creation_seconds=timings.get("project_creation", 0.0),

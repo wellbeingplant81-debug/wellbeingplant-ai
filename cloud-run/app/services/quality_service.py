@@ -7,6 +7,7 @@ from PIL import Image
 
 from app.models.quality_report import AIQualityEvaluation
 from app.prompts.quality_rubric import QUALITY_EVALUATION_RUBRIC
+from app.services.render_profile import thumbnail_filename
 
 
 MODEL_NAME = "gemini-2.5-pro"
@@ -19,7 +20,7 @@ client = genai.Client(
 )
 
 
-def evaluate(project_path, data):
+def evaluate(project_path, data, render_profile=None):
 
     scenes = data["scenes"]
 
@@ -31,7 +32,7 @@ def evaluate(project_path, data):
 
         images.append(Image.open(image_path))
 
-    thumbnail_path = os.path.join(project_path, "thumbnail.png")
+    thumbnail_path = os.path.join(project_path, thumbnail_filename(render_profile))
 
     images.append(Image.open(thumbnail_path))
 

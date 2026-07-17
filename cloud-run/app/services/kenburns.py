@@ -104,10 +104,10 @@ def _directional_pan_offsets(slack, travel, direction):
     return start, end
 
 
-def _fit_scale(img_w, img_h):
+def _fit_scale(img_w, img_h, width=VIDEO_WIDTH, height=VIDEO_HEIGHT):
     return SAFETY_SCALE * max(
-        VIDEO_WIDTH / img_w,
-        VIDEO_HEIGHT / img_h,
+        width / img_w,
+        height / img_h,
     )
 
 
@@ -163,6 +163,8 @@ def build_kenburns_clip(
     image_path: str,
     duration: float,
     motion: str = None,
+    width: int = None,
+    height: int = None,
 ):
     """
     Sprint70-1 - motion을 명시적으로 넘기면(예: video_builder.py가
@@ -170,9 +172,20 @@ def build_kenburns_clip(
     그 모션을 그대로 쓰고 자동 선택(_pick_motion)은 하지 않는다.
     motion을 안 넘기면(기본값 None) 기존과 100% 동일하게 자동
     선택한다 - 완전히 하위 호환.
+
+    Sprint122 - Longform Foundation: width/height를 안 넘기면(기본값
+    None) 기존 모듈 상수 VIDEO_WIDTH/VIDEO_HEIGHT를 그대로 쓴다 -
+    완전히 하위 호환. render_profile의 width/height(예: Longform
+    1920x1080)를 넘기면 그 canvas 기준으로 pan/zoom과 최종 clip
+    크기가 계산된다.
     """
 
     global _last_motion
+
+    if width is None:
+        width = VIDEO_WIDTH
+    if height is None:
+        height = VIDEO_HEIGHT
 
     if motion is None:
         motion = _pick_motion()
@@ -182,7 +195,7 @@ def build_kenburns_clip(
     raw = _load_image_clip(image_path, duration)
     img_w, img_h = raw.w, raw.h
 
-    fit_scale = _fit_scale(img_w, img_h)
+    fit_scale = _fit_scale(img_w, img_h, width, height)
 
     # -------------------------
     # ZOOM IN / OUT
@@ -217,17 +230,17 @@ def build_kenburns_clip(
         desired_travel = random.uniform(*PAN_DISTANCE_RANGE)
 
         capped_scale = fit_scale * (1 + MAX_PAN_EXTRA_SCALE)
-        max_slack_x = max(0.0, img_w * capped_scale - VIDEO_WIDTH)
+        max_slack_x = max(0.0, img_w * capped_scale - width)
 
         travel = min(desired_travel, max_slack_x)
 
-        required_scale = _scale_for_travel(img_w, VIDEO_WIDTH, travel)
+        required_scale = _scale_for_travel(img_w, width, travel)
         scale = max(fit_scale, min(required_scale, capped_scale))
 
         clip = raw.resized(scale).with_duration(duration)
 
-        slack_x = max(0.0, clip.w - VIDEO_WIDTH)
-        slack_y = max(0.0, clip.h - VIDEO_HEIGHT)
+        slack_x = max(0.0, clip.w - width)
+        slack_y = max(0.0, clip.h - height)
 
         direction = -1 if motion == "pan_right" else 1
         start_x, end_x = _directional_pan_offsets(slack_x, travel, direction)
@@ -249,17 +262,17 @@ def build_kenburns_clip(
         desired_travel = random.uniform(*PAN_DISTANCE_RANGE)
 
         capped_scale = fit_scale * (1 + MAX_PAN_EXTRA_SCALE)
-        max_slack_y = max(0.0, img_h * capped_scale - VIDEO_HEIGHT)
+        max_slack_y = max(0.0, img_h * capped_scale - height)
 
         travel = min(desired_travel, max_slack_y)
 
-        required_scale = _scale_for_travel(img_h, VIDEO_HEIGHT, travel)
+        required_scale = _scale_for_travel(img_h, height, travel)
         scale = max(fit_scale, min(required_scale, capped_scale))
 
         clip = raw.resized(scale).with_duration(duration)
 
-        slack_x = max(0.0, clip.w - VIDEO_WIDTH)
-        slack_y = max(0.0, clip.h - VIDEO_HEIGHT)
+        slack_x = max(0.0, clip.w - width)
+        slack_y = max(0.0, clip.h - height)
 
         direction = -1 if motion == "pan_down" else 1
         start_y, end_y = _directional_pan_offsets(slack_y, travel, direction)
@@ -274,7 +287,7 @@ def build_kenburns_clip(
 
     clip = CompositeVideoClip(
         [clip],
-        size=(VIDEO_WIDTH, VIDEO_HEIGHT),
+        size=(width, height),
     ).with_duration(duration)
 
     return clip

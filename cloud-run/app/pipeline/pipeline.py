@@ -3,6 +3,7 @@ import os
 import time
 
 from app import config
+from app.providers import elevenlabs_provider
 from app.services import ai_director_service
 from app.services import asset_planner
 from app.steps import step01_script
@@ -18,6 +19,7 @@ from app.services import prompt_learning_service
 from app.services import production_profile_integration
 from app.services import prompt_optimization_service
 from app.services import regeneration_service
+from app.services import render_profile as render_profile_service
 from app.services import scene_planner_service
 from app.services import visual_consistency_engine
 
@@ -53,6 +55,7 @@ def run_pipeline(
     project_creation_time: float = 0.0,
     pipeline_start: float = None,
     production_profile_name: str = None,
+    render_profile_name: str = None,
 ):
 
     if pipeline_start is None:
@@ -70,6 +73,16 @@ def run_pipeline(
     step02_asset_kwargs = {}
     step03_duration_kwargs = {}
     active_profile = None
+
+    # Sprint122 - Longform Foundation: render_profile_name은 production_
+    # profile_name과 완전히 독립된 축이다("선택값"이지 Feature Flag가
+    # 아니다 - config 토글 없음). RenderProfile.get()은 항상 dict를
+    # 반환하므로(모르는 이름/None -> "shorts" 기본값 폴백) try/except
+    # 없이 무조건 계산하고, 4개 Compose 단계(step02_assets/step04_
+    # subtitle/step05_video/step06_thumbnail) 모두에 그대로 전달한다.
+    # render_profile_name을 안 넘기면 "shorts"가 오늘의 하드코딩 값과
+    # 정확히 같으므로 기존 동작과 100% 동일하다.
+    active_render_profile = render_profile_service.RenderProfile.get(render_profile_name)
 
     # Sprint100-2 - Explicit Profile Opt-In: 전역 플래그(config.
     # ENABLE_PRODUCTION_PROFILE, 기본 False)를 켜지 않고도, 호출자가
@@ -112,6 +125,26 @@ def run_pipeline(
         except Exception as exc:
             print(f"Production profile step failed: {exc}")
 
+    # Sprint123 - Production Policy: Longform은 반드시 ElevenLabs를
+    # 쓴다 - production_profile의 tts_provider(예: development의
+    # "chirp")보다 항상 우선한다. Google로 조용히 대체하지 않는다 -
+    # 아래 사전 검증이 실패하면 예외가 그대로 전파되어 Script/Image/
+    # Asset/Video 생성을 전혀 시작하지 않고 파이프라인이 즉시 멈춘다
+    # (Production 비용 절감 - 사전 검증을 Production 진입 직전에 둔다).
+    # Shorts(render_profile_name 미지정/그 외 값)는 이 블록 자체가
+    # 완전히 no-op이라 기존 동작과 100% 동일하다.
+    if active_render_profile["profile"] == "longform":
+        print("[Pipeline] Longform Pre-flight: ElevenLabs 가용성 검증 중...")
+        voice_id, voice_name = elevenlabs_provider.validate_availability()
+        print(
+            f"[Pipeline] Longform Pre-flight: OK - Provider=ElevenLabs "
+            f"Voice Name={voice_name or '(ELEVENLABS_VOICE_ID 직접 지정)'} "
+            f"Voice ID={voice_id}"
+        )
+
+        step01_duration_kwargs["tts_provider"] = "elevenlabs"
+        step03_duration_kwargs["tts_provider"] = "elevenlabs"
+
     t0 = time.perf_counter()
     data = step01_script.run(
         topic,
@@ -122,6 +155,19 @@ def run_pipeline(
 
     if active_profile is not None:
         data["production_profile"] = active_profile
+
+    # Sprint122 - render_profile_name을 명시적으로 준 요청에 한해서만
+    # 결과 dict/하위 호출에 render_profile을 노출한다 - 안 주면
+    # (기본값 None) 기존 pipeline 출력/호출 시그니처와 100% 동일하다
+    # (아래 각 step0N.run()/collect_assets() 호출도 동일 원칙). 프로필
+    # 자체는 이미 위에서 항상 계산돼 있으므로("shorts"가 오늘의
+    # 하드코딩 값과 정확히 같음), 실제 운영 동작은 노출 여부와 무관하게
+    # 늘 동일하다 - production_profile_name과 동일한 "명시적 opt-in"
+    # 관례를 그대로 따른다.
+    render_profile_opted_in = render_profile_name is not None
+
+    if render_profile_opted_in:
+        data["render_profile"] = active_render_profile
 
     if config.ENABLE_SCENE_PLANNER:
         try:
@@ -222,6 +268,8 @@ def run_pipeline(
     collect_assets_kwargs = dict(step02_asset_kwargs)
     if data.get("asset_plan"):
         collect_assets_kwargs["asset_plan"] = data["asset_plan"]
+    if render_profile_opted_in:
+        collect_assets_kwargs["render_profile"] = active_render_profile
 
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(
@@ -241,15 +289,21 @@ def run_pipeline(
     )
     timings["tts_generation"] = time.perf_counter() - t0
 
+    step04_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
+    step05_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
+    step06_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
+
     t0 = time.perf_counter()
     step04_subtitle.run(
         project_path,
+        **step04_kwargs,
     )
     timings["subtitle_generation"] = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     step05_video.run(
         project_path,
+        **step05_kwargs,
     )
     timings["video_rendering"] = time.perf_counter() - t0
 
@@ -263,6 +317,7 @@ def run_pipeline(
         channel,
         scene1["narration"],
         scene1["image_prompt"],
+        **step06_kwargs,
     )
     timings["thumbnail_generation"] = time.perf_counter() - t0
 
@@ -272,6 +327,7 @@ def run_pipeline(
             data,
             timings,
             pipeline_start,
+            render_profile=active_render_profile,
         )
     except Exception as exc:
         print(f"Quality evaluation step failed: {exc}")

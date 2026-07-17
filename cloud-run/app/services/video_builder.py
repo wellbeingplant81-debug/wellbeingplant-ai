@@ -10,6 +10,7 @@ from moviepy.video.fx.FadeOut import FadeOut
 from moviepy.video.fx.Loop import Loop
 
 from app.services import asset_usage_planner
+from app.services.render_profile import silent_video_filename
 from app.services.kenburns import (
     VIDEO_HEIGHT,
     VIDEO_WIDTH,
@@ -257,20 +258,29 @@ def _resolve_video_only_path(scene):
     return None
 
 
-def _build_video_only_clip(video_path: str, duration: float):
+def _build_video_only_clip(video_path: str, duration: float, width: int = None, height: int = None):
     """
     Sprint100-2 - Video as First-Class Asset. Stock Video 원본을 Ken
     Burns pan/zoom 대신 실제 재생으로 렌더링합니다. kenburns._fit_
-    scale()과 동일한 cover-fit 스케일로 1080x1920을 채우고 중앙에
-    위치시킨 뒤 CompositeVideoClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT))가
-    캔버스 밖을 자동으로 잘라냅니다(kenburns.py의 pan 모션이 크롭 없이
+    scale()과 동일한 cover-fit 스케일로 캔버스를 채우고 중앙에
+    위치시킨 뒤 CompositeVideoClip(size=(width, height))가 캔버스
+    밖을 자동으로 잘라냅니다(kenburns.py의 pan 모션이 크롭 없이
     같은 방식으로 동작하는 것과 동일한 원리). 오디오는 항상 제거합니다
     (최종 mux는 narration/BGM만 쓴다 - final_video_service.
     merge_video_audio()가 이미 "-map 1:a:0"으로 원본 영상의 오디오
     트랙을 아예 쓰지 않습니다). 원본 길이가 duration보다 짧으면
     반복 재생(Loop)하고, 길거나 같으면 앞부분만 자릅니다(subclipped) -
     Ken Burns의 "narration 길이에 정확히 맞춘다" 원칙과 동일합니다.
+
+    Sprint122 - Longform Foundation: width/height를 안 넘기면(기본값
+    None) 기존 VIDEO_WIDTH/VIDEO_HEIGHT를 그대로 쓴다 - 완전히 하위
+    호환.
     """
+
+    if width is None:
+        width = VIDEO_WIDTH
+    if height is None:
+        height = VIDEO_HEIGHT
 
     clip = VideoFileClip(video_path).without_audio()
 
@@ -279,16 +289,16 @@ def _build_video_only_clip(video_path: str, duration: float):
     else:
         clip = clip.subclipped(0, duration)
 
-    fit_scale = _fit_scale(clip.w, clip.h)
+    fit_scale = _fit_scale(clip.w, clip.h, width, height)
 
     clip = clip.resized(fit_scale).with_position("center")
 
     return CompositeVideoClip(
-        [clip], size=(VIDEO_WIDTH, VIDEO_HEIGHT),
+        [clip], size=(width, height),
     ).with_duration(duration)
 
 
-def _build_scene_clip(asset_paths, clip_duration, scene=None):
+def _build_scene_clip(asset_paths, clip_duration, scene=None, render_profile=None):
     """
     Sprint62-3 - Scene 하나를 구성하는 clip을 만듭니다. asset이 1개면
     기존과 완전히 동일하게 단일 Ken Burns clip을 반환합니다(렌더링
@@ -317,12 +327,25 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
     profile 전체, AI/Stock Image scene) 100% 기존 경로 그대로다.
     """
 
+    # Sprint122 - Longform Foundation: render_profile이 있을 때만
+    # width/height kwarg 자체를 보탠다(없으면 build_kenburns_clip()/
+    # _build_video_only_clip() 호출에 kwarg가 아예 추가되지 않아, 그
+    # 함수들 자체의 기본값(VIDEO_WIDTH/VIDEO_HEIGHT)이 적용된다) -
+    # 기존 호출부/mock(width/height를 모르는 lambda 등)과 완전히
+    # 하위 호환된다.
+    canvas_kwargs = {}
+    if render_profile is not None:
+        canvas_kwargs = {
+            "width": render_profile["width"],
+            "height": render_profile["height"],
+        }
+
     if len(asset_paths) == 1:
         video_only_path = _resolve_video_only_path(scene)
         if video_only_path:
             try:
                 return _build_video_only_clip(
-                    video_only_path, clip_duration,
+                    video_only_path, clip_duration, **canvas_kwargs,
                 ).with_fps(30)
             except Exception as exc:
                 # Sprint100-2 - Video 재생 실패(손상된 mp4 등) 시
@@ -333,7 +356,9 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
                     f"[VideoBuilder] video_path 재생 실패, "
                     f"이미지로 폴백: {exc}"
                 )
-        return build_kenburns_clip(asset_paths[0], clip_duration).with_fps(30)
+        return build_kenburns_clip(
+            asset_paths[0], clip_duration, **canvas_kwargs,
+        ).with_fps(30)
 
     cut_durations = (
         _resolve_cut_durations(scene, asset_paths, clip_duration)
@@ -357,7 +382,7 @@ def _build_scene_clip(asset_paths, clip_duration, scene=None):
         )
 
         clip = build_kenburns_clip(
-            path, render_duration, motion=motion,
+            path, render_duration, motion=motion, **canvas_kwargs,
         ).with_fps(30)
 
         effects = []
@@ -404,7 +429,7 @@ def _effects_for_clip(index, last_index, scene, duration, overlap):
     return effects
 
 
-def build_video(project_path: str):
+def build_video(project_path: str, render_profile: dict = None):
 
     scenes = annotate_scenes_with_transitions(_load_scenes(project_path))
 
@@ -448,7 +473,24 @@ def build_video(project_path: str):
 
         scene_asset_paths.append(asset_paths_for_scene)
 
-    durations = _apply_duration_limits(durations)
+    # Sprint123 - Longform Audio/Video Sync. _apply_duration_limits()는
+    # scene 하나의 Ken Burns 재생 길이를 [MIN_SCENE_DURATION,
+    # MAX_SCENE_DURATION] 범위로 눌러 담고, 그 차이를 "다른" scene들에
+    # water-filling으로 재분배한다 - 총합(=narration 총 길이)은
+    # 보존되지만, 개별 scene의 재생 길이가 그 scene 자신의 실제 오디오
+    # 길이와 더 이상 일치하지 않게 된다. Shorts(평균 scene 길이가 이미
+    # 범위 안이라 사실상 no-op)에서는 드러나지 않았지만, Longform은
+    # scene 길이 분포가 더 넓어 이 클램프가 실제로 작동할 가능성이
+    # 높고, 클램프가 한 번이라도 발생하면 그 지점부터 Video(Ken Burns
+    # 컷 경계)가 Audio/Subtitle(항상 실제 audio 길이 기준)과 어긋나기
+    # 시작해 뒤로 갈수록 누적된다 - 실제로 관찰된 "영상 후반으로 갈수록
+    # Scene과 음성이 어긋나는 현상"의 근본 원인이다. Longform은 각
+    # scene의 Ken Burns 길이를 그 scene의 실제 오디오 길이와 정확히
+    # 일치시켜(클램프/재분배 자체를 건너뛴다) 매 scene 경계에서 Audio/
+    # Video가 정확히 일치하도록 보장한다 - Shorts는 기존과 100% 동일
+    # (_apply_duration_limits 그대로 적용).
+    is_longform = render_profile is not None and render_profile.get("profile") == "longform"
+    durations = list(durations) if is_longform else _apply_duration_limits(durations)
 
     last_index = len(scene_asset_paths) - 1
     overlap = CROSSFADE_DURATION
@@ -470,6 +512,7 @@ def build_video(project_path: str):
 
         clip = _build_scene_clip(
             asset_paths_for_scene, clip_duration, scene=scenes[index],
+            render_profile=render_profile,
         )
 
         raw_clips.append(clip)
@@ -502,7 +545,7 @@ def build_video(project_path: str):
 
     output_path = os.path.join(
         video_folder,
-        "short.mp4",
+        silent_video_filename(render_profile),
     )
 
     final.write_videofile(

@@ -71,19 +71,29 @@ HYBRID_STOCK_ROLES = {"detail", "transition"}
 
 def _ai_result(
     image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
-    visual_profile=None,
+    visual_profile=None, aspect_ratio=None,
 ):
     # Sprint72-1 - Visual Diversity Engine: 실제 이미지 생성(Imagen)에
     # 넘기는 프롬프트에만 Profile 문구를 얹는다 - search_query 등
     # 메타데이터는 원본 image_prompt 기준으로 그대로 유지한다.
     enriched_prompt = apply_profile_to_prompt(image_prompt, visual_profile)
 
+    # Sprint122 - Longform Foundation: render_profile의 image_aspect_
+    # ratio가 있을 때만 kwarg를 보탠다(없으면 generate_image() 자체의
+    # 기본값 "9:16"이 그대로 적용됨) - 기존 호출부/mock과 완전히 하위
+    # 호환된다.
+    generate_image_kwargs = {
+        "channel": channel,
+        "is_hook_scene": is_hook_scene,
+        "visual_type": visual_type,
+    }
+    if aspect_ratio is not None:
+        generate_image_kwargs["aspect_ratio"] = aspect_ratio
+
     ai_path = generate_image(
         enriched_prompt,
         staging_path,
-        channel=channel,
-        is_hook_scene=is_hook_scene,
-        visual_type=visual_type,
+        **generate_image_kwargs,
     )
 
     return {
@@ -96,6 +106,7 @@ def _ai_result(
 def _select_real_first(
     image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
     visual_profile=None, asset_strategy=None, prefer_video=False, narration=None,
+    aspect_ratio=None, image_orientation=None,
 ):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
@@ -124,7 +135,11 @@ def _select_real_first(
     있었다(2026-07-13 Production QA에서 실측).
     """
 
-    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    get_candidates_kwargs = {}
+    if image_orientation is not None:
+        get_candidates_kwargs["image_orientation"] = image_orientation
+
+    stock_candidates = get_candidates(image_prompt, allow_video=True, **get_candidates_kwargs)
 
     video_relevance_trace = None
 
@@ -163,7 +178,7 @@ def _select_real_first(
 
     ai_result = _ai_result(
         image_prompt, staging_path, channel, is_hook_scene, visual_type,
-        visual_profile,
+        visual_profile, aspect_ratio=aspect_ratio,
     )
     if video_relevance_trace is not None:
         ai_result["video_relevance_trace"] = video_relevance_trace
@@ -173,7 +188,8 @@ def _select_real_first(
 
 def _select_ai_first(
     image_prompt, staging_path, channel, is_hook_scene, visual_type=None,
-    visual_profile=None, asset_strategy=None, prefer_video=False,
+    visual_profile=None, asset_strategy=None, prefer_video=False, aspect_ratio=None,
+    image_orientation=None,
 ):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
@@ -192,7 +208,7 @@ def _select_ai_first(
         return (
             _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
-                visual_profile,
+                visual_profile, aspect_ratio=aspect_ratio,
             ),
             True,
         )
@@ -202,7 +218,11 @@ def _select_ai_first(
             f"Pexels로 폴백: {exc}"
         )
 
-    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    get_candidates_kwargs = {}
+    if image_orientation is not None:
+        get_candidates_kwargs["image_orientation"] = image_orientation
+
+    stock_candidates = get_candidates(image_prompt, allow_video=True, **get_candidates_kwargs)
     best_candidate, _ = select_best_with_score(
         stock_candidates, is_hook_scene=is_hook_scene,
         asset_strategy=asset_strategy, prefer_video=prefer_video,
@@ -313,6 +333,7 @@ def _remove_if_exists(path: str) -> None:
 
 def _build_ai_candidate(
     image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+    aspect_ratio=None,
 ):
     """
     AI Image를 실제로 생성해, asset_selector.select_with_relevance()가
@@ -325,6 +346,7 @@ def _build_ai_candidate(
 
     ai_result = _ai_result(
         image_prompt, ai_path, channel, is_hook_scene, visual_type, visual_profile,
+        aspect_ratio=aspect_ratio,
     )
 
     return {
@@ -347,7 +369,10 @@ def _discard(result):
     _remove_if_exists(result.get("video_path"))
 
 
-def _gather_stock_result(image_prompt, allow_video, search_query_override, narration, staging_path):
+def _gather_stock_result(
+    image_prompt, allow_video, search_query_override, narration, staging_path,
+    image_orientation=None,
+):
     """
     Sprint102 - Video Coverage Intelligence.
 
@@ -398,8 +423,13 @@ def _gather_stock_result(image_prompt, allow_video, search_query_override, narra
         # 간섭하는 것은 피한다).
         attempt_staging_path = f"{staging_path}.q{attempt_index}"
 
+        get_candidates_kwargs = {}
+        if image_orientation is not None:
+            get_candidates_kwargs["image_orientation"] = image_orientation
+
         candidates = get_candidates(
             image_prompt, allow_video=allow_video, search_query_override=query,
+            **get_candidates_kwargs,
         )
         result, trace, all_failed = select_with_relevance(
             candidates, narration or "", image_prompt, attempt_staging_path,
@@ -424,7 +454,7 @@ def _gather_stock_result(image_prompt, allow_video, search_query_override, narra
 def _select_with_visual_relevance(
     image_prompt, staging_path, channel, is_hook_scene, visual_type,
     visual_profile, narration, prefer_ai, allow_video, search_query_override,
-    video_intent=None,
+    video_intent=None, aspect_ratio=None, image_orientation=None,
 ):
     """
     AI Image/Stock Image/Stock Video 전부 asset_selector.
@@ -462,6 +492,7 @@ def _select_with_visual_relevance(
     if prefer_ai:
         ai_candidate = _build_ai_candidate(
             image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+            aspect_ratio=aspect_ratio,
         )
         ai_result, ai_trace, ai_all_failed = select_with_relevance(
             [ai_candidate], narration or "", image_prompt, staging_path,
@@ -473,6 +504,7 @@ def _select_with_visual_relevance(
 
         stock_result, stock_trace, stock_all_failed = _gather_stock_result(
             image_prompt, allow_video, search_query_override, narration, staging_path,
+            image_orientation=image_orientation,
         )
         _tag_fallback(stock_trace, True)
         combined_trace = ai_trace + stock_trace
@@ -489,6 +521,7 @@ def _select_with_visual_relevance(
 
     stock_result, stock_trace, stock_all_failed = _gather_stock_result(
         image_prompt, allow_video, search_query_override, narration, staging_path,
+        image_orientation=image_orientation,
     )
     _tag_fallback(stock_trace, False)
 
@@ -497,6 +530,7 @@ def _select_with_visual_relevance(
 
     ai_candidate = _build_ai_candidate(
         image_prompt, staging_path, channel, is_hook_scene, visual_type, visual_profile,
+        aspect_ratio=aspect_ratio,
     )
     ai_result, ai_trace, ai_all_failed = select_with_relevance(
         [ai_candidate], narration or "", image_prompt, staging_path,
@@ -621,7 +655,9 @@ def _finalize_downloaded_asset(result: dict, output_path: str) -> None:
         os.replace(result["local_path"], output_path)
 
 
-def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_path):
+def _download_stock_asset(
+    search_prompt, output_path, is_hook_scene, staging_path, image_orientation=None,
+):
     """
     Sprint71-2 - Hybrid Asset Composer. _select_real_first()와 동일한
     패턴(검색 -> 최고 점수 후보 다운로드)으로 스톡 후보를 찾아
@@ -631,7 +667,11 @@ def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_pat
     AI 생성으로 이어갈 수 있습니다.
     """
 
-    stock_candidates = get_candidates(search_prompt, allow_video=True)
+    get_candidates_kwargs = {}
+    if image_orientation is not None:
+        get_candidates_kwargs["image_orientation"] = image_orientation
+
+    stock_candidates = get_candidates(search_prompt, allow_video=True, **get_candidates_kwargs)
     best_candidate, _ = select_best_with_score(
         stock_candidates, is_hook_scene=is_hook_scene,
     )
@@ -654,7 +694,7 @@ def _download_stock_asset(search_prompt, output_path, is_hook_scene, staging_pat
 
 def _generate_extra_ai_assets(
     image_prompt, images_dir, scene_number, channel, is_hook_scene, visual_type,
-    visual_profile=None, max_assets=None,
+    visual_profile=None, max_assets=None, aspect_ratio=None, image_orientation=None,
 ):
     """
     Sprint62-4 - 1차 asset이 이미 AI(Imagen)로 생성된 scene에 한해,
@@ -732,15 +772,22 @@ def _generate_extra_ai_assets(
             )
             source = _download_stock_asset(
                 asset_prompt, output_file, is_hook_scene, staging_path,
+                image_orientation=image_orientation,
             )
 
         if source is None:
+            generate_image_kwargs = {
+                "channel": channel,
+                "is_hook_scene": is_hook_scene,
+                "visual_type": visual_type,
+            }
+            if aspect_ratio is not None:
+                generate_image_kwargs["aspect_ratio"] = aspect_ratio
+
             generate_image(
                 asset_prompt,
                 output_file,
-                channel=channel,
-                is_hook_scene=is_hook_scene,
-                visual_type=visual_type,
+                **generate_image_kwargs,
             )
 
         asset_entry = {
@@ -773,6 +820,7 @@ def integrate_asset(
     asset_strategy: str = None,
     prefer_video: bool = False,
     max_assets: int = None,
+    render_profile: dict = None,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
@@ -834,6 +882,25 @@ def integrate_asset(
 
     visual_type = scene.get("visual_type")
 
+    # Sprint122 - Longform Foundation: render_profile이 있을 때만
+    # image_aspect_ratio를 꺼내 아래 각 선택 경로 -> generate_image()로
+    # 흘려보낸다. render_profile이 없으면(기본값 None) aspect_ratio도
+    # None으로 남아, 이 함수 전체가 오늘과 100% 동일하게 동작한다.
+    aspect_ratio = render_profile.get("image_aspect_ratio") if render_profile else None
+
+    # Sprint122 - Longform Foundation (Stock 크롭 Hotfix). render_
+    # profile이 있을 때만 Stock Image(Pexels/Pixabay) 검색 orientation을
+    # 넘긴다 - width>height면 "landscape"(Longform), 아니면 "portrait"
+    # (Shorts). Stock Video 검색/orientation은 이 스프린트에서 전혀
+    # 건드리지 않는다(get_candidates_kwargs가 image_orientation만
+    # 옮기고 allow_video 분기는 그대로다 - 아래 각 호출부 참고).
+    image_orientation = None
+    if render_profile is not None:
+        image_orientation = (
+            "landscape" if render_profile["width"] > render_profile["height"]
+            else "portrait"
+        )
+
     # Sprint100-4 - Visual Intelligence Completion. selection_trace/
     # relevance_all_failed는 새 통합 경로(motion_contract가 있는
     # scene)에서만 채워진다 - 다른 모든 분기는 그대로 None/False로
@@ -861,7 +928,8 @@ def integrate_asset(
             _select_with_visual_relevance(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
                 visual_profile, scene.get("narration"), prefer_ai, allow_video,
-                search_query_override, video_intent,
+                search_query_override, video_intent, aspect_ratio=aspect_ratio,
+                image_orientation=image_orientation,
             )
         )
     elif asset_strategy == "upload":
@@ -873,27 +941,33 @@ def integrate_asset(
             result, ai_priority_choice = _select_ai_first(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
                 visual_profile, asset_strategy=asset_strategy, prefer_video=prefer_video,
+                aspect_ratio=aspect_ratio, image_orientation=image_orientation,
             )
         else:
             result, ai_priority_choice = _select_real_first(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
                 visual_profile, asset_strategy=asset_strategy, prefer_video=prefer_video,
-                narration=scene.get("narration"),
+                narration=scene.get("narration"), aspect_ratio=aspect_ratio,
+                image_orientation=image_orientation,
             )
     elif visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, visual_type,
-            visual_profile,
+            visual_profile, aspect_ratio=aspect_ratio, image_orientation=image_orientation,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
             image_prompt, staging_path, channel, is_hook_scene, visual_type,
-            visual_profile,
+            visual_profile, aspect_ratio=aspect_ratio, image_orientation=image_orientation,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
         # 기존 prefer_ai 소프트 품질 게이트 경로를 그대로 유지한다.
-        stock_candidates = get_candidates(image_prompt, allow_video=True)
+        get_candidates_kwargs = {}
+        if image_orientation is not None:
+            get_candidates_kwargs["image_orientation"] = image_orientation
+
+        stock_candidates = get_candidates(image_prompt, allow_video=True, **get_candidates_kwargs)
         best_candidate, best_score = select_best_with_score(
             stock_candidates, is_hook_scene=is_hook_scene,
         )
@@ -911,7 +985,7 @@ def integrate_asset(
         else:
             result = _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, visual_type,
-                visual_profile,
+                visual_profile, aspect_ratio=aspect_ratio,
             )
 
     # Sprint100-3.1 - _finalize_downloaded_asset()에 넘기기 전에 꺼내
@@ -1023,6 +1097,7 @@ def integrate_asset(
             extra_assets, subprompt_diagnostics = _generate_extra_ai_assets(
                 image_prompt, images_dir, scene_number, channel, is_hook_scene,
                 visual_type, visual_profile, max_assets=max_assets,
+                aspect_ratio=aspect_ratio, image_orientation=image_orientation,
             )
         # Sprint73 - Subprompt Quality Gate Observability: 이 scene의
         # subprompt 생성이 폴백했는지/왜 폴백했는지를 scene 레벨에

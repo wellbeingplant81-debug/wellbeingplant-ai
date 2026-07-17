@@ -87,6 +87,7 @@ def generate_image(
     is_thumbnail: bool = False,
     is_hook_scene: bool = False,
     visual_type: str = None,
+    aspect_ratio: str = "9:16",
 ):
 
     if is_thumbnail:
@@ -128,7 +129,7 @@ def generate_image(
         model="imagen-4.0-generate-001",
         prompt=final_prompt,
         config=types.GenerateImagesConfig(
-            aspect_ratio="9:16",
+            aspect_ratio=aspect_ratio,
             negative_prompt=negative_prompt,
             add_watermark=False,
         ),

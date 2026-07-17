@@ -52,6 +52,15 @@ def main():
         choices=["development", "upload"],
         help="ProductionProfile 이름. 주면 ENABLE_PRODUCTION_PROFILE을 켠다.",
     )
+    parser.add_argument(
+        "--render-profile",
+        default=None,
+        choices=["shorts", "longform"],
+        help=(
+            "Sprint122 - RenderProfile 이름(shorts/longform). production_"
+            "profile_name과 독립된 축이다. 생략하면 기존과 동일하게 shorts."
+        ),
+    )
     args = parser.parse_args()
 
     if args.profile is not None:
@@ -69,6 +78,7 @@ def main():
 
     result = generate_short_video(
         args.topic, channel=args.channel, production_profile_name=args.profile,
+        render_profile_name=args.render_profile,
     )
 
     print("RESULT:", result)

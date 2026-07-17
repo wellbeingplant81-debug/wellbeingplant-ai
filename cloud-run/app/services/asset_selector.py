@@ -185,6 +185,7 @@ def get_candidates(
     allow_video: bool = True,
     max_per_provider: int = MAX_CANDIDATES_PER_PROVIDER,
     search_query_override: str = None,
+    image_orientation: str = None,
 ) -> list:
     """
     Sprint30 - Multi-Candidate 수집.
@@ -244,7 +245,9 @@ def get_candidates(
     candidates = []
     status_log = []
 
-    for source, search_fn in build_provider_chain(allow_video=allow_video):
+    for source, search_fn in build_provider_chain(
+        allow_video=allow_video, image_orientation=image_orientation,
+    ):
 
         key_present = _has_api_key(source)
 

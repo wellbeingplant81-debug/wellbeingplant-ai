@@ -3,6 +3,8 @@ import subprocess
 
 from PIL import Image
 
+from app.services.render_profile import final_video_filename, silent_video_filename, thumbnail_filename
+
 
 AUDIO_VIDEO_SYNC_TOLERANCE_MS = 250
 
@@ -44,16 +46,16 @@ def _ffprobe_duration(path):
         return None
 
 
-def _check_required_files(project_path, scene_count):
+def _check_required_files(project_path, scene_count, render_profile=None):
 
     required = [
         "script.json",
         os.path.join("audio", "voice.mp3"),
         os.path.join("audio", "final_audio.mp3"),
         os.path.join("subtitle", "subtitle.srt"),
-        os.path.join("video", "short.mp4"),
-        os.path.join("video", "final_short.mp4"),
-        "thumbnail.png",
+        os.path.join("video", silent_video_filename(render_profile)),
+        os.path.join("video", final_video_filename(render_profile)),
+        thumbnail_filename(render_profile),
     ]
 
     for index in range(1, scene_count + 1):
@@ -106,10 +108,18 @@ def _check_scene_count(project_path, scene_count):
     }
 
 
-def _check_image_resolution(project_path, scene_count):
+def _check_image_resolution(project_path, scene_count, render_profile=None):
+    """
+    Sprint123 - Production Policy: Shorts는 세로(portrait)가 정상이지만
+    Longform은 가로(landscape)가 정상이다 - render_profile이 longform
+    이면 "가로가 아니면 경고"로 뒤집는다. render_profile이 없으면
+    (기본값) 기존과 100% 동일하게 portrait 기준이다.
+    """
 
     warnings = []
     details = []
+
+    is_longform = render_profile is not None and render_profile.get("profile") == "longform"
 
     targets = [
         (f"scene_{index}", os.path.join(project_path, "images", f"scene{index}.png"))
@@ -117,7 +127,7 @@ def _check_image_resolution(project_path, scene_count):
     ]
 
     targets.append(
-        ("thumbnail", os.path.join(project_path, "thumbnail.png"))
+        ("thumbnail", os.path.join(project_path, thumbnail_filename(render_profile)))
     )
 
     for label, path in targets:
@@ -133,10 +143,12 @@ def _check_image_resolution(project_path, scene_count):
             continue
 
         portrait = height > width
+        orientation_ok = (width > height) if is_longform else portrait
 
-        if not portrait:
+        if not orientation_ok:
+            expected = "landscape" if is_longform else "portrait"
             warnings.append(
-                f"{label}: not portrait orientation ({width}x{height})"
+                f"{label}: not {expected} orientation ({width}x{height})"
             )
 
         details.append(
@@ -155,9 +167,9 @@ def _check_image_resolution(project_path, scene_count):
     }
 
 
-def _check_video_duration(project_path):
+def _check_video_duration(project_path, render_profile=None):
 
-    path = os.path.join(project_path, "video", "final_short.mp4")
+    path = os.path.join(project_path, "video", final_video_filename(render_profile))
 
     duration = _ffprobe_duration(path)
 
@@ -188,7 +200,7 @@ def _check_subtitle_existence(project_path):
     }
 
 
-def _check_audio_video_sync(project_path, scene_count):
+def _check_audio_video_sync(project_path, scene_count, render_profile=None):
 
     scene_audio_paths = [
         os.path.join(project_path, "audio", "scenes", f"scene{index}.mp3")
@@ -221,7 +233,7 @@ def _check_audio_video_sync(project_path, scene_count):
 
     audio_duration = sum(scene_durations)
 
-    video_path = os.path.join(project_path, "video", "final_short.mp4")
+    video_path = os.path.join(project_path, "video", final_video_filename(render_profile))
     video_duration = _ffprobe_duration(video_path)
 
     if video_duration is None:
@@ -244,9 +256,9 @@ def _check_audio_video_sync(project_path, scene_count):
     }
 
 
-def _check_thumbnail_existence(project_path):
+def _check_thumbnail_existence(project_path, render_profile=None):
 
-    path = os.path.join(project_path, "thumbnail.png")
+    path = os.path.join(project_path, thumbnail_filename(render_profile))
 
     if not os.path.exists(path):
         return {"passed": False}
@@ -260,18 +272,18 @@ def _check_thumbnail_existence(project_path):
     return {"passed": True}
 
 
-def validate(project_path, data):
+def validate(project_path, data, render_profile=None):
 
     scene_count = len(data["scenes"])
 
     checks = {
-        "required_files_exist": _check_required_files(project_path, scene_count),
+        "required_files_exist": _check_required_files(project_path, scene_count, render_profile),
         "scene_count_consistency": _check_scene_count(project_path, scene_count),
-        "image_resolution": _check_image_resolution(project_path, scene_count),
-        "video_duration": _check_video_duration(project_path),
+        "image_resolution": _check_image_resolution(project_path, scene_count, render_profile),
+        "video_duration": _check_video_duration(project_path, render_profile),
         "subtitle_existence": _check_subtitle_existence(project_path),
-        "audio_video_sync": _check_audio_video_sync(project_path, scene_count),
-        "thumbnail_existence": _check_thumbnail_existence(project_path),
+        "audio_video_sync": _check_audio_video_sync(project_path, scene_count, render_profile),
+        "thumbnail_existence": _check_thumbnail_existence(project_path, render_profile),
     }
 
     blocking_failures = [

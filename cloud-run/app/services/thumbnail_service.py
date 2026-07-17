@@ -1,6 +1,7 @@
 import os
 
 from app.services.image_service import generate_image
+from app.services.render_profile import thumbnail_filename
 
 
 def create_thumbnail(
@@ -10,6 +11,7 @@ def create_thumbnail(
     channel: str = "wellbeing",
     scene1_narration: str = "",
     scene1_image_prompt: str = "",
+    render_profile: dict = None,
 ):
 
     prompt = f"""
@@ -49,14 +51,21 @@ No watermark
 
     output = os.path.join(
         project_path,
-        "thumbnail.png",
+        thumbnail_filename(render_profile),
     )
+
+    # Sprint122 - Longform Foundation: render_profile이 있을 때만
+    # aspect_ratio를 보탠다(없으면 generate_image()의 기본값 "9:16"이
+    # 그대로 적용됨) - 완전히 하위 호환.
+    generate_image_kwargs = {"is_thumbnail": True}
+    if render_profile is not None:
+        generate_image_kwargs["aspect_ratio"] = render_profile["thumbnail_aspect_ratio"]
 
     generate_image(
         prompt,
         output,
         channel,
-        is_thumbnail=True,
+        **generate_image_kwargs,
     )
 
     return output

@@ -8,6 +8,7 @@ def generate_short_video(
     topic: str,
     channel: str = "wellbeing",
     production_profile_name: str = None,
+    render_profile_name: str = None,
 ):
 
     pipeline_start = time.perf_counter()
@@ -31,6 +32,7 @@ def generate_short_video(
         project_creation_time=project_creation_time,
         pipeline_start=pipeline_start,
         production_profile_name=production_profile_name,
+        render_profile_name=render_profile_name,
     )
 
     return {

@@ -16,6 +16,7 @@ from app.services import asset_duplicate_detector
 from app.services import asset_usage_planner
 from app.services.asset_integration_service import ASSET_ROLES
 from app.services.duration_optimizer import get_audio_duration
+from app.services.render_profile import final_video_filename
 from app.services.visual_diversity_engine import summarize_visual_diversity
 
 TARGET_MIN_SECONDS = 43.0
@@ -35,7 +36,28 @@ def _scene_number(path: str) -> int:
     return int(match.group(1)) if match else -1
 
 
-def get_real_durations(project_path: str) -> dict:
+def _load_render_profile_from_script(project_path: str):
+    """
+    Sprint123 - Production Policy. script.json에 pipeline.py가 저장해둔
+    render_profile(명시적으로 opt-in된 요청에서만 존재)이 있으면 그대로
+    읽어온다 - 호출자가 render_profile을 몰라도(예: run_e2e.py가 옛날
+    방식으로 build_qa_report(output)만 호출) Longform 산출물 파일명을
+    올바르게 찾을 수 있게 한다. 파일이 없거나 키가 없으면 None(기존과
+    100% 동일하게 Shorts 파일명 사용).
+    """
+
+    script_path = os.path.join(project_path, "script.json")
+
+    if not os.path.exists(script_path):
+        return None
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return data.get("render_profile")
+
+
+def get_real_durations(project_path: str, render_profile: dict = None) -> dict:
     """project_path 아래 실제 오디오/영상 파일들의 ffprobe 실측 길이를
     모은다. 없는 파일은 None(voice/final_audio/final_video) 또는
     빈 리스트(scenes)로 표시하고 에러를 던지지 않는다."""
@@ -59,7 +81,7 @@ def get_real_durations(project_path: str) -> dict:
         "scenes": scenes,
         "voice": _duration_or_none("audio", "voice.mp3"),
         "final_audio": _duration_or_none("audio", "final_audio.mp3"),
-        "final_video": _duration_or_none("video", "final_short.mp4"),
+        "final_video": _duration_or_none("video", final_video_filename(render_profile)),
     }
 
 
@@ -303,7 +325,7 @@ def get_target_range(project_path: str) -> tuple:
     return TARGET_MIN_SECONDS, TARGET_MAX_SECONDS
 
 
-def build_qa_report(project_path: str) -> dict:
+def build_qa_report(project_path: str, render_profile: dict = None) -> dict:
     """get_real_durations + load_quality_summary를 합치고,
     Sprint53 Duration Gate/Optimizer의 목표 범위(기본 43~47초, Sprint100-1
     부터는 get_target_range()로 Production Profile-aware) 안에 실제
@@ -319,9 +341,18 @@ def build_qa_report(project_path: str) -> dict:
     Sprint100-1 - target_min_seconds/target_max_seconds 키를 추가한다.
     기존 target_range_ok는 이제 이 값들로 판정되지만, 값 자체(True/
     False)는 production_profile이 없는 기존 프로젝트에 한해 이전과
-    동일하다."""
+    동일하다.
 
-    durations = get_real_durations(project_path)
+    Sprint123 - Production Policy: render_profile을 안 넘기면(기본값
+    None) script.json에 저장된 값을 자동으로 읽어온다(_load_render_
+    profile_from_script) - 호출자가 몰라도 Longform 산출물 파일명을
+    올바르게 찾는다. script.json 자체가 없거나 render_profile 키가
+    없으면 그대로 None - 기존 Shorts 프로젝트와 100% 동일하다."""
+
+    if render_profile is None:
+        render_profile = _load_render_profile_from_script(project_path)
+
+    durations = get_real_durations(project_path, render_profile)
     quality = load_quality_summary(project_path)
 
     final_duration = durations["final_video"] or durations["voice"]
@@ -337,6 +368,7 @@ def build_qa_report(project_path: str) -> dict:
 
     return {
         "project_path": project_path,
+        "final_video_filename": final_video_filename(render_profile),
         "durations": durations,
         "quality": quality,
         "target_min_seconds": target_min,
@@ -365,7 +397,8 @@ def format_report(report: dict) -> str:
     lines.append("")
     lines.append(f"voice.mp3        : {durations['voice']}")
     lines.append(f"final_audio.mp3  : {durations['final_audio']}")
-    lines.append(f"final_short.mp4  : {durations['final_video']}")
+    final_video_label = report.get("final_video_filename", "final_short.mp4")
+    lines.append(f"{final_video_label}  : {durations['final_video']}")
     target_min = report["target_min_seconds"]
     target_max = report["target_max_seconds"]
     lines.append(

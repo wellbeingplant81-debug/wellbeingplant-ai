@@ -65,6 +65,7 @@ def search_images(
 
 def search_videos(
     query: str,
+    orientation: str = "vertical",
     per_page: int = 5,
 ) -> list:
 
@@ -73,6 +74,7 @@ def search_videos(
         params={
             "key": _api_key(),
             "q": query,
+            "orientation": orientation,
             "per_page": max(per_page, MIN_PER_PAGE),
         },
         timeout=REQUEST_TIMEOUT_SECONDS,

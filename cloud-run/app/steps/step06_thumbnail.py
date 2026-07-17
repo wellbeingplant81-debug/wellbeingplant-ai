@@ -8,6 +8,7 @@ def run(
     channel,
     scene1_narration,
     scene1_image_prompt,
+    render_profile=None,
 ):
 
     create_thumbnail(
@@ -17,4 +18,5 @@ def run(
         channel,
         scene1_narration,
         scene1_image_prompt,
+        render_profile=render_profile,
     )

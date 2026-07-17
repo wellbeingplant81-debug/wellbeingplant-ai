@@ -1,15 +1,17 @@
 import os
 import subprocess
 
+from app.services.render_profile import final_video_filename, silent_video_filename
 
-def merge_video_audio(project_path: str):
+
+def merge_video_audio(project_path: str, render_profile: dict = None):
 
     ffmpeg = "ffmpeg"
 
     video_path = os.path.join(
         project_path,
         "video",
-        "short.mp4",
+        silent_video_filename(render_profile),
     )
 
     audio_path = os.path.join(
@@ -27,7 +29,7 @@ def merge_video_audio(project_path: str):
     output_path = os.path.join(
         project_path,
         "video",
-        "final_short.mp4",
+        final_video_filename(render_profile),
     )
 
     subtitle_path = subtitle_path.replace("\\", "/")
@@ -46,9 +48,16 @@ def merge_video_audio(project_path: str):
     # 자막을 축소한다. Alignment=2(하단 고정)만 쓰고 scene별 상단
     # override는 더 이상 만들지 않는다(subtitle_service.py 참고) -
     # 모든 cue가 항상 같은 위치에 고정된다.
+    # Sprint122 - Longform Foundation: render_profile이 있으면 그
+    # subtitle_font_size/subtitle_margin_v를, 없으면(기본값 None)
+    # 기존 하드코딩 값(Sprint68-1 실측)을 그대로 쓴다 - 완전히 하위
+    # 호환.
+    font_size = render_profile["subtitle_font_size"] if render_profile else 18
+    margin_v = render_profile["subtitle_margin_v"] if render_profile else 115
+
     style = (
         "FontName=Malgun Gothic,"
-        "FontSize=18,"
+        f"FontSize={font_size},"
         "PrimaryColour=&HFFFFFF&,"
         "OutlineColour=&H000000&,"
         "BorderStyle=1,"
@@ -56,7 +65,7 @@ def merge_video_audio(project_path: str):
         "Shadow=0,"
         "Bold=1,"
         "Alignment=2,"
-        "MarginV=115,"
+        f"MarginV={margin_v},"
         # subtitle_service.py가 이미 한 줄에 맞춰 자막을 나눠두므로,
         # libass가 자체 판단으로 재줄바꿈(단어 중간에서 줄이 꺾이는
         # 현상)하지 않도록 자동 줄바꿈을 끈다.

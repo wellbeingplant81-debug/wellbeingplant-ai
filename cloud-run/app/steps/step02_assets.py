@@ -20,6 +20,7 @@ def collect_assets(
     channel="wellbeing",
     asset_plan=None,
     asset_strategy=None,
+    render_profile=None,
 ):
     """
     기존 step02_image.py의 병렬 처리 구조(ThreadPoolExecutor,
@@ -154,6 +155,12 @@ def collect_assets(
         # integrate_asset()에 전달한다(그 외에는 기존처럼 kwarg 자체를
         # 넘기지 않아 완전히 하위 호환).
         integrate_asset_kwargs["asset_strategy"] = "upload"
+
+    if render_profile is not None:
+        # Sprint122 - Longform Foundation: render_profile이 주어졌을
+        # 때만 integrate_asset()에 전달한다 - 안 주면(기본값 None)
+        # kwarg 자체가 추가되지 않아 기존 호출부와 완전히 하위 호환.
+        integrate_asset_kwargs["render_profile"] = render_profile
 
     futures = []
     results = []
