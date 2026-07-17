@@ -92,11 +92,15 @@ class TestLoadScenes(unittest.TestCase):
 
 class TestEffectsForClip(unittest.TestCase):
 
-    def test_hook_scene_gets_fade_in_from_black(self):
+    def test_hook_scene_gets_no_fade_in_starts_immediately_visible(self):
+        # Sprint124 - Thumbnail=First Frame Policy: 첫 clip(index=0)은
+        # transition="fade"여도 더 이상 검정에서 fade-in하지 않는다 -
+        # 첫 프레임을 그대로 썸네일로 쓰므로 검은 화면이 남으면 안 된다.
         scene = {"scene": 1, "transition": "fade"}
         effects = _effects_for_clip(0, 3, scene, 5.0, overlap=0.35)
 
-        self.assertIsInstance(effects[0], FadeIn)
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], CrossFadeOut)
 
     def test_non_first_non_last_scene_gets_cross_dissolve_both_sides(self):
         scene = {"scene": 2, "transition": "cross_dissolve"}
@@ -114,12 +118,14 @@ class TestEffectsForClip(unittest.TestCase):
         self.assertIsInstance(effects[0], CrossFadeIn)
         self.assertIsInstance(effects[1], FadeOut)
 
-    def test_single_scene_video_gets_fade_in_and_fade_out_only(self):
+    def test_single_scene_video_gets_fade_out_only_no_fade_in(self):
+        # index==0이자 last_index==0인 극단적인 단일 scene 영상도
+        # 시작은 fade-in 없이 즉시 보이고, 끝만 블랙으로 fade-out한다.
         scene = {"scene": 1, "transition": "fade"}
         effects = _effects_for_clip(0, 0, scene, 5.0, overlap=0.35)
 
-        self.assertIsInstance(effects[0], FadeIn)
-        self.assertIsInstance(effects[1], FadeOut)
+        self.assertEqual(len(effects), 1)
+        self.assertIsInstance(effects[0], FadeOut)
 
     def test_missing_transition_field_defaults_to_cross_dissolve(self):
         scene = {"scene": 2}

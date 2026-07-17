@@ -21,6 +21,7 @@ from app.services import prompt_optimization_service
 from app.services import regeneration_service
 from app.services import render_profile as render_profile_service
 from app.services import scene_planner_service
+from app.services import thumbnail_headline_service
 from app.services import visual_consistency_engine
 
 
@@ -152,6 +153,19 @@ def run_pipeline(
         **step01_duration_kwargs,
     )
     timings["script_generation"] = time.perf_counter() - t0
+
+    # Sprint124 - Thumbnail=First Frame Policy: title/hook을 그대로
+    # 쓰지 않고 썸네일 전용 헤드라인을 별도로 생성한다. 실패해도(Gemini
+    # 오류 등) 파이프라인 전체를 막지 않고, title 한 줄짜리(강조 단어
+    # 없음)로 안전하게 폴백한다 - 썸네일 자체(첫 프레임 추출)는 헤드라인
+    # 유무와 무관하게 항상 만들어져야 한다.
+    try:
+        data["thumbnail_headline"] = thumbnail_headline_service.generate_thumbnail_headline(
+            topic, data["title"], data["hook"], data["script"],
+        )
+    except Exception as exc:
+        print(f"Thumbnail headline step failed: {exc}")
+        data["thumbnail_headline"] = {"lines": [data["title"]], "keywords": []}
 
     if active_profile is not None:
         data["production_profile"] = active_profile
@@ -292,6 +306,9 @@ def run_pipeline(
     step04_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
     step05_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
     step06_kwargs = {"render_profile": active_render_profile} if render_profile_opted_in else {}
+    # Sprint124 - thumbnail_headline은 render_profile opt-in 여부와
+    # 무관하게 항상 전달한다(Shorts/Longform 모두 새 정책 대상).
+    step06_kwargs["thumbnail_headline"] = data.get("thumbnail_headline")
 
     t0 = time.perf_counter()
     step04_subtitle.run(

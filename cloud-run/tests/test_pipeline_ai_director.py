@@ -68,7 +68,12 @@ def patched_pipeline():
          patch("app.pipeline.pipeline.prompt_effectiveness_service") as prompt_effectiveness, \
          patch("app.pipeline.pipeline.prompt_optimization_service") as prompt_optimization, \
          patch("app.pipeline.pipeline.prompt_learning_service") as prompt_learning, \
-         patch("app.pipeline.pipeline.ai_director_service") as ai_director:
+         patch("app.pipeline.pipeline.ai_director_service") as ai_director, \
+         patch("app.pipeline.pipeline.thumbnail_headline_service") as thumbnail_headline_service:
+
+        thumbnail_headline_service.generate_thumbnail_headline.return_value = {
+            "lines": ["헤드라인"], "keywords": [],
+        }
 
         yield {
             "step01": step01,
@@ -86,6 +91,7 @@ def patched_pipeline():
             "prompt_optimization": prompt_optimization,
             "prompt_learning": prompt_learning,
             "ai_director": ai_director,
+            "thumbnail_headline_service": thumbnail_headline_service,
         }
 
 
@@ -201,6 +207,7 @@ class TestAiDirectorFeatureFlag(unittest.TestCase):
                     "hook": "h",
                     "script": "s",
                     "scenes": ENRICHED_SCENES,
+                    "thumbnail_headline": {"lines": ["헤드라인"], "keywords": []},
                 },
             )
             m["step02_assets"].collect_assets.assert_called_once_with(

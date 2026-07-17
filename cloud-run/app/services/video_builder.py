@@ -412,14 +412,23 @@ def _effects_for_clip(index, last_index, scene, duration, overlap):
     이전 clip과 겹쳐 보이는 실제 cross-dissolve(CrossFadeIn)를
     적용합니다. 마지막 clip은 항상 블랙으로 fade-out하고, 그 외에는
     다음 clip과 겹치는 cross-dissolve(CrossFadeOut)를 적용합니다.
+
+    Sprint124 - Thumbnail=First Frame Policy: 첫 clip(index==0)에는
+    어떤 fade-in도 넣지 않습니다 - FadeIn(검정에서 시작)이든
+    CrossFadeIn(겹칠 이전 clip이 없어 사실상 검정에서 시작)이든 영상
+    시작에 짧은 검은 화면을 만들어, 그 첫 프레임을 그대로 쓰는
+    썸네일이 새까맣게 나오는 문제가 있었습니다. 첫 clip은 처음부터
+    완전히 보이는 상태로 시작합니다 - 뒤 scene과의 cross-dissolve
+    (clip 끝의 CrossFadeOut)에는 영향이 없습니다.
     """
 
     effects = []
 
-    if scene.get("transition") == "fade":
-        effects.append(FadeIn(_fade_duration(duration)))
-    else:
-        effects.append(CrossFadeIn(overlap))
+    if index != 0:
+        if scene.get("transition") == "fade":
+            effects.append(FadeIn(_fade_duration(duration)))
+        else:
+            effects.append(CrossFadeIn(overlap))
 
     if index == last_index:
         effects.append(FadeOut(_fade_duration(duration)))

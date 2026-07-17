@@ -9,6 +9,7 @@ def run(
     scene1_narration,
     scene1_image_prompt,
     render_profile=None,
+    thumbnail_headline=None,
 ):
 
     create_thumbnail(
@@ -19,4 +20,5 @@ def run(
         scene1_narration,
         scene1_image_prompt,
         render_profile=render_profile,
+        thumbnail_headline=thumbnail_headline,
     )

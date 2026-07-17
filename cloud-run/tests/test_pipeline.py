@@ -57,6 +57,17 @@ class TestPipeline(unittest.TestCase):
         self.addCleanup(self._tmp_dir.cleanup)
         self.project_path = self._tmp_dir.name
 
+        # Sprint124 - thumbnail_headline_service는 실제 Gemini를
+        # 호출하므로, 이 파일의 모든 테스트에서 공통으로 mock한다
+        # (기존 테스트들이 이 서비스를 몰라도 되도록 데코레이터가
+        # 아니라 setUp에서 한 번만 patch).
+        headline_patcher = patch("app.pipeline.pipeline.thumbnail_headline_service")
+        self.addCleanup(headline_patcher.stop)
+        mock_headline_service = headline_patcher.start()
+        mock_headline_service.generate_thumbnail_headline.return_value = {
+            "lines": ["헤드라인"], "keywords": [],
+        }
+
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")

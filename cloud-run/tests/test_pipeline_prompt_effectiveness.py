@@ -73,7 +73,12 @@ def patched_pipeline():
          patch("app.pipeline.pipeline.visual_consistency_engine") as visual_consistency, \
          patch("app.pipeline.pipeline.scene_planner_service") as scene_planner, \
          patch("app.pipeline.pipeline.prompt_enrichment_service") as prompt_enrichment, \
-         patch("app.pipeline.pipeline.prompt_effectiveness_service") as prompt_effectiveness:
+         patch("app.pipeline.pipeline.prompt_effectiveness_service") as prompt_effectiveness, \
+         patch("app.pipeline.pipeline.thumbnail_headline_service") as thumbnail_headline_service:
+
+        thumbnail_headline_service.generate_thumbnail_headline.return_value = {
+            "lines": ["헤드라인"], "keywords": [],
+        }
 
         yield {
             "step01": step01,
@@ -88,6 +93,7 @@ def patched_pipeline():
             "scene_planner": scene_planner,
             "prompt_enrichment": prompt_enrichment,
             "prompt_effectiveness": prompt_effectiveness,
+            "thumbnail_headline_service": thumbnail_headline_service,
         }
 
 
@@ -181,6 +187,7 @@ class TestPromptEffectivenessFeatureFlag(unittest.TestCase):
                     "hook": "h",
                     "script": "s",
                     "scenes": ENRICHED_SCENES,
+                    "thumbnail_headline": {"lines": ["헤드라인"], "keywords": []},
                 },
             )
             m["step02_assets"].collect_assets.assert_called_once_with(

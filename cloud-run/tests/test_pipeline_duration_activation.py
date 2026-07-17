@@ -71,7 +71,12 @@ def patched_pipeline():
          patch("app.pipeline.pipeline.step07_quality") as step07, \
          patch("app.pipeline.pipeline.regeneration_service") as regeneration_service, \
          patch("app.pipeline.pipeline.visual_consistency_engine") as visual_consistency, \
-         patch("app.pipeline.pipeline.scene_planner_service") as scene_planner:
+         patch("app.pipeline.pipeline.scene_planner_service") as scene_planner, \
+         patch("app.pipeline.pipeline.thumbnail_headline_service") as thumbnail_headline_service:
+
+        thumbnail_headline_service.generate_thumbnail_headline.return_value = {
+            "lines": ["헤드라인"], "keywords": [],
+        }
 
         yield {
             "step01": step01,
@@ -84,6 +89,7 @@ def patched_pipeline():
             "regeneration_service": regeneration_service,
             "visual_consistency": visual_consistency,
             "scene_planner": scene_planner,
+            "thumbnail_headline_service": thumbnail_headline_service,
         }
 
 
