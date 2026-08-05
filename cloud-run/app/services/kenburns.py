@@ -24,7 +24,52 @@ MOTIONS = [
     "pan_vertical",
 ]
 
+# Sprint64 - Scene Timeline 단일화.
+#
+# Sprint55는 "짧은 scene에서 Ken Burns 모션이 부자연스럽게 빨라진다"는
+# 문제를 scene duration 자체를 늘려서(최소 2초) 막았다. 하지만 scene
+# 길이는 나레이션 오디오가 이미 정해 놓은 값이라, 그걸 늘리면 화면
+# 경계가 소리에서 밀려난다(실측 최대 800ms).
+#
+# 문제의 본질은 duration이 아니라 "초당 모션량"이다. 그래서 경계는
+# 오디오 그대로 두고, 짧은 scene에서는 모션 강도만 줄여 초당 변화율을
+# 아래 상한 안에 가둔다. 화면은 똑같이 안정적이면서 타임라인은
+# 오디오와 정확히 일치한다.
+#
+# 상한값은 Sprint55의 기존 동작에서 그대로 역산했다: 최대 강도
+# (ZOOM_INTENSITY_RANGE 상단 0.10, PAN_DISTANCE_RANGE 상단 160px)가
+# 최소 scene 길이(2초)에 걸쳐 일어나던 속도가 곧 "그때까지 허용되던
+# 가장 빠른 모션"이다.
+MAX_ZOOM_RATE_PER_SECOND = ZOOM_INTENSITY_RANGE[1] / 2.0
+MAX_PAN_RATE_PX_PER_SECOND = PAN_DISTANCE_RANGE[1] / 2.0
+
 _last_motion = None
+
+
+def moderate_zoom_intensity(intensity: float, duration: float) -> float:
+    """
+    zoom 강도를 duration에 맞춰 낮춘다. 순수 함수입니다.
+
+    duration이 충분히 길면 요청된 강도를 그대로 쓰고, 짧으면 초당
+    변화율이 MAX_ZOOM_RATE_PER_SECOND를 넘지 않도록 줄인다.
+    """
+
+    if duration <= 0:
+        return 0.0
+
+    return min(intensity, MAX_ZOOM_RATE_PER_SECOND * duration)
+
+
+def moderate_pan_travel(travel: float, duration: float) -> float:
+    """
+    pan 이동 거리(px)를 duration에 맞춰 낮춘다. 순수 함수입니다.
+    moderate_zoom_intensity()와 같은 원리.
+    """
+
+    if duration <= 0:
+        return 0.0
+
+    return min(travel, MAX_PAN_RATE_PX_PER_SECOND * duration)
 
 
 def _ease_in_out(progress):
@@ -94,7 +139,9 @@ def build_kenburns_clip(
 
     if motion in ("zoom_in", "zoom_out"):
 
-        intensity = random.uniform(*ZOOM_INTENSITY_RANGE)
+        intensity = moderate_zoom_intensity(
+            random.uniform(*ZOOM_INTENSITY_RANGE), duration,
+        )
 
         start_scale, end_scale = (
             (fit_scale, fit_scale * (1 + intensity))
@@ -118,7 +165,9 @@ def build_kenburns_clip(
 
     elif motion == "pan_horizontal":
 
-        desired_travel = random.uniform(*PAN_DISTANCE_RANGE)
+        desired_travel = moderate_pan_travel(
+            random.uniform(*PAN_DISTANCE_RANGE), duration,
+        )
 
         capped_scale = fit_scale * (1 + MAX_PAN_EXTRA_SCALE)
         max_slack_x = max(0.0, img_w * capped_scale - VIDEO_WIDTH)
@@ -149,7 +198,9 @@ def build_kenburns_clip(
 
     else:
 
-        desired_travel = random.uniform(*PAN_DISTANCE_RANGE)
+        desired_travel = moderate_pan_travel(
+            random.uniform(*PAN_DISTANCE_RANGE), duration,
+        )
 
         capped_scale = fit_scale * (1 + MAX_PAN_EXTRA_SCALE)
         max_slack_y = max(0.0, img_h * capped_scale - VIDEO_HEIGHT)

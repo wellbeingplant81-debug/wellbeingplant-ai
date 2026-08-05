@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from app.services.duration_optimizer import get_audio_duration
 from app.services import audio_policy
+from app.services.scene_timeline import build_timeline
 from app.services.kenburns import VIDEO_WIDTH
 from app.services.subtitle_placement_service import (
     POSITION_TOP,
@@ -520,8 +521,13 @@ def create_subtitle(project_path: str):
     if len(scene_audios) != len(scenes):
 
         raise Exception(
-            "Scene MP3 개수와 Scene 개수가 다릅니다."
+            "Scene 오디오 개수와 Scene 개수가 다릅니다."
         )
+
+    # Sprint64 - Scene Timeline 단일화. 자막 cue의 시각은 여기서 직접
+    # 누적하지 않고 video_builder.py와 똑같은 타임라인을 받아 쓴다 -
+    # 예전에는 양쪽이 각자 계산해서 경계가 어긋났다(실측 최대 800ms).
+    timeline = build_timeline(project_path, scenes)
 
     subtitle_dir = os.path.join(
         project_path,
@@ -538,7 +544,6 @@ def create_subtitle(project_path: str):
         "subtitle.srt",
     )
 
-    current = 0
     cues = []
 
     # Sprint61 - Silence-Aware Subtitle Timing. Duration Optimizer는
@@ -548,9 +553,9 @@ def create_subtitle(project_path: str):
     last_scene_pause_seconds = _load_last_scene_pause_seconds(project_path)
     last_scene_index = len(scenes) - 1
 
-    for index, (scene, audio_path) in enumerate(zip(
-        scenes,
-        scene_audios,
+    for index, (scene, slot) in enumerate(zip(
+        sorted(scenes, key=lambda item: item["scene"]),
+        timeline,
     )):
 
         narration = scene["narration"].strip()
@@ -579,15 +584,10 @@ def create_subtitle(project_path: str):
         print(subtitles)
         print("=" * 60)
 
-        # Sprint59 - moviepy(AudioFileClip)의 duration 추정치는 ffprobe/
-        # 실제 concat 결과와 씬마다 수 ms씩 어긋나고(특히 Duration
-        # Optimizer가 후처리하는 마지막 씬에서 수십 ms까지 벌어짐), 이
-        # 오차가 씬을 거칠수록 누적돼 뒤쪽 cue일수록 실제 음성과
-        # 어긋난다. concat_scene_audio()가 실제로 무손실(각 씬의 ffprobe
-        # 길이 합 == final_audio.mp3 실측 길이)임을 확인했으므로,
-        # get_audio_duration()(ffprobe)로 측정치를 실제 오디오 파이프
-        # 라인과 일치시킨다.
-        scene_duration = get_audio_duration(audio_path)
+        # Sprint64 - scene이 화면에 머무는 구간은 공유 타임라인이
+        # 이미 정해 놓았다. 여기서는 그 구간 안에 cue를 나눠 넣기만
+        # 한다.
+        scene_duration = slot["duration"]
 
         # Sprint61 - 마지막 scene이고 유효한 pause_seconds가 있으면,
         # 무음 패딩을 뺀 "실제 발화 길이"로 이 scene의 cue들을 배분한다
@@ -619,7 +619,7 @@ def create_subtitle(project_path: str):
                 / total_len
             )
 
-            start = current + local_time
+            start = slot["start"] + local_time
             end = start + part_duration
 
             cues.append({
@@ -629,8 +629,6 @@ def create_subtitle(project_path: str):
             })
 
             local_time += part_duration
-
-        current += scene_duration
 
     # Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.mp3 길이에
     # 맞춘다(중간 cue는 위에서 계산한 값을 그대로 유지). Sprint61 -
