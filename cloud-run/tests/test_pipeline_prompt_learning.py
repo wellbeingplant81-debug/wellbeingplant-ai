@@ -50,7 +50,21 @@ FAKE_PROMPT_METRICS = [
 
 @contextlib.contextmanager
 def patched_pipeline():
-    with patch("app.pipeline.pipeline.step01_script") as step01, \
+    # Sprint68 (Stage 3) - 스테이지가 진행되면서 config 기본값이
+    # 하나씩 켜진다. 이 하네스를 쓰는 테스트들은 "무엇을 켰는지"를
+    # 각자 명시해야 하므로, 여기서 일단 전부 끈 상태에서 시작한다.
+    # 개별 테스트가 나중에 거는 patch가 이 값들을 덮어쓴다.
+    with patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    ), \
+         patch("app.pipeline.pipeline.step01_script") as step01, \
          patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
@@ -83,6 +97,10 @@ def patched_pipeline():
         }
 
 
+# Sprint68 (Stage 3) - Scene Planner 기본 활성화에 따른 하네스 기본값.
+DEFAULT_SCENE_PLAN = []
+
+
 def _wire_defaults(mocks):
     mocks["step01"].run.return_value = dict(SAMPLE_DATA)
     mocks["visual_consistency"].apply_visual_consistency.return_value = STYLED_SCENES
@@ -91,6 +109,10 @@ def _wire_defaults(mocks):
     # visual_type 분기 도입과 무관하게 그대로 성립하도록 한다.
     mocks["scene_planner"].apply_visual_type.side_effect = lambda scenes: scenes
     mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
+    # Sprint68 (Stage 3) - Scene Planner가 기본 활성이므로, planner를
+    # 통째로 mock한 이 하네스에서도 plan_scenes()가 직렬화 가능한 값을
+    # 돌려줘야 한다. MagicMock을 그대로 두면 script.json 저장에서 깨진다.
+    mocks["scene_planner"].plan_scenes.return_value = DEFAULT_SCENE_PLAN
 
 
 class TestPromptLearningFeatureFlag(unittest.TestCase):
@@ -111,7 +133,9 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", True), \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False), \
-             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False):
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_SCENE_PLANNER", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_ENRICHMENT", False):
             _wire_defaults(m)
             m["prompt_effectiveness"].evaluate_scenes.return_value = FAKE_PROMPT_METRICS
 
@@ -181,7 +205,9 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False), \
-             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False):
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_SCENE_PLANNER", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_ENRICHMENT", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

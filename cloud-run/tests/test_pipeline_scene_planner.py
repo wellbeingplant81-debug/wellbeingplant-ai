@@ -59,7 +59,21 @@ def patched_pipeline():
     인자 순서를 손으로 맞출 필요가 없게 했습니다.
     """
 
-    with patch("app.pipeline.pipeline.step01_script") as step01, \
+    # Sprint68 (Stage 3) - 스테이지가 진행되면서 config 기본값이
+    # 하나씩 켜진다. 이 하네스를 쓰는 테스트들은 "무엇을 켰는지"를
+    # 각자 명시해야 하므로, 여기서 일단 전부 끈 상태에서 시작한다.
+    # 개별 테스트가 나중에 거는 patch가 이 값들을 덮어쓴다.
+    with patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    ), \
+         patch("app.pipeline.pipeline.step01_script") as step01, \
          patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
@@ -152,7 +166,9 @@ class TestScenePlannerFeatureFlag(unittest.TestCase):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False), \
-             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False):
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_SCENE_PLANNER", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_ENRICHMENT", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

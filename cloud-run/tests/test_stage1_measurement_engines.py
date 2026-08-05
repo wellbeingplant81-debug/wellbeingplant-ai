@@ -87,6 +87,7 @@ class PipelineHarness(unittest.TestCase):
              patch.object(config, "ENABLE_SCENE_PLANNER", False), \
              patch.object(config, "ENABLE_PROMPT_ENRICHMENT", False), \
              patch.object(config, "ENABLE_PROMPT_OPTIMIZATION", False), \
+             patch.object(config, "ENABLE_VIRAL_WRITER", False), \
              patch.object(config, "ENABLE_AI_DIRECTOR", False), \
              patch.object(pipeline.step01_script, "run", fake_step01), \
              patch.object(
@@ -129,15 +130,17 @@ class TestStage1FlagsOnly(unittest.TestCase):
         self.assertTrue(config.ENABLE_PROMPT_EFFECTIVENESS)
         self.assertTrue(config.ENABLE_PROMPT_LEARNING)
 
-    def test_engines_that_change_output_stay_disabled(self):
-        # 생성 산출물을 실제로 바꾸는 엔진들. 하나라도 켜지면 이 파일의
-        # "출력 불변" 검증이 의미를 잃는다.
+    def test_engines_not_yet_activated_stay_disabled(self):
+        # 아직 어느 스테이지에서도 켜지 않은 엔진들.
         #
-        # Sprint67 - AI Director는 이 목록에 없다. 켜져 있어도 scene을
-        # 바꾸지 않는 관측 전용 엔진이고(Stage 2에서 활성화), 그
-        # 계약은 tests/test_stage2_ai_director.py가 따로 고정한다.
-        self.assertFalse(config.ENABLE_SCENE_PLANNER)
-        self.assertFalse(config.ENABLE_PROMPT_ENRICHMENT)
+        # Sprint67 - AI Director는 여기 없다. 켜져 있어도 scene을 바꾸지
+        # 않는 관측 전용 엔진이고, 계약은 test_stage2_ai_director.py가
+        # 고정한다.
+        #
+        # Sprint68 - Scene Planner와 Prompt Enrichment도 여기서 빠졌다.
+        # 이 둘은 Stage 3에서 켰고 실제로 image_prompt를 바꾼다. 그래서
+        # 이 파일의 "출력 불변" 검증은 config 기본값이 아니라
+        # run_pipeline() 하네스가 직접 둘을 끄는 것으로 성립시킨다.
         self.assertFalse(config.ENABLE_PROMPT_OPTIMIZATION)
         self.assertFalse(config.ENABLE_VIRAL_WRITER)
 

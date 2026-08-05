@@ -57,6 +57,19 @@ class TestPipeline(unittest.TestCase):
         self.addCleanup(self._tmp_dir.cleanup)
         self.project_path = self._tmp_dir.name
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -96,6 +109,19 @@ class TestPipeline(unittest.TestCase):
         )
         self.assertEqual(result["scenes"], ENRICHED_SCENES)
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -136,6 +162,19 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(saved["scenes"], ENRICHED_SCENES)
         self.assertEqual(saved["title"], SAMPLE_DATA["title"])
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -176,6 +215,19 @@ class TestPipeline(unittest.TestCase):
     def test_step02_image_not_used_by_pipeline_module(self):
         self.assertFalse(hasattr(pipeline, "step02_image"))
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -209,6 +261,19 @@ class TestPipeline(unittest.TestCase):
 
         mock_regeneration_service.run.assert_called_once_with(self.project_path)
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -243,6 +308,19 @@ class TestPipeline(unittest.TestCase):
 
         mock_regeneration_service.run.assert_not_called()
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")
@@ -277,6 +355,19 @@ class TestPipeline(unittest.TestCase):
 
         self.assertEqual(result["scenes"], ENRICHED_SCENES)
 
+    # Sprint68 (Stage 3) - 이 파일의 테스트들은 step 사이의 배선만
+    # 확인한다. 스테이지가 진행되며 켜진 엔진들이 그 사이에서
+    # image_prompt를 바꾸면 배선 검증이 흐려지므로 여기서는 전부 끈다.
+    @patch.multiple(
+        "app.pipeline.pipeline.config",
+        ENABLE_SCENE_PLANNER=False,
+        ENABLE_PROMPT_ENRICHMENT=False,
+        ENABLE_PROMPT_EFFECTIVENESS=False,
+        ENABLE_PROMPT_OPTIMIZATION=False,
+        ENABLE_PROMPT_LEARNING=False,
+        ENABLE_AI_DIRECTOR=False,
+        ENABLE_VIRAL_WRITER=False,
+    )
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script")

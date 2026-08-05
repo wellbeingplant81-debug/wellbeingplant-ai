@@ -88,6 +88,7 @@ class PipelineHarness(unittest.TestCase):
              patch.object(config, "ENABLE_SCENE_PLANNER", False), \
              patch.object(config, "ENABLE_PROMPT_ENRICHMENT", False), \
              patch.object(config, "ENABLE_PROMPT_OPTIMIZATION", False), \
+             patch.object(config, "ENABLE_VIRAL_WRITER", False), \
              patch.object(pipeline.step01_script, "run", fake_step01), \
              patch.object(
                  pipeline.step02_assets, "collect_assets", fake_collect_assets,
@@ -134,9 +135,10 @@ class TestStage2FlagState(unittest.TestCase):
         self.assertTrue(config.ENABLE_PROMPT_EFFECTIVENESS)
         self.assertTrue(config.ENABLE_PROMPT_LEARNING)
 
-    def test_engines_that_change_output_stay_disabled(self):
-        self.assertFalse(config.ENABLE_SCENE_PLANNER)
-        self.assertFalse(config.ENABLE_PROMPT_ENRICHMENT)
+    def test_engines_not_yet_activated_stay_disabled(self):
+        # Sprint68 - Scene Planner와 Prompt Enrichment는 Stage 3에서
+        # 켰다. 이 파일의 "출력 불변" 검증은 config 기본값이 아니라
+        # run_pipeline() 하네스가 직접 둘을 끄는 것으로 성립시킨다.
         self.assertFalse(config.ENABLE_PROMPT_OPTIMIZATION)
         self.assertFalse(config.ENABLE_VIRAL_WRITER)
 
