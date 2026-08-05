@@ -2,6 +2,13 @@ import os
 import subprocess
 
 
+# Sprint62 - Master Quality Render Pipeline. 최종 인코딩 품질 목표.
+# 이번 Epic에서는 이 값을 바꾸지 않는다 - 화질 개선은 오직
+# video_builder.py의 1차 인코딩 손실을 없애는 데서만 나와야, 무엇이
+# 실제로 개선을 만들었는지 측정으로 분리할 수 있기 때문이다.
+FINAL_CRF = 18
+
+
 def merge_video_audio(project_path: str):
 
     ffmpeg = "ffmpeg"
@@ -76,7 +83,7 @@ def merge_video_audio(project_path: str):
         "slow",
 
         "-crf",
-        "18",
+        str(FINAL_CRF),
 
         "-pix_fmt",
         "yuv420p",

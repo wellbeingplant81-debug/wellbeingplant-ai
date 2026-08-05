@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(
     0,
@@ -17,8 +18,12 @@ from moviepy.video.fx.FadeOut import FadeOut
 from app.services.video_builder import (
     _apply_duration_limits,
     _effects_for_clip,
+    _intermediate_ffmpeg_params,
     _load_scenes,
     _resolve_asset_path,
+    build_video,
+    INTERMEDIATE_CRF,
+    INTERMEDIATE_PRESET,
     MIN_SCENE_DURATION,
     MAX_SCENE_DURATION,
 )
@@ -217,6 +222,140 @@ class TestApplyDurationLimits(unittest.TestCase):
         self.assertAlmostEqual(sum(raw), sum(result), places=6)
         for value in result:
             self.assertGreaterEqual(value, 0.5 - 1e-6)
+
+
+class TestIntermediateEncodingParams(unittest.TestCase):
+    """Sprint62 - Master Quality Render Pipeline.
+
+    short.mp4는 final_video_service.py가 자막을 번인하면서 곧바로 다시
+    인코딩하는 중간 산출물이다. 그런데 moviepy는 -crf를 전혀 넘기지
+    않으므로(moviepy/video/io/ffmpeg_writer.py 참고) 아무것도 지정하지
+    않으면 libx264 기본값 CRF 23으로 인코딩된다 - 2차 인코딩이 CRF
+    18이어도 1차에서 이미 버린 디테일은 되살아나지 않는다.
+
+    중간본은 즉시 버려지므로 압축 효율(파일 크기)은 의미가 없고,
+    충실도와 렌더 속도만이 의미가 있다.
+    """
+
+    def test_crf_is_visually_lossless(self):
+        self.assertLessEqual(INTERMEDIATE_CRF, 16)
+        self.assertGreaterEqual(INTERMEDIATE_CRF, 0)
+
+    def test_ffmpeg_params_pass_crf_explicitly(self):
+        params = _intermediate_ffmpeg_params()
+
+        self.assertIn("-crf", params)
+        self.assertEqual(
+            params[params.index("-crf") + 1],
+            str(INTERMEDIATE_CRF),
+        )
+
+    def test_ffmpeg_params_do_not_set_bitrate(self):
+        # CRF(품질 목표)와 -b:v(비트레이트 목표)를 동시에 주면 libx264는
+        # 비트레이트를 우선해 CRF를 무시한다. 둘을 섞지 않는다.
+        params = _intermediate_ffmpeg_params()
+
+        self.assertNotIn("-b:v", params)
+        self.assertNotIn("-b", params)
+
+    def test_preset_is_declared(self):
+        self.assertIsInstance(INTERMEDIATE_PRESET, str)
+        self.assertTrue(INTERMEDIATE_PRESET)
+
+
+class TestBuildVideoEncodingContract(unittest.TestCase):
+    """Sprint62 - build_video()가 실제로 write_videofile에 명시적 품질
+    파라미터를 넘기는지 검증한다. 상수만 선언해 두고 정작 넘기지 않는
+    회귀를 막는 것이 목적이다."""
+
+    def _make_project(self, tmp_dir, scene_count=2):
+
+        os.makedirs(os.path.join(tmp_dir, "images"), exist_ok=True)
+        os.makedirs(
+            os.path.join(tmp_dir, "audio", "scenes"), exist_ok=True,
+        )
+
+        scenes = []
+
+        for index in range(1, scene_count + 1):
+
+            image_path = os.path.join(
+                tmp_dir, "images", f"scene{index}.png",
+            )
+            audio_path = os.path.join(
+                tmp_dir, "audio", "scenes", f"scene{index}.mp3",
+            )
+
+            for path in (image_path, audio_path):
+                with open(path, "wb") as f:
+                    f.write(b"stub")
+
+            scenes.append({"scene": index, "narration": "x"})
+
+        with open(
+            os.path.join(tmp_dir, "script.json"), "w", encoding="utf-8",
+        ) as f:
+            json.dump({"scenes": scenes}, f)
+
+        return scenes
+
+    def _run_build_video(self, tmp_dir):
+
+        with patch(
+            "app.services.video_builder.AudioFileClip"
+        ) as mock_audio, patch(
+            "app.services.video_builder.build_kenburns_clip"
+        ) as mock_kenburns, patch(
+            "app.services.video_builder.concatenate_videoclips"
+        ) as mock_concat:
+
+            mock_audio.return_value = MagicMock(duration=6.0)
+            mock_kenburns.return_value = MagicMock()
+
+            final = MagicMock()
+            mock_concat.return_value = final
+
+            build_video(tmp_dir)
+
+            return final.write_videofile.call_args
+
+    def test_write_videofile_receives_explicit_ffmpeg_params(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._make_project(tmp_dir)
+
+            call_args = self._run_build_video(tmp_dir)
+
+            self.assertEqual(
+                call_args.kwargs.get("ffmpeg_params"),
+                _intermediate_ffmpeg_params(),
+            )
+
+    def test_write_videofile_receives_declared_preset(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._make_project(tmp_dir)
+
+            call_args = self._run_build_video(tmp_dir)
+
+            self.assertEqual(
+                call_args.kwargs.get("preset"),
+                INTERMEDIATE_PRESET,
+            )
+
+    def test_output_contract_is_unchanged(self):
+        # Sprint62는 인코딩 품질만 바꾼다 - 코덱/fps/무음 처리 등 나머지
+        # 출력 계약은 그대로여야 한다(R5).
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._make_project(tmp_dir)
+
+            call_args = self._run_build_video(tmp_dir)
+
+            self.assertEqual(call_args.kwargs.get("codec"), "libx264")
+            self.assertEqual(call_args.kwargs.get("fps"), 30)
+            self.assertFalse(call_args.kwargs.get("audio"))
+            self.assertEqual(
+                call_args.args[0],
+                os.path.join(tmp_dir, "video", "short.mp4"),
+            )
 
 
 if __name__ == "__main__":

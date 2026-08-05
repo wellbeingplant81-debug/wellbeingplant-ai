@@ -35,6 +35,40 @@ CROSSFADE_DURATION = 0.35
 MIN_SCENE_DURATION = 2.0
 MAX_SCENE_DURATION = 14.0
 
+# Sprint62 - Master Quality Render Pipeline.
+#
+# 여기서 만드는 short.mp4는 최종 산출물이 아니라, final_video_service.py가
+# 자막을 번인하면서 곧바로 다시 인코딩해 final_short.mp4를 만드는 중간
+# 산출물이다. 그런데 moviepy는 write_videofile에 -crf를 전혀 넘기지
+# 않으므로(moviepy/video/io/ffmpeg_writer.py의 명령어 조립 참고), 우리가
+# 아무것도 지정하지 않으면 libx264 기본값인 CRF 23으로 인코딩된다.
+#
+# 실측(2026-08-05, output/20260709_* 3건): 중간본이 1080x1920 30fps에서
+# 1.04~1.82 Mbps에 불과했다. 2차 인코딩이 CRF 18이어도 1차에서 이미
+# 버려진 디테일은 되살아나지 않는다 - Ken Burns처럼 화면 전체가 계속
+# 움직이는 영상에서는 이 손실이 그대로 최종 화질 상한이 된다.
+#
+# 중간본은 다음 단계에서 즉시 재인코딩되고 버려지므로 압축 효율(파일
+# 크기)은 아무 의미가 없다. 의미가 있는 것은 충실도와 렌더 속도뿐이다.
+# 그래서 CRF는 시각적 무손실 영역까지 낮추고(품질 목표), preset은 오히려
+# 빠른 쪽으로 올린다(같은 CRF를 더 빨리 도달하되 파일만 커짐). preset은
+# 도달 방식일 뿐 품질 목표가 아니므로, 이 조합은 기존 CRF 23 + slow보다
+# 항상 화질이 높다.
+INTERMEDIATE_CRF = 16
+INTERMEDIATE_PRESET = "veryfast"
+
+
+def _intermediate_ffmpeg_params(crf: int = INTERMEDIATE_CRF) -> list:
+    """
+    중간본(short.mp4) 인코딩에 쓸 추가 ffmpeg 인자를 만든다. 순수
+    함수입니다.
+
+    -b:v(비트레이트 목표)는 절대 함께 주지 않는다 - libx264는 둘이
+    동시에 주어지면 비트레이트를 우선해 CRF를 무시하기 때문이다.
+    """
+
+    return ["-crf", str(crf)]
+
 
 def _apply_duration_limits(
     raw_durations: list,
@@ -286,7 +320,8 @@ def build_video(project_path: str):
         output_path,
         codec="libx264",
         fps=30,
-        preset="slow",
+        preset=INTERMEDIATE_PRESET,
+        ffmpeg_params=_intermediate_ffmpeg_params(),
         audio=False,
         threads=4,
         logger="bar",
