@@ -46,16 +46,28 @@ from app.services import prompt_learning_service, quality_service  # noqa: E402
 from app.tools import evaluation  # noqa: E402
 
 
-ARMS = {
-    "baseline": {
-        "ENABLE_SCENE_PLANNER": False,
-        "ENABLE_PROMPT_ENRICHMENT": False,
-    },
-    "candidate": {
+# 후보마다 어떤 플래그를 켜는지가 다르므로, arm 정의를 이름으로 고른다.
+# 새 Epic을 평가할 때 여기에 한 줄 추가하면 된다 - 스크립트를 고쳐
+# 가며 쓰면 지난 실험이 무엇이었는지 기록이 남지 않는다.
+CANDIDATES = {
+    "planner-v2": {
         "ENABLE_SCENE_PLANNER": True,
         "ENABLE_PROMPT_ENRICHMENT": True,
     },
+    "character-consistency": {
+        "ENABLE_CHARACTER_CONSISTENCY": True,
+    },
 }
+
+# baseline은 후보가 켜는 플래그를 전부 끈 상태다 - 후보별로 자동
+# 계산하므로 baseline 정의를 따로 관리하지 않는다.
+def build_arms(candidate_name: str) -> dict:
+    flags = CANDIDATES[candidate_name]
+
+    return {
+        "baseline": {name: False for name in flags},
+        "candidate": dict(flags),
+    }
 
 
 def load_clean_script(source_project):
@@ -81,7 +93,8 @@ def load_clean_script(source_project):
     }
 
 
-def run_once(work_dir, run_index, arm, flags, script, source_project):
+def run_once(work_dir, run_index, arm, flags, script, source_project,
+             fresh_script=False):
     """이미지 생성 + 썸네일 + Gemini 평가를 한 번 수행한다."""
 
     project = os.path.join(work_dir, f"{arm}_run{run_index}")
@@ -106,6 +119,15 @@ def run_once(work_dir, run_index, arm, flags, script, source_project):
 
     prompt_learning_service.reset_learning()
 
+    # 후보가 대본을 바꾸는 경우에는 저장된 대본을 재사용하면 안 된다 -
+    # 그러면 후보의 변경이 아예 실행되지 않는다. 대신 회차마다 Writer가
+    # 새 대본을 쓰므로 편차가 커진다는 것을 감수한다.
+    step01_patch = (
+        patch.object(pipeline.step01_script, "run", pipeline.step01_script.run)
+        if fresh_script
+        else patch.object(pipeline.step01_script, "run", fake_step01)
+    )
+
     with patch.multiple(
         "app.pipeline.pipeline.config",
         ENABLE_PROMPT_EFFECTIVENESS=True,
@@ -115,7 +137,7 @@ def run_once(work_dir, run_index, arm, flags, script, source_project):
         ENABLE_VIRAL_WRITER=False,
         **flags,
     ), \
-         patch.object(pipeline.step01_script, "run", fake_step01), \
+         step01_patch, \
          patch.object(pipeline.step03_tts, "run", lambda s, p: None), \
          patch.object(pipeline.step04_subtitle, "run", lambda p: None), \
          patch.object(pipeline.step05_video, "run", lambda p: None), \
@@ -169,7 +191,21 @@ def main():
         "--out", default="evaluation_report.md",
         help="Markdown 리포트 출력 경로",
     )
+    parser.add_argument(
+        "--candidate", required=True, choices=sorted(CANDIDATES),
+        help="평가할 후보 (CANDIDATES 참고)",
+    )
+    parser.add_argument(
+        "--fresh-script", action="store_true",
+        help=(
+            "회차마다 Writer를 다시 호출한다. 후보가 대본 자체를 바꾸는 "
+            "경우(예: character-consistency) 반드시 필요하다 - 저장된 "
+            "대본을 재사용하면 후보의 변경이 애초에 반영되지 않는다."
+        ),
+    )
     args = parser.parse_args()
+
+    arms = build_arms(args.candidate)
 
     script = load_clean_script(args.source)
 
@@ -178,7 +214,7 @@ def main():
     collected = {}
     projects = {}
 
-    for arm, flags in ARMS.items():
+    for arm, flags in arms.items():
 
         print("=" * 70)
         print(f"{arm}  ({args.runs}회)")
@@ -191,6 +227,7 @@ def main():
             started = time.perf_counter()
             payload, project = run_once(
                 args.work, index, arm, flags, script, args.source,
+                fresh_script=args.fresh_script,
             )
             evaluations.append(payload)
             projects[arm].append(project)
@@ -218,7 +255,7 @@ def main():
     )
 
     report += "\n## 생성 산출물 (사람이 직접 볼 것)\n\n"
-    for arm in ARMS:
+    for arm in arms:
         report += f"### {arm}\n\n"
         for path in projects[arm]:
             report += f"- `{path}`\n"

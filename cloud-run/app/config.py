@@ -101,3 +101,29 @@ ENABLE_AI_DIRECTOR = True
 # working without modification. Flag off means byte-for-byte identical
 # behavior to pre-Sprint51.
 ENABLE_VIRAL_WRITER = False
+
+# Sprint71 - Character Consistency Engine v1. Off by default.
+#
+# Evaluation Framework v2로 5회 측정했더니 character_consistency가 5회
+# 전부 0점이었다. 원인은 렌더가 아니라 대본이었다 - Writer가 scene 1에
+# "middle-aged Korean man", scene 3에 "Korean woman in her 50s",
+# scene 5에 "elderly Korean couple"을 써 놓으니 같은 사람이 나올 수가
+# 없다.
+#
+# 이 플래그는 두 가지를 함께 켠다.
+#
+# 1. Writer에게 "인물은 한 명, 외형 묘사는 매 scene 동일" 규칙을 준다
+#    (app/prompts/character_consistency_rules.py).
+# 2. 인물이 등장하는 scene을 Imagen으로 보낸다
+#    (app/services/character_consistency_engine.py). Pexels 스톡은
+#    매번 다른 실제 사람이라 대본이 무엇을 적든 지킬 수 없다.
+#
+# 둘은 분리할 수 없다. 대본만 고치면 스톡이 무시하고, 라우팅만 바꾸면
+# 대본이 여전히 다른 사람을 요구한다.
+#
+# 비용: 인물 scene이 Pexels(무료)에서 Imagen으로 옮겨가므로 영상당
+# Imagen 호출이 3~4회 늘어난다.
+#
+# Evaluation Framework v2에서 character_consistency와 overall_quality가
+# 둘 다 통계적으로 개선될 때만 True로 바꾼다.
+ENABLE_CHARACTER_CONSISTENCY = False

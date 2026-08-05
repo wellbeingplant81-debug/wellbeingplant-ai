@@ -9,6 +9,7 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from app.services import image_service
 from app.services.asset_integration_service import integrate_asset
 
 
@@ -151,7 +152,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -248,7 +249,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -334,7 +335,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         }
         mock_get_candidates.return_value = [low_quality_candidate]
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -359,7 +360,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         # 선택("ai_priority")이 아니라 기존과 같은 "fallback"이어야 한다.
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -395,7 +396,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -418,7 +419,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
         mock_download.side_effect = Exception("network error")
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -435,7 +436,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     def test_visual_type_ai_uses_imagen_first(
         self, mock_generate_image, mock_get_candidates,
     ):
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -501,10 +502,10 @@ class TestAssetIntegrationService(unittest.TestCase):
 
     @patch("app.services.asset_integration_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
-    def test_visual_type_ai_passes_visual_type_to_generate_image(
+    def test_visual_type_ai_passes_the_medical_style_to_generate_image(
         self, mock_get_candidates, mock_generate_image,
     ):
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -514,20 +515,24 @@ class TestAssetIntegrationService(unittest.TestCase):
         scene = {**SAMPLE_SCENE, "visual_type": "ai"}
         integrate_asset(scene, self.project_path)
 
+        # Sprint71 - generate_image에 넘어가는 것은 라우팅 값("ai")이
+        # 아니라 스타일 이름이다. 인물이 아닌 ai scene은 의료 일러스트.
         _, kwargs = mock_generate_image.call_args
-        self.assertEqual(kwargs["visual_type"], "ai")
+        self.assertEqual(
+            kwargs["image_style"], image_service.IMAGE_STYLE_MEDICAL,
+        )
 
     @patch("app.services.asset_integration_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
-    def test_visual_type_real_fallback_passes_visual_type_to_generate_image(
+    def test_visual_type_real_fallback_passes_the_default_style(
         self, mock_get_candidates, mock_generate_image,
     ):
-        # visual_type="real"인 scene이 Pexels 실패로 AI 폴백을 타도,
-        # generate_image에는 "real"이 그대로 전달돼야 한다(의료 스타일이
+        # Sprint71 - visual_type="real"인 scene이 Pexels 실패로 AI
+        # 폴백을 타도 기본(채널) 스타일이어야 한다(의료 스타일이
         # 아니라 기존 photorealistic 스타일을 써야 하므로).
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -538,11 +543,13 @@ class TestAssetIntegrationService(unittest.TestCase):
         integrate_asset(scene, self.project_path)
 
         _, kwargs = mock_generate_image.call_args
-        self.assertEqual(kwargs["visual_type"], "real")
+        self.assertEqual(
+            kwargs["image_style"], image_service.IMAGE_STYLE_DEFAULT,
+        )
 
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
-    def test_visual_type_absent_passes_none_to_generate_image(
+    def test_visual_type_absent_passes_the_default_style(
         self, mock_get_candidates, mock_download,
     ):
         mock_get_candidates.return_value = []
@@ -551,7 +558,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             "app.services.asset_integration_service.generate_image",
         ) as mock_generate_image:
 
-            def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, visual_type=None):
+            def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
                 with open(output_file, "wb") as f:
                     f.write(b"ai bytes")
                 return output_file
@@ -561,7 +568,9 @@ class TestAssetIntegrationService(unittest.TestCase):
             integrate_asset(SAMPLE_SCENE, self.project_path)
 
             _, kwargs = mock_generate_image.call_args
-            self.assertIsNone(kwargs["visual_type"])
+            self.assertEqual(
+                kwargs["image_style"], image_service.IMAGE_STYLE_DEFAULT,
+            )
 
 
 if __name__ == "__main__":

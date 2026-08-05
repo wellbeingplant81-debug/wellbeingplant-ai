@@ -6,18 +6,48 @@ from app.services.asset_mode_config import get_pexels_quality_threshold
 from app.services.asset_priority_classifier import effective_pexels_threshold
 from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
+from app.services import image_service
+from app.services.character_consistency_engine import CHARACTER_SCENE_FIELD
 from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 
 
-def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def resolve_image_style(scene: dict) -> str:
+    """
+    scene이 어떤 이미지 스타일로 생성되어야 하는지 정한다. 순수
+    함수입니다.
+
+    Sprint71 - provider 라우팅(visual_type)과 스타일을 갈라 놓는
+    지점이다. 인물 scene은 라우팅상으로는 Imagen 우선("ai")이지만
+    스타일은 의료 일러스트가 아니라 인물이어야 한다 - 두 값을 한
+    필드로 쓰던 동안에는 인물 프롬프트가 해부학 단면도로 렌더됐다.
+
+    인물 판정이 의료 판정보다 우선한다. "혈관을 든 사람"처럼 둘 다
+    걸릴 수 있는 장면에서는 사람 쪽을 지키는 편이 낫다 - 인물
+    일관성이 무너지면 영상 전체가 무너지지만, 배경 그림체가 조금
+    달라지는 것은 그만큼 치명적이지 않다.
+    """
+
+    scene = scene or {}
+
+    if scene.get(CHARACTER_SCENE_FIELD):
+        return image_service.IMAGE_STYLE_CHARACTER
+
+    if scene.get("visual_type") == VISUAL_TYPE_AI:
+        return image_service.IMAGE_STYLE_MEDICAL
+
+    return image_service.IMAGE_STYLE_DEFAULT
+
+
+def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
+               image_style=image_service.IMAGE_STYLE_DEFAULT):
     ai_path = generate_image(
         image_prompt,
         staging_path,
         channel=channel,
         is_hook_scene=is_hook_scene,
-        visual_type=visual_type,
+        image_style=image_style,
     )
 
     return {
@@ -27,7 +57,8 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type=N
     }
 
 
-def _select_real_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
+                       image_style=image_service.IMAGE_STYLE_DEFAULT):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
@@ -49,12 +80,15 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene, visua
             )
 
     return (
-        _ai_result(image_prompt, staging_path, channel, is_hook_scene, visual_type),
+        _ai_result(
+            image_prompt, staging_path, channel, is_hook_scene, image_style,
+        ),
         False,
     )
 
 
-def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene, visual_type=None):
+def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
+                     image_style=image_service.IMAGE_STYLE_DEFAULT):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
 
@@ -67,7 +101,7 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene, visual_
     try:
         return (
             _ai_result(
-                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                image_prompt, staging_path, channel, is_hook_scene, image_style,
             ),
             True,
         )
@@ -178,14 +212,15 @@ def integrate_asset(
     staging_path = os.path.join(images_dir, f"scene{scene_number}.raw")
 
     visual_type = scene.get("visual_type")
+    image_style = resolve_image_style(scene)
 
     if visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
-            image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            image_prompt, staging_path, channel, is_hook_scene, image_style,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
-            image_prompt, staging_path, channel, is_hook_scene, visual_type,
+            image_prompt, staging_path, channel, is_hook_scene, image_style,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
@@ -207,7 +242,7 @@ def integrate_asset(
             result = download_candidate(best_candidate, staging_path)
         else:
             result = _ai_result(
-                image_prompt, staging_path, channel, is_hook_scene, visual_type,
+                image_prompt, staging_path, channel, is_hook_scene, image_style,
             )
 
     source = result["source"]

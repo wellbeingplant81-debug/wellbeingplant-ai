@@ -16,6 +16,7 @@ from app.prompts.image_style import (
     WELLBEING_NEGATIVE_PROMPT,
     WELLBEING_STYLE,
 )
+from app.services import image_service
 from app.services.image_service import generate_image
 
 
@@ -50,7 +51,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         generate_image(
             "microscopic view of gut bacteria",
             self.output_file,
-            visual_type="ai",
+            image_style=image_service.IMAGE_STYLE_MEDICAL,
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
@@ -69,7 +70,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         generate_image(
             "microscopic view of gut bacteria",
             self.output_file,
-            visual_type="ai",
+            image_style=image_service.IMAGE_STYLE_MEDICAL,
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
@@ -89,7 +90,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         generate_image(
             "a person drinking water in the morning",
             self.output_file,
-            visual_type="real",
+            image_style=image_service.IMAGE_STYLE_DEFAULT,
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
@@ -113,7 +114,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
 
     @patch("app.services.image_service.enhance_image")
     @patch("app.services.image_service.client")
-    def test_is_thumbnail_takes_priority_over_visual_type_ai(
+    def test_thumbnail_style_wins_over_a_medical_prompt(
         self, mock_client, mock_enhance,
     ):
         mock_client.models.generate_images.return_value = _mock_response()
@@ -121,8 +122,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         generate_image(
             "thumbnail prompt",
             self.output_file,
-            is_thumbnail=True,
-            visual_type="ai",
+            image_style=image_service.IMAGE_STYLE_THUMBNAIL,
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
@@ -141,7 +141,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
             "cross-section of a blood vessel",
             self.output_file,
             is_hook_scene=True,
-            visual_type="ai",
+            image_style=image_service.IMAGE_STYLE_MEDICAL,
         )
 
         _, kwargs = mock_client.models.generate_images.call_args

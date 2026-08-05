@@ -3,6 +3,7 @@ import json
 from google import genai
 
 from app import config
+from app.prompts.character_consistency_rules import with_character_rules
 from app.prompts.script_prompt import SCRIPT_PROMPT
 from app.prompts.viral_script_prompt import VIRAL_SCRIPT_PROMPT
 
@@ -27,6 +28,12 @@ def generate_script(
         target_duration=target_duration,
         scene_count=scene_count,
     )
+
+    # Sprint71 - Character Consistency v1. 인물 일관성은 대본이 정하는
+    # 것이므로 여기서 규칙을 얹는다. 두 템플릿 중 무엇이 선택됐든
+    # 동일하게 붙으므로, 한쪽만 반영되는 일이 없다.
+    if config.ENABLE_CHARACTER_CONSISTENCY:
+        prompt = with_character_rules(prompt)
 
     print("\n" + "=" * 80)
     print("SCRIPT PROMPT")

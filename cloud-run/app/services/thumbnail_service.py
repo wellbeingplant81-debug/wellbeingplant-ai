@@ -1,5 +1,6 @@
 import os
 
+from app.services import image_service
 from app.services.image_service import generate_image
 
 
@@ -56,7 +57,7 @@ No watermark
         prompt,
         output,
         channel,
-        is_thumbnail=True,
+        image_style=image_service.IMAGE_STYLE_THUMBNAIL,
     )
 
     return output

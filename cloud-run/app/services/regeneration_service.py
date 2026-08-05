@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from app.config import QUALITY_MAX_RETRY
 from app.models.quality_report import RetryAttempt, SceneRegenerationEntry
+from app.services import asset_integration_service
 from app.services.image_service import generate_image
 from app.services.video_builder import build_video
 from app.services.final_video_service import merge_video_audio
@@ -127,7 +128,9 @@ def run(project_path: str):
                     output_file,
                     channel=channel,
                     is_hook_scene=(scene_number == 1),
-                    visual_type=scenes_by_number[scene_number].get("visual_type"),
+                    image_style=asset_integration_service.resolve_image_style(
+                        scenes_by_number[scene_number],
+                    ),
                 )
 
                 entry.regeneration.retry_count += 1

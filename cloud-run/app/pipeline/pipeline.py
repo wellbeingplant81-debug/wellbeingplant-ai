@@ -4,6 +4,7 @@ import time
 
 from app import config
 from app.services import ai_director_service
+from app.services import character_consistency_engine
 from app.steps import step01_script
 from app.steps import step02_assets
 from app.steps import step03_tts
@@ -237,6 +238,19 @@ def run_pipeline(
     data["scenes"] = scene_planner_service.apply_visual_type(
         data["scenes"],
     )
+
+    # Sprint71 - Character Consistency v1. Writer가 한 인물만 쓰도록
+    # 이미 지시받았더라도, 그 인물이 나오는 scene이 Pexels로 가면
+    # 매번 다른 실제 사람이 나온다. 인물 scene만 Imagen 쪽으로 돌린다 -
+    # image_prompt는 건드리지 않는다(대본이 적어 둔 인물 묘사와
+    # 어긋나면 안 된다).
+    if config.ENABLE_CHARACTER_CONSISTENCY:
+        try:
+            data["scenes"] = character_consistency_engine.apply_character_routing(
+                data["scenes"],
+            )
+        except Exception as exc:
+            print(f"Character consistency step failed: {exc}")
 
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(

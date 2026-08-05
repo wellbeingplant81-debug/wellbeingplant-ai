@@ -25,6 +25,7 @@ from app.models.quality_report import (
     TechnicalValidation,
     ThumbnailQuality,
 )
+from app.services import image_service
 from app.services import regeneration_service
 
 
@@ -229,7 +230,7 @@ class TestRegenerationService(unittest.TestCase):
             os.path.join(self.project_path, "images", "scene3.png"),
             channel="wellbeing",
             is_hook_scene=False,
-            visual_type=None,
+            image_style=image_service.IMAGE_STYLE_DEFAULT,
         )
         mock_build_video.assert_called_once_with(self.project_path)
         mock_merge.assert_called_once_with(self.project_path)
@@ -289,7 +290,8 @@ class TestRegenerationService(unittest.TestCase):
         mock_step07.load.return_value = initial_report
         mock_step07.evaluate.return_value = post_cycle_report
 
-        def _side_effect(prompt, output_file, channel, is_hook_scene, visual_type=None):
+        def _side_effect(prompt, output_file, channel, is_hook_scene,
+                         image_style=None):
             if "scene1" in output_file:
                 raise Exception("scene1 failed")
 
@@ -404,7 +406,7 @@ class TestRegenerationService(unittest.TestCase):
             os.path.join(self.project_path, "images", "scene1.png"),
             channel="wellbeing",
             is_hook_scene=True,
-            visual_type=None,
+            image_style=image_service.IMAGE_STYLE_DEFAULT,
         )
 
         entries = {e.scene: e for e in result.regeneration}
@@ -457,10 +459,10 @@ class TestRegenerationService(unittest.TestCase):
             os.path.join(self.project_path, "images", "scene3.png"),
             channel="wellbeing",
             is_hook_scene=False,
-            visual_type="ai",
+            image_style=image_service.IMAGE_STYLE_MEDICAL,
         )
 
-    def test_visual_type_missing_defaults_to_none(
+    def test_visual_type_missing_uses_the_default_style(
         self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
     ):
         # visual_type 필드 자체가 없는(구버전) script.json도 KeyError
@@ -473,7 +475,9 @@ class TestRegenerationService(unittest.TestCase):
         regeneration_service.run(self.project_path)
 
         _, kwargs = mock_generate_image.call_args
-        self.assertIsNone(kwargs["visual_type"])
+        self.assertEqual(
+            kwargs["image_style"], image_service.IMAGE_STYLE_DEFAULT,
+        )
 
     def test_total_failure_cycle_stops_without_a_second_attempt(
         self, mock_step07, mock_generate_image, mock_build_video, mock_merge,
