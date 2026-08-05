@@ -31,9 +31,16 @@ from app.services import visual_consistency_engine
 # MEASUREMENT_FILENAME으로 나간다. 아래 키들은 project_data 안에서만
 # 살아 있고(다음 스테이지의 Optimization이 메모리로 소비한다) 디스크의
 # script.json에는 절대 실리지 않는다.
-MEASUREMENT_ONLY_KEYS = ("prompt_metrics",)
+#
+# Sprint67 (Stage 2) - AI Director의 결정도 같은 성격이다. Director는
+# scene을 바꾸지 않고 accept/review/regenerate 권고만 계산하므로,
+# 그 결과 역시 생성 산출물이 아니라 관측 산출물이다(실측: 켜는 것만으로
+# script.json에 755자가 붙었다).
+MEASUREMENT_ONLY_KEYS = ("prompt_metrics", "director_decision")
 
-MEASUREMENT_FILENAME = "prompt_metrics.json"
+# 이제 프롬프트 점수만 담는 파일이 아니므로 이름도 그에 맞춘다. 모든
+# 참조가 이 상수를 거치므로 파급은 없다.
+MEASUREMENT_FILENAME = "measurements.json"
 
 
 def _save_script(project_path, data):
@@ -63,10 +70,14 @@ def _save_script(project_path, data):
         )
 
 
-def _write_measurements(project_path, prompt_metrics, learning_summary):
+def _write_measurements(project_path, measurements, learning_summary):
     """
     측정 결과를 script.json이 아닌 별도 파일로 남긴다. 순수한 관측
     산출물이므로 파이프라인의 어떤 단계도 이 파일을 읽지 않는다.
+
+    measurements는 MEASUREMENT_ONLY_KEYS 중 이번 실행에서 실제로 채워진
+    것들만 담는다 - 꺼져 있는 엔진의 키를 null로 남겨 두면 "돌았는데
+    결과가 없다"와 "아예 안 돌았다"를 구분할 수 없기 때문이다.
 
     Sprint49 Learning은 인메모리 카운터만 갱신하고 아무것도 남기지
     않으므로, 여기서 그 스냅샷을 함께 기록해 실제로 무엇을 배웠는지
@@ -76,12 +87,14 @@ def _write_measurements(project_path, prompt_metrics, learning_summary):
 
     path = os.path.join(project_path, MEASUREMENT_FILENAME)
 
+    payload = dict(measurements)
+
+    if learning_summary is not None:
+        payload["learning_summary"] = learning_summary
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(
-            {
-                "prompt_metrics": prompt_metrics,
-                "learning_summary": learning_summary,
-            },
+            payload,
             f,
             ensure_ascii=False,
             indent=4,
@@ -172,23 +185,6 @@ def run_pipeline(
         except Exception as exc:
             print(f"Prompt learning step failed: {exc}")
 
-    # Sprint66 (Stage 1) - 측정 결과를 관측용 파일로 남긴다. 이 블록은
-    # Observability Layer이며 Production Pipeline과 분리되어 있다 -
-    # 여기서 무슨 예외가 나든(디스크 오류 포함) 영상 생성은 그대로
-    # 계속되어야 한다.
-    if data.get("prompt_metrics"):
-        try:
-            _write_measurements(
-                project_path,
-                data["prompt_metrics"],
-                (
-                    prompt_learning_service.get_learning_summary()
-                    if config.ENABLE_PROMPT_LEARNING else None
-                ),
-            )
-        except Exception as exc:
-            print(f"Measurement recording failed: {exc}")
-
     if config.ENABLE_AI_DIRECTOR:
         try:
             best_pattern = (
@@ -205,6 +201,34 @@ def run_pipeline(
             )
         except Exception as exc:
             print(f"AI director step failed: {exc}")
+
+    # Sprint66 (Stage 1) / Sprint67 (Stage 2) - 관측 산출물을 남긴다.
+    #
+    # 반드시 관측 엔진들이 전부 끝난 뒤여야 한다. Stage 1에서는 이
+    # 블록이 Director보다 앞에 있어서, Director를 켜면 결정이 파일에는
+    # 안 남고 script.json에만 실렸다.
+    #
+    # 이 블록은 Observability Layer이며 Production Pipeline과 분리되어
+    # 있다 - 여기서 무슨 예외가 나든(디스크 오류 포함) 영상 생성은
+    # 그대로 계속되어야 한다.
+    measurements = {
+        key: data[key]
+        for key in MEASUREMENT_ONLY_KEYS
+        if data.get(key)
+    }
+
+    if measurements:
+        try:
+            _write_measurements(
+                project_path,
+                measurements,
+                (
+                    prompt_learning_service.get_learning_summary()
+                    if config.ENABLE_PROMPT_LEARNING else None
+                ),
+            )
+        except Exception as exc:
+            print(f"Measurement recording failed: {exc}")
 
     # Sprint60 - Smart Visual Selection v1: 최종 image_prompt(enrichment/
     # optimization까지 다 반영된 뒤)를 기준으로 scene마다 real/ai를

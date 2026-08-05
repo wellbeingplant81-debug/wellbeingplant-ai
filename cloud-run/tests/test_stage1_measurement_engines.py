@@ -130,12 +130,15 @@ class TestStage1FlagsOnly(unittest.TestCase):
         self.assertTrue(config.ENABLE_PROMPT_LEARNING)
 
     def test_engines_that_change_output_stay_disabled(self):
-        # Stage 2 이후로 미룬 엔진들. 하나라도 켜지면 Stage 1의
+        # 생성 산출물을 실제로 바꾸는 엔진들. 하나라도 켜지면 이 파일의
         # "출력 불변" 검증이 의미를 잃는다.
+        #
+        # Sprint67 - AI Director는 이 목록에 없다. 켜져 있어도 scene을
+        # 바꾸지 않는 관측 전용 엔진이고(Stage 2에서 활성화), 그
+        # 계약은 tests/test_stage2_ai_director.py가 따로 고정한다.
         self.assertFalse(config.ENABLE_SCENE_PLANNER)
         self.assertFalse(config.ENABLE_PROMPT_ENRICHMENT)
         self.assertFalse(config.ENABLE_PROMPT_OPTIMIZATION)
-        self.assertFalse(config.ENABLE_AI_DIRECTOR)
         self.assertFalse(config.ENABLE_VIRAL_WRITER)
 
 

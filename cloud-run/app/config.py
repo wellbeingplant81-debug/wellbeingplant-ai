@@ -45,10 +45,19 @@ ENABLE_PROMPT_OPTIMIZATION = False
 # 남겨 둔다.
 ENABLE_PROMPT_LEARNING = True
 
-# Sprint50 - AI Director v1. Off by default. Pure rule-based read-only
-# decision engine - never modifies data["scenes"] or any other pipeline
-# output, only ever adds data["director_decision"] when enabled.
-ENABLE_AI_DIRECTOR = False
+# Sprint50 - AI Director v1.
+#
+# Sprint67 (Stage 2)에서 켰다. 다른 엔진들의 결과만 읽어 scene마다
+# accept/review/regenerate 권고를 계산하는 순수 규칙 엔진이다 - LLM도,
+# DB도, 파일 I/O도 없고 data["scenes"]를 비롯한 어떤 생성 산출물도
+# 건드리지 않는다. 결정은 script.json이 아니라 관측 산출물로 나간다
+# (pipeline.MEASUREMENT_ONLY_KEYS 참고).
+#
+# 주의: asset_quality_service는 아직 파이프라인에 연결되어 있지 않아
+# asset 쪽 판단은 항상 unknown이고, ENABLE_SCENE_PLANNER가 꺼져 있어
+# best_pattern 매칭도 일어나지 않는다. 즉 지금 결정은 사실상
+# prompt_metrics 하나에만 근거한다.
+ENABLE_AI_DIRECTOR = True
 
 # Sprint51 Phase 1 - Viral Writer Engine. Off by default. Only swaps which
 # prompt template script_service.generate_script() sends to Gemini - the

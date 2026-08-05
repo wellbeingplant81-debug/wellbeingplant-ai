@@ -110,7 +110,8 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
     def test_flag_off_is_never_called(self):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", True), \
-             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False):
             _wire_defaults(m)
             m["prompt_effectiveness"].evaluate_scenes.return_value = FAKE_PROMPT_METRICS
 
@@ -179,7 +180,8 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
     def test_default_flags_off_pipeline_output_unchanged_from_sprint48(self):
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
-             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()
