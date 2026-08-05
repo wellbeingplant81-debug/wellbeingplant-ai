@@ -6,6 +6,7 @@ import unicodedata
 from datetime import timedelta
 
 from app.services.duration_optimizer import get_audio_duration
+from app.services import audio_policy
 from app.services.kenburns import VIDEO_WIDTH
 from app.services.subtitle_placement_service import (
     POSITION_TOP,
@@ -454,7 +455,7 @@ def _snap_last_cue_to_final_audio_duration(
     final_audio_path = os.path.join(
         project_path,
         "audio",
-        "final_audio.mp3",
+        audio_policy.FINAL_AUDIO_FILENAME,
     )
 
     if not os.path.exists(final_audio_path):
@@ -511,7 +512,7 @@ def create_subtitle(project_path: str):
         glob.glob(
             os.path.join(
                 scene_audio_folder,
-                "*.mp3",
+                audio_policy.SCENE_AUDIO_GLOB,
             )
         )
     )

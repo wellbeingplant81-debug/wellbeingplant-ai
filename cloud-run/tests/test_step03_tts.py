@@ -20,8 +20,8 @@ SAMPLE_SCENES = [
 ]
 
 FAKE_SCENE_PATHS = [
-    os.path.join("output", "proj", "audio", "scenes", "scene1.mp3"),
-    os.path.join("output", "proj", "audio", "scenes", "scene2.mp3"),
+    os.path.join("output", "proj", "audio", "scenes", "scene1.wav"),
+    os.path.join("output", "proj", "audio", "scenes", "scene2.wav"),
 ]
 
 

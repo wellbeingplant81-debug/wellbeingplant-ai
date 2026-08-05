@@ -35,7 +35,7 @@ class RealProjectFixture(unittest.TestCase):
     def _make_audio(self, path, seconds):
         result = subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{seconds:.2f}",
-             "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", path],
+             "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", path],
             capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -52,10 +52,10 @@ class RealProjectFixture(unittest.TestCase):
 class TestGetRealDurations(RealProjectFixture):
 
     def test_reports_scene_and_total_durations(self):
-        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene1.mp3"), 3.0)
-        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene2.mp3"), 4.0)
-        self._make_audio(os.path.join(self.project_path, "audio", "voice.mp3"), 7.0)
-        self._make_audio(os.path.join(self.project_path, "audio", "final_audio.mp3"), 7.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene1.wav"), 3.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene2.wav"), 4.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "voice.wav"), 7.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "final_audio.wav"), 7.0)
         self._make_video(os.path.join(self.project_path, "video", "final_short.mp4"), 7.0)
 
         result = get_real_durations(self.project_path)
@@ -78,7 +78,7 @@ class TestGetRealDurations(RealProjectFixture):
     def test_scenes_are_sorted_numerically(self):
         for i in [2, 10, 1]:
             self._make_audio(
-                os.path.join(self.project_path, "audio", "scenes", f"scene{i}.mp3"), 1.0
+                os.path.join(self.project_path, "audio", "scenes", f"scene{i}.wav"), 1.0
             )
 
         result = get_real_durations(self.project_path)
@@ -117,9 +117,9 @@ class TestLoadQualitySummary(unittest.TestCase):
 class TestBuildQaReport(RealProjectFixture):
 
     def test_combines_durations_and_quality_summary(self):
-        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene1.mp3"), 5.0)
-        self._make_audio(os.path.join(self.project_path, "audio", "voice.mp3"), 5.0)
-        self._make_audio(os.path.join(self.project_path, "audio", "final_audio.mp3"), 5.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "scenes", "scene1.wav"), 5.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "voice.wav"), 5.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "final_audio.wav"), 5.0)
         self._make_video(os.path.join(self.project_path, "video", "final_short.mp4"), 5.0)
 
         report = build_qa_report(self.project_path)
@@ -129,7 +129,7 @@ class TestBuildQaReport(RealProjectFixture):
         self.assertIn("target_range_ok", report)
 
     def test_target_range_ok_true_when_within_43_47(self):
-        self._make_audio(os.path.join(self.project_path, "audio", "voice.mp3"), 45.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "voice.wav"), 45.0)
         self._make_video(os.path.join(self.project_path, "video", "final_short.mp4"), 45.0)
 
         report = build_qa_report(self.project_path)
@@ -137,7 +137,7 @@ class TestBuildQaReport(RealProjectFixture):
         self.assertTrue(report["target_range_ok"])
 
     def test_target_range_ok_false_when_outside_43_47(self):
-        self._make_audio(os.path.join(self.project_path, "audio", "voice.mp3"), 30.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "voice.wav"), 30.0)
         self._make_video(os.path.join(self.project_path, "video", "final_short.mp4"), 30.0)
 
         report = build_qa_report(self.project_path)
@@ -145,7 +145,7 @@ class TestBuildQaReport(RealProjectFixture):
         self.assertFalse(report["target_range_ok"])
 
     def test_format_report_does_not_raise(self):
-        self._make_audio(os.path.join(self.project_path, "audio", "voice.mp3"), 45.0)
+        self._make_audio(os.path.join(self.project_path, "audio", "voice.wav"), 45.0)
 
         report = build_qa_report(self.project_path)
         text = format_report(report)

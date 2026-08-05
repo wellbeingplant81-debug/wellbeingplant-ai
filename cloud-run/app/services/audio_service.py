@@ -1,6 +1,7 @@
 import os
 import subprocess
 
+from app.services import audio_policy
 from app.services.bgm_service import select_bgm
 from app.services.duration_optimizer import get_audio_duration
 
@@ -57,8 +58,10 @@ def concat_scene_audio(scene_audio_paths, output_file):
         "0",
         "-i",
         list_file,
-        "-c:a",
-        "libmp3lame",
+        # Sprint63 - libmp3lame은 비트레이트를 지정하지 않으면 24kHz mono
+        # 입력에서 32kbps로 내려간다(실측). scene 오디오를 하나로 잇는
+        # 이 단계에서까지 재양자화할 이유가 없으므로 무손실 PCM으로 쓴다.
+        *audio_policy.pcm_output_args(),
         output_file,
     ]
 
@@ -86,7 +89,7 @@ def mix_audio(project_path: str, bgm_category: str = None):
     voice = os.path.join(
         project_path,
         "audio",
-        "voice.mp3",
+        audio_policy.VOICE_FILENAME,
     )
 
     bgm = select_bgm(bgm_category)
@@ -94,7 +97,7 @@ def mix_audio(project_path: str, bgm_category: str = None):
     output = os.path.join(
         project_path,
         "audio",
-        "final_audio.mp3",
+        audio_policy.FINAL_AUDIO_FILENAME,
     )
 
     # Sprint53 Duration Optimizer가 이미 확정한 실제 narration 길이에
@@ -133,8 +136,9 @@ def mix_audio(project_path: str, bgm_category: str = None):
             # 없이는 narration max_volume이 -1.5dB -> -7.6dB로 떨어졌다.
             "amix=inputs=2:duration=first:dropout_transition=2:normalize=0"
         ),
-        "-c:a",
-        "mp3",
+        # Sprint63 - 최종 MP4의 AAC 인코딩 직전 마지막 중간 산출물이다.
+        # 여기서 mp3로 한 번 더 떨구면 그 손실을 안은 채 AAC로 넘어간다.
+        *audio_policy.pcm_output_args(),
         output,
     ]
 

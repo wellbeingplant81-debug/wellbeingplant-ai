@@ -1,6 +1,7 @@
 import os
 
 from app.providers.tts_provider import generate_voice
+from app.services import audio_policy
 
 
 def create_scene_tts(
@@ -28,7 +29,7 @@ def create_scene_tts(
 
         output_file = os.path.join(
             audio_dir,
-            f"scene{index}.mp3",
+            audio_policy.scene_audio_filename(index),
         )
 
         generate_voice(

@@ -1,5 +1,6 @@
 import os
 import subprocess
+from app.services import audio_policy
 
 
 # Sprint62 - Master Quality Render Pipeline. 최종 인코딩 품질 목표.
@@ -22,7 +23,7 @@ def merge_video_audio(project_path: str):
     audio_path = os.path.join(
         project_path,
         "audio",
-        "final_audio.mp3",
+        audio_policy.FINAL_AUDIO_FILENAME,
     )
 
     subtitle_path = os.path.join(
@@ -92,10 +93,10 @@ def merge_video_audio(project_path: str):
         "+faststart",
 
         "-c:a",
-        "aac",
+        audio_policy.DELIVERY_AUDIO_CODEC,
 
         "-b:a",
-        "192k",
+        audio_policy.DELIVERY_AUDIO_BITRATE,
 
         "-shortest",
 

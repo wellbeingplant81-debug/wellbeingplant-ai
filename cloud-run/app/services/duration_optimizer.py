@@ -7,7 +7,7 @@ Chirp3-HD-Aoede는 같은 텍스트를 넣어도 합성 길이가 크게(실측 
 그래서 이 모듈은 텍스트/SSML이 아니라, 이미 합성이 끝난 실제 scene
 mp3 파일들의 ffprobe 실측 길이를 보고 마지막 scene의 오디오 파일
 자체만 후처리한다. narration/script.json/Speech Normalization 결과는
-전혀 건드리지 않는다 - 오직 audio/scenes/*.mp3만 다룬다.
+전혀 건드리지 않는다 - 오직 audio/scenes/의 나레이션 파일만 다룬다.
 
 - 43~47초: 아무 파일도 건드리지 않는다.
 - 43초 미만: ffmpeg로 만든 무음을 마지막 scene 오디오 뒤에 이어붙여
@@ -19,6 +19,8 @@ mp3 파일들의 ffprobe 실측 길이를 보고 마지막 scene의 오디오 �
 
 import os
 import subprocess
+
+from app.services import audio_policy
 
 FFMPEG = "ffmpeg"
 FFPROBE = "ffprobe"
@@ -69,10 +71,14 @@ def append_silence(audio_path: str, pause_seconds: float, output_path: str) -> s
         "-i", audio_path,
         "-f", "lavfi",
         "-t", f"{clamped_pause:.2f}",
-        "-i", "anullsrc=r=44100:cl=mono",
+        # Sprint63 - 무음 소스의 샘플레이트/채널이 나레이션과 다르면
+        # concat 필터가 전체를 리샘플한다. 정책값과 맞춰 그 변환을
+        # 아예 없앤다(이전에는 44100이라 24kHz 나레이션이 매번
+        # 리샘플됐다).
+        "-i", audio_policy.silence_source(),
         "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[out]",
         "-map", "[out]",
-        "-c:a", "libmp3lame",
+        *audio_policy.pcm_output_args(),
         output_path,
     ]
 
@@ -94,7 +100,7 @@ def speed_up_audio(audio_path: str, rate: float, output_path: str) -> str:
         FFMPEG, "-y",
         "-i", audio_path,
         "-filter:a", f"atempo={clamped_rate:.4f}",
-        "-c:a", "libmp3lame",
+        *audio_policy.pcm_output_args(),
         output_path,
     ]
 
@@ -140,7 +146,7 @@ def optimize_scene_audio(scene_audio_paths: list) -> dict:
 
     last_path = scene_audio_paths[-1]
     last_duration = durations[-1]
-    tmp_path = last_path + ".optimized.mp3"
+    tmp_path = last_path + ".optimized" + audio_policy.NARRATION_EXTENSION
 
     if total < MIN_ACCEPTABLE_SECONDS:
         pause_seconds = min(

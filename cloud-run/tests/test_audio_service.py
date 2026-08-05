@@ -23,6 +23,7 @@ from app.services.audio_service import (
     DUCK_RELEASE_MS,
     DUCK_MAKEUP,
 )
+from app.services import audio_policy
 from app.services.duration_optimizer import get_audio_duration
 
 
@@ -33,7 +34,7 @@ class TestMixAudioCommand(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.tmp_dir, "audio"))
-        with open(os.path.join(self.tmp_dir, "audio", "voice.mp3"), "wb") as f:
+        with open(os.path.join(self.tmp_dir, "audio", "voice.wav"), "wb") as f:
             f.write(b"fake voice")
 
     def tearDown(self):
@@ -167,12 +168,21 @@ class RealAudioMixTestCase(unittest.TestCase):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def _make_tone(self, path: str, seconds: float, freq: int = 440):
+        # Sprint63 - narration(voice.wav)은 무손실 PCM, BGM(*.mp3)은
+        # 외부 자산 그대로 mp3다. 확장자에 맞는 코덱을 쓰지 않으면
+        # 컨테이너와 내용이 어긋나 ffprobe 길이가 미묘하게 틀어진다.
+        codec = (
+            "pcm_s16le"
+            if path.endswith(audio_policy.NARRATION_EXTENSION)
+            else "libmp3lame"
+        )
+
         result = subprocess.run(
             [
                 "ffmpeg", "-y",
                 "-f", "lavfi", "-t", f"{seconds:.2f}",
                 "-i", f"sine=frequency={freq}:sample_rate=44100",
-                "-c:a", "libmp3lame", path,
+                "-c:a", codec, path,
             ],
             capture_output=True, text=True,
         )
@@ -180,7 +190,7 @@ class RealAudioMixTestCase(unittest.TestCase):
         return path
 
     def _make_voice(self, seconds: float) -> str:
-        path = os.path.join(self.project_path, "audio", "voice.mp3")
+        path = os.path.join(self.project_path, "audio", "voice.wav")
         return self._make_tone(path, seconds, freq=440)
 
     def _mean_volume_db(self, path: str) -> float:
@@ -210,7 +220,7 @@ class TestLoopShortBgm(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
         self.assertAlmostEqual(get_audio_duration(output), 10.0, delta=0.15)
 
 
@@ -224,7 +234,7 @@ class TestTrimLongBgm(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
         self.assertAlmostEqual(get_audio_duration(output), 5.0, delta=0.15)
 
 
@@ -244,7 +254,7 @@ class TestNarrationNotAttenuatedByMix(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
         mix_max_db = self._max_volume_db(output)
 
         # amix normalize=1이면 약 -6dB 떨어진다 - 1dB 이내로 유지되어야
@@ -261,26 +271,26 @@ class TestBgmDucking(RealAudioMixTestCase):
         # 처음 loud_seconds는 narration 실측 피크(-1.5dB 근방)에 가깝게
         # 키운 톤, 이어서 silence_seconds는 완전 무음 - 실제 narration의
         # "말하는 구간 -> 조용한 구간" 전환을 흉내낸다.
-        path = os.path.join(self.project_path, "audio", "voice.mp3")
-        loud_path = os.path.join(self.tmp_dir, "_loud.mp3")
-        silence_path = os.path.join(self.tmp_dir, "_silence.mp3")
+        path = os.path.join(self.project_path, "audio", "voice.wav")
+        loud_path = os.path.join(self.tmp_dir, "_loud.wav")
+        silence_path = os.path.join(self.tmp_dir, "_silence.wav")
 
         subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{loud_seconds:.2f}",
              "-i", "sine=frequency=440:sample_rate=44100",
-             "-af", "volume=18dB", "-c:a", "libmp3lame", loud_path],
+             "-af", "volume=18dB", "-c:a", "pcm_s16le", loud_path],
             capture_output=True, text=True,
         )
         subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{silence_seconds:.2f}",
-             "-i", "anullsrc=r=44100:cl=mono",
-             "-c:a", "libmp3lame", silence_path],
+             "-i", "anullsrc=r=24000:cl=mono",
+             "-c:a", "pcm_s16le", silence_path],
             capture_output=True, text=True,
         )
         result = subprocess.run(
             ["ffmpeg", "-y", "-i", loud_path, "-i", silence_path,
              "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[out]",
-             "-map", "[out]", "-c:a", "libmp3lame", path],
+             "-map", "[out]", "-c:a", "pcm_s16le", path],
             capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -297,7 +307,7 @@ class TestBgmDucking(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
 
         # narration이 확실히 재생 중인 구간(초반 여유를 두고 1.0~3.0s)의
         # 최종 믹스 음량은, BGM만 있을 때보다 narration(0dB, 훨씬 큼)이
@@ -335,7 +345,7 @@ class TestBgmDucking(RealAudioMixTestCase):
             DUCK_RELEASE_MS, DUCK_MAKEUP,
         )
 
-        voice_path = os.path.join(project_path, "audio", "voice.mp3")
+        voice_path = os.path.join(project_path, "audio", "voice.wav")
         duration = get_audio_duration(voice_path)
         fade_out_start = max(duration - BGM_FADE_OUT_SECONDS, 0.0)
         isolated_path = os.path.join(self.tmp_dir, "_isolated_bgm.mp3")
@@ -393,7 +403,7 @@ class TestBgmDuckingRobustness(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
         self.assertAlmostEqual(get_audio_duration(output), 0.4, delta=0.15)
 
     def test_long_narration_still_works(self):
@@ -404,7 +414,7 @@ class TestBgmDuckingRobustness(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
         self.assertAlmostEqual(get_audio_duration(output), 60.0, delta=0.3)
 
 
@@ -414,13 +424,13 @@ class TestMergeContainsBgm(RealAudioMixTestCase):
         # BGM이 실제로 섞여 들어갔다면, voice 단독보다 최종 결과물의
         # 평균 음량(mean_volume)이 달라야 한다 (침묵 narration + 낮은
         # 볼륨의 BGM만 섞어서, BGM 유무 자체가 신호로 드러나게 한다).
-        voice_path = os.path.join(self.project_path, "audio", "voice.mp3")
+        voice_path = os.path.join(self.project_path, "audio", "voice.wav")
         # 무음 narration - BGM이 섞이지 않으면 최종 결과도 완전 무음이어야 한다.
         result = subprocess.run(
             [
                 "ffmpeg", "-y", "-f", "lavfi", "-t", "6.0",
-                "-i", "anullsrc=r=44100:cl=mono",
-                "-c:a", "libmp3lame", voice_path,
+                "-i", "anullsrc=r=24000:cl=mono",
+                "-c:a", "pcm_s16le", voice_path,
             ],
             capture_output=True, text=True,
         )
@@ -432,7 +442,7 @@ class TestMergeContainsBgm(RealAudioMixTestCase):
         with patch("app.services.audio_service.select_bgm", return_value=bgm_path):
             mix_audio(self.project_path)
 
-        output = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        output = os.path.join(self.project_path, "audio", "final_audio.wav")
 
         voice_alone_db = self._mean_volume_db(voice_path)
         final_mix_db = self._mean_volume_db(output)

@@ -10,6 +10,7 @@ sys.path.insert(
 )
 
 from app.providers import elevenlabs_provider
+from app.services import audio_policy
 
 
 def _fake_response(status_code=200, json_data=None, content=b"", text=""):
@@ -110,7 +111,7 @@ class TestGenerateVoice(unittest.TestCase):
         elevenlabs_provider._voice_id_cache.clear()
         self._tmp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp_dir.cleanup)
-        self.output_file = os.path.join(self._tmp_dir.name, "voice.mp3")
+        self.output_file = os.path.join(self._tmp_dir.name, "voice.wav")
 
     @patch.dict(os.environ, {}, clear=True)
     def test_missing_api_key_raises(self):
@@ -127,24 +128,65 @@ class TestGenerateVoice(unittest.TestCase):
         {"ELEVENLABS_API_KEY": "key", "ELEVENLABS_VOICE_NAME": "Brandon"},
         clear=True,
     )
+    @patch("app.providers.elevenlabs_provider.subprocess.run")
     @patch("app.providers.elevenlabs_provider.requests.post")
     @patch("app.providers.elevenlabs_provider.requests.get")
     def test_successful_call_uses_resolved_voice_id_and_writes_file(
-        self, mock_get, mock_post,
+        self, mock_get, mock_post, mock_run,
     ):
         mock_get.return_value = _fake_response(
             json_data={"voices": [{"name": "Brandon", "voice_id": "brandon-id"}]},
         )
         mock_post.return_value = _fake_response(content=b"mp3 bytes")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
         result = elevenlabs_provider.generate_voice("안녕하세요", self.output_file)
 
         self.assertEqual(result, self.output_file)
-        with open(self.output_file, "rb") as f:
-            self.assertEqual(f.read(), b"mp3 bytes")
 
         called_url = mock_post.call_args[0][0]
         self.assertIn("brandon-id", called_url)
+
+    @patch("app.providers.elevenlabs_provider.subprocess.run")
+    @patch("app.providers.elevenlabs_provider.requests.post")
+    @patch("app.providers.elevenlabs_provider.requests.get")
+    def test_response_is_normalized_to_policy_audio_format(
+        self, mock_get, mock_post, mock_run,
+    ):
+        """Sprint63 - ElevenLabs는 MP3를 돌려주지만 파이프라인 나머지
+        구간은 무손실 PCM만 다룬다. 받은 바이트를 그대로 .wav 이름으로
+        저장하면 컨테이너와 내용이 어긋나므로, 여기서 한 번 디코딩해
+        정책 포맷으로 정규화해야 한다."""
+
+        mock_get.return_value = _fake_response(
+            json_data={"voices": [{"name": "Brandon", "voice_id": "brandon-id"}]},
+        )
+        mock_post.return_value = _fake_response(content=b"mp3 bytes")
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+        elevenlabs_provider.generate_voice("안녕하세요", self.output_file)
+
+        command = mock_run.call_args[0][0]
+
+        self.assertEqual(command[0], "ffmpeg")
+        self.assertIn(audio_policy.NARRATION_PCM_CODEC, command)
+        self.assertIn(str(audio_policy.NARRATION_SAMPLE_RATE_HZ), command)
+        self.assertEqual(command[-1], self.output_file)
+
+    @patch("app.providers.elevenlabs_provider.subprocess.run")
+    @patch("app.providers.elevenlabs_provider.requests.post")
+    @patch("app.providers.elevenlabs_provider.requests.get")
+    def test_conversion_failure_raises_instead_of_writing_bad_audio(
+        self, mock_get, mock_post, mock_run,
+    ):
+        mock_get.return_value = _fake_response(
+            json_data={"voices": [{"name": "Brandon", "voice_id": "brandon-id"}]},
+        )
+        mock_post.return_value = _fake_response(content=b"not audio")
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="boom")
+
+        with self.assertRaises(Exception):
+            elevenlabs_provider.generate_voice("안녕하세요", self.output_file)
 
     @patch.dict(
         os.environ,

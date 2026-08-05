@@ -1,6 +1,10 @@
 import os
+import subprocess
+import tempfile
 
 import requests
+
+from app.services import audio_policy
 
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 VOICES_URL = "https://api.elevenlabs.io/v1/voices"
@@ -104,7 +108,43 @@ def generate_voice(text: str, output_file: str):
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    with open(output_file, "wb") as f:
-        f.write(response.content)
+    _write_policy_audio(response.content, output_file)
 
     return output_file
+
+
+def _write_policy_audio(audio_bytes: bytes, output_file: str):
+    """
+    Sprint63 - Master Quality Audio. ElevenLabs는 기본적으로 MP3를
+    돌려주지만, 파이프라인의 나머지 구간은 무손실 PCM WAV만 다룬다
+    (app/services/audio_policy.py). 받은 바이트를 그대로 .wav 이름으로
+    저장하면 컨테이너와 내용이 어긋나므로, 여기서 한 번만 디코딩해
+    정책 포맷으로 정규화한다.
+
+    ElevenLabs가 이미 만든 MP3 손실은 되돌릴 수 없다 - 여기서 막는 것은
+    "그 뒤로 더 쌓이는" 재인코딩이다. Google TTS 경로(LINEAR16)는 애초에
+    손실이 없으므로 이런 변환 자체가 필요 없다.
+    """
+
+    with tempfile.NamedTemporaryFile(
+        suffix=".src", delete=False,
+    ) as tmp:
+        tmp.write(audio_bytes)
+        source_path = tmp.name
+
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", source_path]
+            + audio_policy.pcm_output_args()
+            + [output_file],
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise Exception(
+                f"ElevenLabs 오디오를 정책 포맷으로 변환하지 못했습니다: "
+                f"{result.stderr}"
+            )
+    finally:
+        os.remove(source_path)

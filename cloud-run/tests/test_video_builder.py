@@ -15,6 +15,7 @@ from moviepy.video.fx.CrossFadeOut import CrossFadeOut
 from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
+from app.services import audio_policy
 from app.services.video_builder import (
     _apply_duration_limits,
     _effects_for_clip,
@@ -283,7 +284,8 @@ class TestBuildVideoEncodingContract(unittest.TestCase):
                 tmp_dir, "images", f"scene{index}.png",
             )
             audio_path = os.path.join(
-                tmp_dir, "audio", "scenes", f"scene{index}.mp3",
+                tmp_dir, "audio", "scenes",
+                audio_policy.scene_audio_filename(index),
             )
 
             for path in (image_path, audio_path):

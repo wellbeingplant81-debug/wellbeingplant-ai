@@ -3,6 +3,7 @@ import os
 import subprocess
 
 from PIL import Image
+from app.services import audio_policy
 
 
 AUDIO_VIDEO_SYNC_TOLERANCE_MS = 250
@@ -49,8 +50,8 @@ def _check_required_files(project_path, scene_count):
 
     required = [
         "script.json",
-        os.path.join("audio", "voice.mp3"),
-        os.path.join("audio", "final_audio.mp3"),
+        os.path.join("audio", audio_policy.VOICE_FILENAME),
+        os.path.join("audio", audio_policy.FINAL_AUDIO_FILENAME),
         os.path.join("subtitle", "subtitle.srt"),
         os.path.join("video", "short.mp4"),
         os.path.join("video", "final_short.mp4"),
@@ -59,7 +60,11 @@ def _check_required_files(project_path, scene_count):
 
     for index in range(1, scene_count + 1):
         required.append(os.path.join("images", f"scene{index}.png"))
-        required.append(os.path.join("audio", "scenes", f"scene{index}.mp3"))
+        required.append(
+            os.path.join(
+                "audio", "scenes", audio_policy.scene_audio_filename(index),
+            )
+        )
 
     missing = [
         path
@@ -80,7 +85,9 @@ def _check_scene_count(project_path, scene_count):
     )
 
     audio_files = glob.glob(
-        os.path.join(project_path, "audio", "scenes", "scene*.mp3")
+        os.path.join(
+            project_path, "audio", "scenes", audio_policy.SCENE_AUDIO_GLOB,
+        )
     )
 
     return {
@@ -179,7 +186,10 @@ def _check_subtitle_existence(project_path):
 def _check_audio_video_sync(project_path, scene_count):
 
     scene_audio_paths = [
-        os.path.join(project_path, "audio", "scenes", f"scene{index}.mp3")
+        os.path.join(
+            project_path, "audio", "scenes",
+            audio_policy.scene_audio_filename(index),
+        )
         for index in range(1, scene_count + 1)
     ]
 

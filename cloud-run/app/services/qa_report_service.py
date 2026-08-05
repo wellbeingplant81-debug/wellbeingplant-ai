@@ -12,12 +12,15 @@ import json
 import os
 import re
 
+from app.services import audio_policy
 from app.services.duration_optimizer import get_audio_duration
 
 TARGET_MIN_SECONDS = 43.0
 TARGET_MAX_SECONDS = 47.0
 
-_SCENE_NUMBER_PATTERN = re.compile(r"scene(\d+)\.mp3$")
+_SCENE_NUMBER_PATTERN = re.compile(
+    r"scene(\d+)" + re.escape(audio_policy.NARRATION_EXTENSION) + "$"
+)
 
 
 def _scene_number(path: str) -> int:
@@ -32,7 +35,7 @@ def get_real_durations(project_path: str) -> dict:
 
     scenes_dir = os.path.join(project_path, "audio", "scenes")
     scene_paths = sorted(
-        glob.glob(os.path.join(scenes_dir, "scene*.mp3")),
+        glob.glob(os.path.join(scenes_dir, audio_policy.SCENE_AUDIO_GLOB)),
         key=_scene_number,
     )
 
@@ -47,8 +50,10 @@ def get_real_durations(project_path: str) -> dict:
 
     return {
         "scenes": scenes,
-        "voice": _duration_or_none("audio", "voice.mp3"),
-        "final_audio": _duration_or_none("audio", "final_audio.mp3"),
+        "voice": _duration_or_none("audio", audio_policy.VOICE_FILENAME),
+        "final_audio": _duration_or_none(
+            "audio", audio_policy.FINAL_AUDIO_FILENAME,
+        ),
         "final_video": _duration_or_none("video", "final_short.mp4"),
     }
 
@@ -112,8 +117,10 @@ def format_report(report: dict) -> str:
         lines.append("  (no scene audio files found)")
 
     lines.append("")
-    lines.append(f"voice.mp3        : {durations['voice']}")
-    lines.append(f"final_audio.mp3  : {durations['final_audio']}")
+    lines.append(f"{audio_policy.VOICE_FILENAME:<16} : {durations['voice']}")
+    lines.append(
+        f"{audio_policy.FINAL_AUDIO_FILENAME:<16} : {durations['final_audio']}"
+    )
     lines.append(f"final_short.mp4  : {durations['final_video']}")
     lines.append(
         f"target range (43-47s): {'OK' if report['target_range_ok'] else 'OUT OF RANGE'}"

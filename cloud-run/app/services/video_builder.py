@@ -8,6 +8,7 @@ from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
 from app.services.kenburns import build_kenburns_clip
+from app.services import audio_policy
 from app.services.transition_engine import annotate_scenes_with_transitions
 
 
@@ -240,7 +241,7 @@ def build_video(project_path: str):
 
         scene_audio = os.path.join(
             scene_audio_folder,
-            f"scene{scene['scene']}.mp3",
+            audio_policy.scene_audio_filename(scene["scene"]),
         )
 
         if not os.path.exists(scene_audio):

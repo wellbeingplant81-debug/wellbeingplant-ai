@@ -311,10 +311,10 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
             json.dump({"scenes": scenes}, f, ensure_ascii=False)
 
         for i in (1, 2):
-            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.mp3")
+            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.wav")
             result = subprocess.run(
                 ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
-                 "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+                 "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
                 capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -469,7 +469,7 @@ class TestLoadLastScenePauseSeconds(unittest.TestCase):
 
 
 class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
-    """Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.mp3 길이에
+    """Sprint59 - 마지막 cue의 종료 시간만 실제 final_audio.wav 길이에
     맞춘다. 중간 cue는 절대 건드리지 않는다."""
 
     def setUp(self):
@@ -487,7 +487,7 @@ class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
         ]
 
     def _touch_final_audio(self):
-        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.wav")
         with open(final_audio_path, "wb") as f:
             f.write(b"fake")
         return final_audio_path
@@ -587,7 +587,7 @@ class TestSnapLastCueToFinalAudioDuration(unittest.TestCase):
 
 
 class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
-    """Sprint59 - create_subtitle() 전체 파이프라인에서 final_audio.mp3가
+    """Sprint59 - create_subtitle() 전체 파이프라인에서 final_audio.wav가
     있으면 마지막 cue만 그 실제 길이에 맞춰지는지 검증한다."""
 
     def setUp(self):
@@ -605,10 +605,10 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
             json.dump({"scenes": scenes}, f, ensure_ascii=False)
 
         for i in (1, 2):
-            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.mp3")
+            audio_path = os.path.join(self.project_path, "audio", "scenes", f"scene{i}.wav")
             result = subprocess.run(
                 ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
-                 "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+                 "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
                 capture_output=True, text=True,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -624,10 +624,10 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
             return f.read()
 
     def _make_final_audio(self, duration_seconds):
-        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.mp3")
+        final_audio_path = os.path.join(self.project_path, "audio", "final_audio.wav")
         result = subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
-             "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", final_audio_path],
+             "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", final_audio_path],
             capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -644,7 +644,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
         return_value=POSITION_BOTTOM,
     )
     def test_last_cue_end_matches_final_audio_duration(self, mock_choose):
-        # 두 씬 mp3 합은 약 4.0s지만, 실제 final_audio.mp3는 BGM 믹스/
+        # 두 씬 mp3 합은 약 4.0s지만, 실제 final_audio.wav는 BGM 믹스/
         # 재인코딩 오차로 4.35s라고 가정한다. format_srt_time()의 ms
         # 절삭(Sprint59와 무관한 기존 동작)에 흔들리지 않도록 문자열이
         # 아니라 초 단위 수치로 비교한다.
@@ -681,12 +681,12 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
         return_value=POSITION_BOTTOM,
     )
     def test_no_final_audio_file_preserves_old_behavior(self, mock_choose):
-        # final_audio.mp3가 없어도(안전장치가 발동하지 않아도) 마지막
+        # final_audio.wav가 없어도(안전장치가 발동하지 않아도) 마지막
         # cue는 씬 mp3 실측 길이의 합과 일치해야 한다. create_subtitle()
         # 내부는 (Sprint59 재조사 이후) get_audio_duration()(ffprobe)로
         # 씬 mp3 길이를 재므로, 여기서도 같은 방식으로 기대값을 구한다.
         expected_seconds = 0.0
-        for name in ("scene1.mp3", "scene2.mp3"):
+        for name in ("scene1.wav", "scene2.wav"):
             expected_seconds += get_audio_duration(
                 os.path.join(self.project_path, "audio", "scenes", name)
             )
@@ -726,10 +726,10 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
         self._make_scene_audio(2, 4.0)
 
         self.scene1_duration = get_audio_duration(
-            os.path.join(self.project_path, "audio", "scenes", "scene1.mp3")
+            os.path.join(self.project_path, "audio", "scenes", "scene1.wav")
         )
         self.scene2_duration = get_audio_duration(
-            os.path.join(self.project_path, "audio", "scenes", "scene2.mp3")
+            os.path.join(self.project_path, "audio", "scenes", "scene2.wav")
         )
 
     def tearDown(self):
@@ -737,11 +737,11 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
 
     def _make_scene_audio(self, scene_number, duration_seconds):
         audio_path = os.path.join(
-            self.project_path, "audio", "scenes", f"scene{scene_number}.mp3",
+            self.project_path, "audio", "scenes", f"scene{scene_number}.wav",
         )
         result = subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
-             "-i", "anullsrc=r=44100:cl=mono", "-c:a", "libmp3lame", audio_path],
+             "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
             capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
