@@ -28,16 +28,41 @@ PURPOSE_PHRASES = {
 }
 
 
+def _phrase_if_planned(scene_plan_item: dict, field: str, phrases: dict):
+    """
+    Sprint69 (Scene Planner v2) - 그 차원이 프롬프트에서 온 것이면
+    아무것도 덧붙이지 않는다.
+
+    v1은 계획된 값을 무조건 덧붙였고, 그래서 "dynamic low-angle
+    close-up shot"으로 시작하는 프롬프트 뒤에 "wide shot"이 붙는 일이
+    생겼다. 프롬프트가 이미 그 차원을 말하고 있다면 계획이 할 일은
+    없다 - 같은 값이면 중복이고, 다른 값이면 모순이다. 둘 다 프롬프트를
+    나쁘게 만든다.
+
+    source 정보가 아예 없는 계획(v1 형식이나 테스트가 손으로 만든
+    항목)은 예전처럼 덧붙인다 - 정보가 없을 때 조용히 기능을 꺼 버리면
+    호출자가 알아채지 못한다.
+    """
+
+    if scene_plan_item.get(f"{field}_source") == scene_planner_service.PROMPT_SOURCE:
+        return None
+
+    return phrases.get(scene_plan_item.get(field))
+
+
 def enrich_prompt(original_prompt: str, scene_plan_item: dict) -> str:
     """
     scene_plan_item(scene_planner_service.plan_scenes()의 항목 하나)의
     camera/visual_type/purpose를 사람이 읽을 수 있는 문구로 바꿔
     original_prompt 뒤에 덧붙입니다. 순수 함수입니다.
 
-    scene_plan_item이 없거나(Planner 비활성/미매칭) 알려진 설명 문구가
-    하나도 없으면 original_prompt를 그대로 반환합니다 - Sprint45
-    "Planner가 비활성화되어도 기존 결과와 동일해야 함" 원칙을
-    이 함수 레벨에서도 그대로 지킵니다.
+    scene_plan_item이 없거나(Planner 비활성/미매칭) 덧붙일 문구가 하나도
+    없으면 original_prompt를 그대로 반환합니다 - Sprint45 "Planner가
+    비활성화되어도 기존 결과와 동일해야 함" 원칙을 이 함수 레벨에서도
+    그대로 지킵니다.
+
+    Sprint69 (v2) - 프롬프트가 이미 지시하고 있는 차원은 건드리지
+    않습니다(_phrase_if_planned 참고).
     """
 
     if not scene_plan_item:
@@ -46,8 +71,10 @@ def enrich_prompt(original_prompt: str, scene_plan_item: dict) -> str:
     descriptors = [
         phrase
         for phrase in (
-            CAMERA_PHRASES.get(scene_plan_item.get("camera")),
-            VISUAL_TYPE_PHRASES.get(scene_plan_item.get("visual_type")),
+            _phrase_if_planned(scene_plan_item, "camera", CAMERA_PHRASES),
+            _phrase_if_planned(
+                scene_plan_item, "visual_type", VISUAL_TYPE_PHRASES,
+            ),
             PURPOSE_PHRASES.get(scene_plan_item.get("purpose")),
         )
         if phrase

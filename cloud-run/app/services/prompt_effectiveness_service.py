@@ -11,6 +11,7 @@ Sprint46 prompt_enrichment_service가 만든 enriched_prompt가 실제로
 import re
 
 from app.services import prompt_enrichment_service
+from app.services import scene_planner_service
 
 # 각 검사 항목이 통과했을 때 더해지는 점수 (합계 100).
 POINTS = {
@@ -50,12 +51,28 @@ def _check_descriptor_reflected(
     않은 값이면 "확인할 대상이 없다"는 뜻이므로 통과로 처리합니다 -
     prompt_enrichment_service.enrich_prompt()가 같은 이유로 원본을
     그대로 반환하는 것과 대칭되는 규칙입니다.
+
+    Sprint69 (Scene Planner v2) - 그 값이 프롬프트에서 읽어 온 것이면
+    이미 반영되어 있는 것이므로 통과입니다. 이 검사가 보려는 것은
+    "계획한 연출이 프롬프트에 담겼는가"인데, 프롬프트가 출처라면 담기고
+    말고 할 것이 없습니다.
+
+    문자열로 다시 찾지 않는 이유가 중요합니다. 프롬프트는 같은 뜻을
+    다른 말로 적을 수 있습니다 - "macro"는 close_up으로 읽히지만
+    "close-up"이라는 글자는 없습니다. 여기서 글자를 찾으면 프롬프트를
+    존중했다는 이유로 오히려 감점되어, 점수가 실제 품질과 반대로
+    움직입니다.
     """
 
-    value = (scene_plan_item or {}).get(field)
+    scene_plan_item = scene_plan_item or {}
+
+    value = scene_plan_item.get(field)
     phrase = phrase_map.get(value)
 
     if not phrase:
+        return True
+
+    if scene_plan_item.get(f"{field}_source") == scene_planner_service.PROMPT_SOURCE:
         return True
 
     return phrase in (enriched_prompt or "")

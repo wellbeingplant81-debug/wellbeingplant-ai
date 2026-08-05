@@ -16,24 +16,28 @@ ENABLE_SCENE_PLANNER = False
 
 # Sprint46 - Prompt Enrichment Engine.
 #
-# Sprint68 (Stage 3)에서 켜서 실제 A/B 영상을 두 벌 만들어 본 뒤
-# 되돌렸다. 같은 대본/같은 나레이션 오디오로 에셋만 다시 수집했고,
-# 실제로 달라진 이미지는 Imagen이 만드는 2개뿐이었다(나머지 4개는
-# Pexels이고 검색어가 안 바뀌어 바이트 단위로 동일했다).
+# Sprint68 (Stage 3)에서 켰다가 되돌렸고, Sprint69에서 카메라 충돌을
+# 없앤 v2로 다시 재 봤지만 여전히 켜지 않았다. 이유는 "나빠져서"가
+# 아니라 "좋아졌다고 말할 근거가 없어서"다.
 #
-# 그 2개 중 하나가 눈에 띄게 나빠졌다. scene 4는 원본 프롬프트가
-# "dynamic low-angle close-up shot"인데 Planner가 "wide shot"을
-# 덧붙였고, 결과 이미지에 'Meticin'/'Croupic'/'Visulation' 같은 뜻
-# 없는 가짜 라벨이 박혔다. Gemini Vision 평가도 realism 90->40,
-# composition 90->50, 재생성 권고 false->true로 뒤집혔다.
+# Sprint69 A/B가 뜻밖에 알려 준 것: 같은 설정으로 두 번 돌린 결과가
+# Gemini Vision 기준 overall_quality 40 vs 90, image_realism 50 vs 85,
+# character_consistency 20 vs 80으로 갈렸다. 프롬프트가 완전히 동일한
+# 두 실행이다 - Imagen이 매번 다른 그림을 그리고 평가자도 흔들리기
+# 때문이다. 이 잡음 폭(overall 기준 ~50점)이 Enrichment가 낼 수 있는
+# 어떤 효과보다 크다. 실행 한 번짜리 A/B로는 판정 자체가 불가능하다.
 #
-# 주의할 점 하나: prompt_effectiveness 점수는 오히려 90 -> 100으로
-# 올랐다. 그 루브릭은 "계획대로 문구가 들어갔는가"를 보기 때문에
-# Enrichment를 켜면 정의상 점수가 오른다 - 이미지가 좋아졌다는
-# 뜻이 아니다. 내부 점수와 실제 화질이 반대로 움직인 사례다.
+# Sprint68에서 "scene 4의 가짜 라벨은 카메라 충돌 탓"이라고 적었던 것은
+# 과했다. Sprint69에서는 enrichment를 전혀 걸지 않은 baseline 쪽에
+# 'IMPROVED 3LOO' 같은 가짜 텍스트가 나왔다. 텍스트 아티팩트는
+# Imagen 샘플링의 성질이지 Enrichment가 만든 것이 아니다.
 #
-# 다시 켜려면 최소한 camera 결정이 원본 프롬프트에 이미 있는 카메라
-# 지시를 읽고 충돌을 피해야 한다.
+# 다만 Sprint69의 v2 자체는 유지한다. Planner가 프롬프트에 이미 있는
+# 카메라 지시를 덮어쓰지 않는 것은 A/B와 무관하게 옳고, 결정론적
+# 테스트로 검증된다(tests/test_scene_planner_v2.py).
+#
+# 다시 켜려면 필요한 것은 더 나은 프롬프트가 아니라 더 나은 측정이다 -
+# arm당 여러 번 생성해 평균을 내거나, 사람이 직접 비교 판정하는 절차.
 #
 # 별개의 알려진 한계: 스톡 검색은 enrichment가 끝난 프롬프트를 그대로
 # 쓰고 extract_search_query()는 앞 8개 내용어만 본다. 실제 대본의

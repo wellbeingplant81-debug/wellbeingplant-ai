@@ -21,6 +21,8 @@ plan_scenes()의 반환값에도 "visual_type"이라는 키가 있지만(값은
 이름만 겹칠 뿐 서로 호출하지 않는 독립적인 기능입니다.
 """
 
+import re
+
 from app.services.asset_priority_classifier import classify_scene_importance
 from app.services.search_query_extractor import extract_search_query
 from app.services.transition_engine import assign_transition
@@ -48,6 +50,104 @@ PHOTO_REALISTIC_VISUAL_TYPE = "photo_realistic"
 # 렌더링 파이프라인의 오디오 기반 duration을 대체하지 않습니다.
 KOREAN_NARRATION_CHARS_PER_SECOND = 5.5
 MIN_SCENE_DURATION_SECONDS = 2.0
+
+# Sprint69 - Scene Planner v2.
+#
+# v1은 카메라를 scene 위치만으로 정했다(첫 scene=close_up, 마지막=
+# medium_shot, 나머지=wide_shot). 그런데 대본이 만들어 주는 image_prompt는
+# 이미 카메라를 지시하고 있는 경우가 많다. 실측 6개 중 3개가 충돌했고,
+# "dynamic low-angle close-up shot"에 "wide shot"을 덧붙인 scene은 결과
+# 이미지에 뜻 없는 가짜 라벨이 박혔다.
+#
+# v2는 프롬프트가 이미 말하고 있는 차원은 건드리지 않는다. 아래 패턴으로
+# 프롬프트의 프레이밍을 읽어 그대로 채택하고, 어디서 온 값인지를
+# camera_source에 남긴다 - prompt_enrichment_service가 그 값을 보고
+# "planned"일 때만 문구를 덧붙이므로 충돌은 애초에 생기지 않는다.
+#
+# 순서가 곧 우선순위는 아니다. 매칭은 프롬프트 안에서 "먼저 나온" 것을
+# 주 프레이밍으로 본다 - 사람이 프롬프트를 쓸 때 주 프레이밍을 앞에
+# 놓기 때문이다.
+CAMERA_PATTERNS = {
+    HOOK_CAMERA: (
+        r"\bextreme\s+close[-\s]?ups?\b",
+        r"\bclose[-\s]?ups?\b",
+        r"\bmacro\b",
+    ),
+    CTA_CAMERA: (
+        r"\bmedium[-\s]shots?\b",
+        r"\bwaist[-\s]up\b",
+        r"\bhalf[-\s]body\b",
+    ),
+    DEVELOPMENT_CAMERA: (
+        r"\bwide[-\s](?:shot|angle)s?\b",
+        r"\bestablishing\s+shots?\b",
+        r"\bpanoramic\b",
+        r"\blong\s+shots?\b",
+    ),
+}
+
+# 프롬프트가 비주얼 타입을 이미 지시하는 경우도 같은 원칙으로 다룬다.
+# 사진 프롬프트에 "illustrative"를 덧붙이면 카메라 충돌과 똑같은 종류의
+# 모순이 된다.
+VISUAL_TYPE_PATTERNS = {
+    PHOTO_REALISTIC_VISUAL_TYPE: (
+        r"\bphoto[-\s]?realistic\b",
+        r"\bphotorealistic\b",
+        r"\bdocumentary\s+photo\b",
+    ),
+    ILLUSTRATIVE_VISUAL_TYPE: (
+        r"\billustrations?\b",
+        r"\billustrative\b",
+        r"\bdiagram\b",
+        r"\bmedical\s+render\b",
+        r"\b3d\s+render\b",
+    ),
+}
+
+PROMPT_SOURCE = "prompt"
+PLANNED_SOURCE = "planned"
+
+
+def _detect_first(image_prompt: str, patterns: dict):
+    """
+    patterns의 어떤 정규식이 프롬프트에서 가장 먼저 나타나는지 찾아 그
+    키를 돌려준다. 아무것도 없으면 None. 순수 함수입니다.
+    """
+
+    if not image_prompt:
+        return None
+
+    text = image_prompt.lower()
+
+    best_key = None
+    best_index = len(text)
+
+    for key, expressions in patterns.items():
+        for expression in expressions:
+            match = re.search(expression, text)
+            if match and match.start() < best_index:
+                best_index = match.start()
+                best_key = key
+
+    return best_key
+
+
+def detect_camera(image_prompt: str):
+    """
+    image_prompt가 이미 지시하고 있는 카메라 프레이밍을 돌려준다.
+    지시가 없으면 None. 순수 함수입니다 - 입력을 변경하지 않습니다.
+    """
+
+    return _detect_first(image_prompt, CAMERA_PATTERNS)
+
+
+def detect_visual_type(image_prompt: str):
+    """
+    image_prompt가 이미 지시하고 있는 비주얼 타입을 돌려준다.
+    지시가 없으면 None. 순수 함수입니다.
+    """
+
+    return _detect_first(image_prompt, VISUAL_TYPE_PATTERNS)
 
 
 def _determine_purpose(index: int, total: int) -> str:
@@ -135,12 +235,25 @@ def plan_scenes(script: dict) -> list:
 
         purpose = _determine_purpose(index, total)
         scene_number = scene.get("scene", index + 1)
+        image_prompt = scene.get("image_prompt", "")
+
+        # Sprint69 (v2) - 프롬프트가 이미 지시한 것이 있으면 그것을
+        # 채택하고, 어디서 왔는지를 함께 남긴다. Enrichment는 planned인
+        # 차원만 프롬프트에 덧붙인다.
+        stated_camera = detect_camera(image_prompt)
+        stated_visual_type = detect_visual_type(image_prompt)
 
         plans.append({
             "scene_id": scene_number,
             "purpose": purpose,
-            "visual_type": _determine_visual_type(scene),
-            "camera": _determine_camera(purpose),
+            "visual_type": stated_visual_type or _determine_visual_type(scene),
+            "visual_type_source": (
+                PROMPT_SOURCE if stated_visual_type else PLANNED_SOURCE
+            ),
+            "camera": stated_camera or _determine_camera(purpose),
+            "camera_source": (
+                PROMPT_SOURCE if stated_camera else PLANNED_SOURCE
+            ),
             "transition": assign_transition(scene_number),
             "duration": _estimate_duration(scene.get("narration", "")),
             "keywords": _extract_keywords(scene),

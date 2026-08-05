@@ -31,13 +31,21 @@ class TestPlanScenesStructure(unittest.TestCase):
         for plan in plans:
             self.assertEqual(
                 set(plan.keys()),
-                {"scene_id", "purpose", "visual_type", "camera",
-                 "transition", "duration", "keywords"},
+                # Sprint69 (Scene Planner v2) - camera_source /
+                # visual_type_source가 추가됐다. 그 값이 프롬프트에서
+                # 읽어 온 것인지("prompt") 위치 규칙으로 정한
+                # 것인지("planned")를 Enrichment가 알아야, 프롬프트가
+                # 이미 말한 것을 다시 덧붙이지 않는다.
+                {"scene_id", "purpose", "visual_type", "visual_type_source",
+                 "camera", "camera_source", "transition", "duration",
+                 "keywords"},
             )
             self.assertIsInstance(plan["scene_id"], int)
             self.assertIsInstance(plan["purpose"], str)
             self.assertIsInstance(plan["visual_type"], str)
+            self.assertIsInstance(plan["visual_type_source"], str)
             self.assertIsInstance(plan["camera"], str)
+            self.assertIsInstance(plan["camera_source"], str)
             self.assertIsInstance(plan["transition"], str)
             self.assertIsInstance(plan["duration"], float)
             self.assertIsInstance(plan["keywords"], list)

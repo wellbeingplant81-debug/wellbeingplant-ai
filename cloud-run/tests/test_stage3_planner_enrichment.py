@@ -185,22 +185,25 @@ class TestStage3FlagState(unittest.TestCase):
         self.assertFalse(config.ENABLE_VIRAL_WRITER)
 
 
-class TestCameraConflictWithTheOriginalPrompt(unittest.TestCase):
-    """A/B에서 드러난 실패 원인을 재현 가능한 형태로 남긴다.
+class TestCameraConflictIsFixed(unittest.TestCase):
+    """Stage 3 A/B가 드러낸 실패를 Sprint69 (Scene Planner v2)가 고쳤다.
 
-    Planner는 camera를 scene 위치만으로 정하고 원본 프롬프트가 이미
-    지시한 카메라를 읽지 않는다. 다시 켜기 전에 반드시 해결해야 하는
-    지점이므로, 고쳐진 순간 이 테스트가 실패해서 알려 주도록 둔다.
+    이 클래스는 Sprint68에서 "고쳐지면 실패하도록" 심어 둔 테스트를
+    뒤집은 것이다 - 이제는 충돌이 없다는 쪽을 고정한다. 회귀하면
+    여기가 먼저 깨진다.
     """
 
     CONFLICTING = [
-        ("Dynamic low-angle close-up shot of running shoes on asphalt", 3),
-        ("Macro top-down view inside a realistic human artery", 1),
-        ("Eye-level medium shot of a healthy elderly Korean couple", 4),
+        ("Dynamic low-angle close-up shot of running shoes on asphalt",
+         3, scene_planner_service.HOOK_CAMERA),
+        ("Macro top-down view inside a realistic human artery",
+         1, scene_planner_service.HOOK_CAMERA),
+        ("Eye-level medium shot of a healthy elderly Korean couple",
+         4, scene_planner_service.CTA_CAMERA),
     ]
 
-    def test_planner_ignores_the_camera_already_in_the_prompt(self):
-        for prompt, index in self.CONFLICTING:
+    def test_planner_adopts_the_camera_already_in_the_prompt(self):
+        for prompt, index, expected in self.CONFLICTING:
             with self.subTest(prompt=prompt):
                 scenes = [
                     {"scene": n, "narration": "n", "image_prompt": "filler"}
@@ -209,32 +212,29 @@ class TestCameraConflictWithTheOriginalPrompt(unittest.TestCase):
                 scenes[index]["image_prompt"] = prompt
 
                 plan = scene_planner_service.plan_scenes({"scenes": scenes})
-                camera = plan[index]["camera"]
 
+                self.assertEqual(plan[index]["camera"], expected)
                 self.assertEqual(
-                    camera,
-                    scene_planner_service.DEVELOPMENT_CAMERA,
-                    "camera가 위치가 아니라 프롬프트를 보고 정해지도록 "
-                    "바뀌었다면 이 테스트를 갱신하고 Stage 3를 다시 "
-                    "평가해야 한다",
+                    plan[index]["camera_source"],
+                    scene_planner_service.PROMPT_SOURCE,
                 )
 
-    def test_enrichment_appends_the_conflicting_camera_phrase(self):
+    def test_enrichment_no_longer_appends_a_conflicting_camera_phrase(self):
         prompt = "Dynamic low-angle close-up shot of running shoes on asphalt"
 
-        enriched = prompt_enrichment_service.enrich_prompt(
-            prompt,
-            {
-                "camera": scene_planner_service.DEVELOPMENT_CAMERA,
-                "visual_type": (
-                    scene_planner_service.PHOTO_REALISTIC_VISUAL_TYPE
-                ),
-                "purpose": scene_planner_service.DEVELOPMENT_PURPOSE,
-            },
-        )
+        scenes = [
+            {"scene": 1, "narration": "n", "image_prompt": prompt},
+            {"scene": 2, "narration": "n", "image_prompt": "filler"},
+        ]
+        plan = scene_planner_service.plan_scenes({"scenes": scenes})
+
+        enriched = prompt_enrichment_service.apply_prompt_enrichment(
+            scenes, plan,
+        )[0]["image_prompt"]
 
         self.assertIn("close-up", enriched)
-        self.assertIn("wide shot", enriched)
+        self.assertNotIn("wide shot", enriched)
+        self.assertNotIn("medium shot", enriched)
 
 
 class TestNarrationAndStructureAreUntouched(PipelineHarness):
@@ -284,7 +284,9 @@ class TestPromptEnrichmentIsAppendOnly(PipelineHarness):
                 f"  on : {on_scene['image_prompt']}",
             )
 
-    def test_prompts_actually_gain_the_planned_descriptors(self):
+    def test_prompts_gain_descriptors_only_where_the_prompt_was_silent(self):
+        # Sprint69 (v2) - 프롬프트가 이미 카메라를 지시하면 문구를
+        # 덧붙이지 않는다. 침묵한 scene에만 붙는다.
         result = self.both()
 
         plan_by_scene = {
@@ -299,7 +301,20 @@ class TestPromptEnrichmentIsAppendOnly(PipelineHarness):
             camera_phrase = prompt_enrichment_service.CAMERA_PHRASES[
                 plan["camera"]
             ]
-            self.assertIn(camera_phrase, scene["image_prompt"])
+
+            if plan["camera_source"] == scene_planner_service.PLANNED_SOURCE:
+                self.assertIn(camera_phrase, scene["image_prompt"])
+            else:
+                added = scene["image_prompt"][
+                    len(
+                        next(
+                            s["image_prompt"]
+                            for s in result["off"]["scenes"]
+                            if s["scene"] == scene["scene"]
+                        )
+                    ):
+                ]
+                self.assertNotIn(camera_phrase, added)
 
     def test_enrichment_changes_something(self):
         # append-only만 검사하면 "아무것도 안 붙여도 통과"한다.
