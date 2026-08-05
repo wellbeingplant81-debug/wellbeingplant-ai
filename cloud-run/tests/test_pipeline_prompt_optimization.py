@@ -159,7 +159,8 @@ class TestPromptOptimizationFeatureFlag(unittest.TestCase):
         Optimization 플래그가 켜져 있어도 기존 결과와 동일해야 한다."""
 
         with patched_pipeline() as m, \
-             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_OPTIMIZATION", True):
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_OPTIMIZATION", True), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()
@@ -184,7 +185,9 @@ class TestPromptOptimizationFeatureFlag(unittest.TestCase):
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
 
     def test_default_flags_off_pipeline_output_unchanged_from_sprint47(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

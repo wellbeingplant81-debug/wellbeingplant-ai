@@ -11,11 +11,20 @@ ENABLE_SCENE_PLANNER = False
 # regardless of this flag.
 ENABLE_PROMPT_ENRICHMENT = False
 
-# Sprint47 - Prompt Effectiveness Engine. Off by default. Measurement
-# only - never changes data["scenes"] or any generation output, so
-# leaving this False (or True) never affects the pipeline's rendered
-# result, only whether project_data["prompt_metrics"] is populated.
-ENABLE_PROMPT_EFFECTIVENESS = False
+# Sprint47 - Prompt Effectiveness Engine.
+#
+# Sprint66 (Stage 1)에서 켰다. 측정 전용이라 data["scenes"]도, 그 밖의
+# 어떤 생성 산출물도 건드리지 않는다 - 켜고 끄는 것이 바꾸는 것은
+# project_data["prompt_metrics"]가 채워지는지 여부와, 그 결과가
+# prompt_metrics.json으로 나가는지 여부뿐이다. script.json을 비롯한
+# 생성 산출물은 바이트 단위로 동일하다(pipeline.MEASUREMENT_ONLY_KEYS
+# 참고).
+#
+# 주의: ENABLE_SCENE_PLANNER가 꺼져 있는 동안에는 scene_plan이 없어서
+# camera/visual_type/purpose 항목이 "확인 대상 없음 -> 통과"로 처리되고
+# keywords는 항상 0점이다. 즉 지금 점수는 enrichment 이전의 기준선이며,
+# 실질적인 변별력은 Planner를 켜는 단계에서 생긴다.
+ENABLE_PROMPT_EFFECTIVENESS = True
 
 # Sprint48 - Adaptive Prompt Optimization Engine. Off by default. Only
 # takes effect when ENABLE_PROMPT_EFFECTIVENESS also produced
@@ -23,12 +32,18 @@ ENABLE_PROMPT_EFFECTIVENESS = False
 # stays byte-for-byte identical regardless of this flag.
 ENABLE_PROMPT_OPTIMIZATION = False
 
-# Sprint49 - Self-Learning Prompt Engine. Off by default. In-memory only
-# (no file I/O, no DB, no external calls) - never adds keys to
-# project_data and never changes data["scenes"], so this flag cannot
-# affect the pipeline's output either way. Only takes effect when
-# ENABLE_PROMPT_EFFECTIVENESS also produced prompt_metrics to learn from.
-ENABLE_PROMPT_LEARNING = False
+# Sprint49 - Self-Learning Prompt Engine.
+#
+# Sprint66 (Stage 1)에서 켰다. 인메모리 카운터만 갱신하고 project_data에
+# 키를 추가하지도, data["scenes"]를 바꾸지도 않으므로 생성 산출물에
+# 영향이 없다. ENABLE_PROMPT_EFFECTIVENESS가 만들어 준 prompt_metrics가
+# 있어야만 동작한다.
+#
+# 학습 상태는 프로세스 메모리에만 있다 - 재시작하면 사라진다. Stage 1은
+# 그 스냅샷을 prompt_metrics.json에 관측용으로 기록하기만 하고,
+# 영속화는 Optimization이 학습 결과를 실제로 소비하는 단계의 과제로
+# 남겨 둔다.
+ENABLE_PROMPT_LEARNING = True
 
 # Sprint50 - AI Director v1. Off by default. Pure rule-based read-only
 # decision engine - never modifies data["scenes"] or any other pipeline

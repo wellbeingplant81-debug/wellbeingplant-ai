@@ -109,7 +109,8 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
 
     def test_flag_off_is_never_called(self):
         with patched_pipeline() as m, \
-             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", True):
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", True), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
             m["prompt_effectiveness"].evaluate_scenes.return_value = FAKE_PROMPT_METRICS
 
@@ -136,7 +137,8 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
         Learning 플래그가 켜져 있어도 학습이 실행되지 않아야 한다."""
 
         with patched_pipeline() as m, \
-             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", True):
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", True), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False):
             _wire_defaults(m)
 
             self._run_pipeline()
@@ -175,7 +177,9 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
 
     def test_default_flags_off_pipeline_output_unchanged_from_sprint48(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

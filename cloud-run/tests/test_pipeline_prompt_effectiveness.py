@@ -116,7 +116,9 @@ class TestPromptEffectivenessFeatureFlag(unittest.TestCase):
         )
 
     def test_flag_off_is_never_called(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()
@@ -141,7 +143,12 @@ class TestPromptEffectivenessFeatureFlag(unittest.TestCase):
             )
             self.assertEqual(result["prompt_metrics"], FAKE_PROMPT_METRICS)
 
-    def test_metrics_persisted_to_script_json(self):
+    def test_metrics_persisted_outside_script_json(self):
+        """Sprint66 (Stage 1) - 측정 결과는 더 이상 script.json에 실리지
+        않는다. script.json은 "무엇을 만들었는가"만 담고, 측정은
+        Observability 산출물로 따로 나간다 - 그래야 측정 엔진을 켜고
+        끄는 것이 생성 산출물의 바이트를 바꾸지 않는다."""
+
         with patched_pipeline() as m, \
              patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", True):
             _wire_defaults(m)
@@ -151,9 +158,19 @@ class TestPromptEffectivenessFeatureFlag(unittest.TestCase):
 
         script_path = os.path.join(self.project_path, "script.json")
         with open(script_path, "r", encoding="utf-8") as f:
-            saved = json.load(f)
+            saved_script = json.load(f)
 
-        self.assertEqual(saved["prompt_metrics"], FAKE_PROMPT_METRICS)
+        self.assertNotIn("prompt_metrics", saved_script)
+
+        measurement_path = os.path.join(
+            self.project_path, pipeline.MEASUREMENT_FILENAME,
+        )
+        with open(measurement_path, "r", encoding="utf-8") as f:
+            saved_measurements = json.load(f)
+
+        self.assertEqual(
+            saved_measurements["prompt_metrics"], FAKE_PROMPT_METRICS,
+        )
 
     def test_exception_does_not_break_pipeline(self):
         with patched_pipeline() as m, \
@@ -169,7 +186,9 @@ class TestPromptEffectivenessFeatureFlag(unittest.TestCase):
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
 
     def test_default_flags_off_pipeline_output_unchanged_from_sprint46(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

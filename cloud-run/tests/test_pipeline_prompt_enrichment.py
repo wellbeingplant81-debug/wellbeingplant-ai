@@ -175,7 +175,9 @@ class TestPromptEnrichmentFeatureFlag(unittest.TestCase):
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
 
     def test_default_flags_off_pipeline_output_unchanged_from_sprint45(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()

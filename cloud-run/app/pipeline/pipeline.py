@@ -20,12 +20,34 @@ from app.services import scene_planner_service
 from app.services import visual_consistency_engine
 
 
+# Sprint66 (Stage 1) - Observability와 Production의 분리.
+#
+# 측정 엔진(Sprint47 Effectiveness, Sprint49 Learning)은 파이프라인이
+# 무엇을 만들지에 전혀 관여하지 않는다. 그런데 결과를 project_data에
+# 담아 두면 _save_script()가 그것까지 script.json에 써 버려서, 플래그를
+# 켜는 것만으로 생성 산출물의 바이트가 달라진다(실측 +1,277자).
+#
+# script.json은 "무엇을 만들었는가"만 담는다. "그게 얼마나 좋았는가"는
+# MEASUREMENT_FILENAME으로 나간다. 아래 키들은 project_data 안에서만
+# 살아 있고(다음 스테이지의 Optimization이 메모리로 소비한다) 디스크의
+# script.json에는 절대 실리지 않는다.
+MEASUREMENT_ONLY_KEYS = ("prompt_metrics",)
+
+MEASUREMENT_FILENAME = "prompt_metrics.json"
+
+
 def _save_script(project_path, data):
 
     script_path = os.path.join(
         project_path,
         "script.json",
     )
+
+    payload = {
+        key: value
+        for key, value in data.items()
+        if key not in MEASUREMENT_ONLY_KEYS
+    }
 
     with open(
         script_path,
@@ -34,11 +56,38 @@ def _save_script(project_path, data):
     ) as f:
 
         json.dump(
-            data,
+            payload,
             f,
             ensure_ascii=False,
             indent=4,
         )
+
+
+def _write_measurements(project_path, prompt_metrics, learning_summary):
+    """
+    측정 결과를 script.json이 아닌 별도 파일로 남긴다. 순수한 관측
+    산출물이므로 파이프라인의 어떤 단계도 이 파일을 읽지 않는다.
+
+    Sprint49 Learning은 인메모리 카운터만 갱신하고 아무것도 남기지
+    않으므로, 여기서 그 스냅샷을 함께 기록해 실제로 무엇을 배웠는지
+    볼 수 있게 한다. 영속화(다음 실행이 이어받는 것)는 Optimization이
+    학습 결과를 실제로 소비하는 시점의 과제다 - 여기서는 관측만 한다.
+    """
+
+    path = os.path.join(project_path, MEASUREMENT_FILENAME)
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "prompt_metrics": prompt_metrics,
+                "learning_summary": learning_summary,
+            },
+            f,
+            ensure_ascii=False,
+            indent=4,
+        )
+
+    return path
 
 
 def run_pipeline(
@@ -122,6 +171,23 @@ def run_pipeline(
             )
         except Exception as exc:
             print(f"Prompt learning step failed: {exc}")
+
+    # Sprint66 (Stage 1) - 측정 결과를 관측용 파일로 남긴다. 이 블록은
+    # Observability Layer이며 Production Pipeline과 분리되어 있다 -
+    # 여기서 무슨 예외가 나든(디스크 오류 포함) 영상 생성은 그대로
+    # 계속되어야 한다.
+    if data.get("prompt_metrics"):
+        try:
+            _write_measurements(
+                project_path,
+                data["prompt_metrics"],
+                (
+                    prompt_learning_service.get_learning_summary()
+                    if config.ENABLE_PROMPT_LEARNING else None
+                ),
+            )
+        except Exception as exc:
+            print(f"Measurement recording failed: {exc}")
 
     if config.ENABLE_AI_DIRECTOR:
         try:

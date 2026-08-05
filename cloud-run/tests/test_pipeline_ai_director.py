@@ -162,7 +162,8 @@ class TestAiDirectorFeatureFlag(unittest.TestCase):
         플래그가 켜져 있으면 실행되어야 한다(모두 unknown으로 처리)."""
 
         with patched_pipeline() as m, \
-             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", True):
+             patch("app.pipeline.pipeline.config.ENABLE_AI_DIRECTOR", True), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False):
             _wire_defaults(m)
             m["ai_director"].evaluate_scenes.return_value = FAKE_DIRECTOR_DECISION
 
@@ -189,7 +190,9 @@ class TestAiDirectorFeatureFlag(unittest.TestCase):
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
 
     def test_default_flags_off_pipeline_output_unchanged_from_sprint49(self):
-        with patched_pipeline() as m:
+        with patched_pipeline() as m, \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_EFFECTIVENESS", False), \
+             patch("app.pipeline.pipeline.config.ENABLE_PROMPT_LEARNING", False):
             _wire_defaults(m)
 
             result = self._run_pipeline()
