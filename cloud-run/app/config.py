@@ -206,3 +206,14 @@ BEST_OF_N_CANDIDATES = 2
 # 모자라면 앞 scene부터 두 번째 장을 받고, 뒤 scene은 한 장으로 간다.
 # 어느 scene도 0장이 되지는 않는다.
 BEST_OF_N_MAX_CANDIDATES = 12
+
+
+# Sprint91 - 실제 YouTube 업로드.
+#
+# RealYouTubeRuntime.login()과 youtube_upload_step_service가 둘 다 이
+# 플래그를 먼저 본다. False면 자격증명 체인을 아예 건드리지 않는다 -
+# 실제 토큰이 있어도 마찬가지다.
+#
+# 이 저장소에서 실제 업로드는 아직 한 번도 검증되지 않았다. Evaluation
+# Policy v3에 따라 True로 올리려면 Level 3 Release Gate가 필요하다.
+ENABLE_YOUTUBE_UPLOAD = False

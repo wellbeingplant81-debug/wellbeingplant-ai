@@ -32,7 +32,7 @@ _STAGES = (
     ("upload", "업로드", None),
 )
 
-_MEDIA_KINDS = {
+MEDIA_KINDS = {
     "video": "video/final_short.mp4",
     "thumbnail": "thumbnail.png",
 }
@@ -223,8 +223,8 @@ def media_path(project_path: str, kind: str, scene_number=None) -> str:
             else f"studio_before/scene{number}.png"
         )
 
-    elif kind in _MEDIA_KINDS:
-        relative = _MEDIA_KINDS[kind]
+    elif kind in MEDIA_KINDS:
+        relative = MEDIA_KINDS[kind]
 
     else:
         raise ValueError(f"알 수 없는 media 종류입니다: {kind!r}")
