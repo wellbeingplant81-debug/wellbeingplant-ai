@@ -150,3 +150,56 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOnlyOneImageIsRequested(unittest.TestCase):
+    """Sprint74 - 파이프라인은 이미지를 4장씩 만들고 3장을 버리고 있었다.
+
+    generate_image()는 number_of_images를 지정하지 않았고, 그러면 Vertex가
+    자기 기본값을 적용한다. 그 기본값이 4다. 코드는
+    generated_images[0]만 저장하므로 나머지 세 장은 만들어지고 요금이
+    청구된 뒤 그대로 버려졌다.
+
+    Sprint74 실측에서 드러났다. Best-of-N OFF/ON을 비교하려고 Imagen
+    호출을 세었더니 OFF 팔이 요청 7번에 이미지 28장(정확히 4배)을
+    받았고, 디스크에 쓰인 것은 7장이었다. 요청 장수를 명시한 ON 팔은
+    6번 요청에 14장이었다 - 후보를 2장씩 뽑았는데도 절반이었다.
+
+    scene당 4장이 필요한 적은 없었다. 필요한 것은 명시적으로 요청한다.
+    """
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.output_file = os.path.join(self.tmp_dir, "out.png")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    @patch("app.services.image_service.enhance_image")
+    @patch("app.services.image_service.client")
+    def test_a_single_image_request_asks_for_exactly_one(
+        self, mock_client, mock_enhance,
+    ):
+        mock_client.models.generate_images.return_value = _mock_response()
+
+        generate_image("a bowl of oatmeal", self.output_file)
+
+        _, kwargs = mock_client.models.generate_images.call_args
+        self.assertEqual(kwargs["config"].number_of_images, 1)
+
+    @patch("app.services.image_service.enhance_image")
+    @patch("app.services.image_service.client")
+    def test_a_candidate_request_asks_for_exactly_that_many(
+        self, mock_client, mock_enhance,
+    ):
+        response = _mock_response()
+        response.generated_images = response.generated_images * 3
+        mock_client.models.generate_images.return_value = response
+
+        image_service.generate_image_candidates(
+            "a bowl of oatmeal",
+            [os.path.join(self.tmp_dir, f"c{i}.png") for i in range(3)],
+        )
+
+        _, kwargs = mock_client.models.generate_images.call_args
+        self.assertEqual(kwargs["config"].number_of_images, 3)

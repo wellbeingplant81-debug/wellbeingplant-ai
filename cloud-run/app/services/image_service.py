@@ -260,6 +260,13 @@ def generate_image(
             aspect_ratio="9:16",
             negative_prompt=negative_prompt,
             add_watermark=False,
+            # Sprint74 - 이 줄이 없던 동안 Vertex는 자기 기본값인 4장을
+            # 만들었고, 아래에서 [0]만 저장했다. 나머지 세 장은 요금이
+            # 청구된 뒤 그대로 버려졌다.
+            #
+            # 여러 장이 필요하면 generate_image_candidates를 쓴다.
+            # 이 함수는 한 장을 쓰므로 한 장만 요청한다.
+            number_of_images=1,
         ),
     )
 
