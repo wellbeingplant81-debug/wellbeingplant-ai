@@ -10,6 +10,7 @@ from app.routers.tts import router as tts_router
 from app.routers.final_video import router as final_video_router
 from app.routers.batch import router as batch_router
 from app.routers.topic import router as topic_router
+from app.routers.studio import router as studio_router
 
 app = FastAPI(
     title="WellbeingPlant AI Factory",
@@ -27,6 +28,10 @@ app.include_router(tts_router)
 app.include_router(final_video_router)
 app.include_router(batch_router)
 app.include_router(topic_router)
+
+# Sprint80 - AI Video Studio UI. 엔진을 건드리지 않고 산출물을
+# 읽어 보여 주기만 한다.
+app.include_router(studio_router)
 
 @app.get("/")
 def root():

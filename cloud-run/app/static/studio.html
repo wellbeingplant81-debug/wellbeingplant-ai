@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 영상제작소 — Studio</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161b22; --panel2:#1c2430; --line:#2a3240;
+  --text:#e6edf3; --dim:#8b98a9; --accent:#4c9aff; --ok:#3fb950;
+  --warn:#d29922; --bad:#f85149; --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.55 "Segoe UI","Malgun Gothic",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+header .tag{font-size:11px;color:var(--dim);border:1px solid var(--line);
+  padding:2px 8px;border-radius:99px}
+.layout{display:grid;grid-template-columns:280px 1fr 340px;gap:12px;
+  padding:12px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);padding:14px}
+.panel h2{font-size:12px;margin:0 0 10px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.8px;font-weight:600}
+label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
+input,select,textarea{width:100%;background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:7px;padding:8px 10px;
+  font:inherit}
+textarea{resize:vertical;min-height:64px}
+button{background:var(--accent);color:#04101f;border:0;border-radius:7px;
+  padding:9px 14px;font:inherit;font-weight:650;cursor:pointer;width:100%}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--text);
+  border:1px solid var(--line);font-weight:500}
+.muted{color:var(--dim);font-size:12px}
+.stages{display:flex;flex-direction:column;gap:7px}
+.stage{display:flex;align-items:center;gap:10px;padding:8px 10px;
+  background:var(--panel2);border-radius:7px;border:1px solid transparent}
+.stage .dot{width:9px;height:9px;border-radius:50%;background:#39424f;
+  flex:none}
+.stage.done .dot{background:var(--ok)}
+.stage.active{border-color:var(--accent)}
+.stage.active .dot{background:var(--accent)}
+.stage.na .dot{background:#4a3a1a}
+.stage .name{flex:1}
+.stage .note{font-size:11px;color:var(--dim)}
+.scene{padding:9px 11px;background:var(--panel2);border-radius:7px;
+  margin-bottom:7px;cursor:pointer;border:1px solid transparent}
+.scene:hover{border-color:var(--line)}
+.scene.sel{border-color:var(--accent)}
+.scene .row{display:flex;justify-content:space-between;gap:8px}
+.scene .t{font-weight:600;font-size:13px}
+.badge{font-size:10px;padding:1px 7px;border-radius:99px;
+  border:1px solid var(--line);color:var(--dim)}
+.badge.ok{color:var(--ok);border-color:#1d4429}
+.badge.bad{color:var(--bad);border-color:#5c2320}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:4px 10px;font-size:12px}
+.kv dt{color:var(--dim)}
+.kv dd{margin:0;word-break:break-word}
+.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.score{background:var(--panel2);border-radius:8px;padding:9px;text-align:center}
+.score b{display:block;font-size:20px;line-height:1.25}
+.score span{font-size:10px;color:var(--dim)}
+.console{background:#080b0f;border:1px solid var(--line);border-radius:8px;
+  padding:10px;height:190px;overflow:auto;font:11.5px/1.5 Consolas,monospace;
+  color:#9fb0c3;white-space:pre-wrap;word-break:break-all}
+video,img.preview{width:100%;border-radius:8px;background:#000;display:block}
+.cands{font-size:11.5px}
+.cand{padding:7px 9px;background:var(--panel2);border-radius:6px;
+  margin-bottom:5px;border-left:3px solid transparent}
+.cand.sel{border-left-color:var(--accent)}
+.cand .s{color:var(--dim);font-size:10.5px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tab{font-size:12px;padding:5px 10px;border-radius:99px;cursor:pointer;
+  border:1px solid var(--line);color:var(--dim)}
+.tab.on{color:var(--text);border-color:var(--accent)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.na-note{background:#231c0d;border:1px solid #4a3a1a;color:#d29922;
+  border-radius:7px;padding:9px 11px;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI 영상제작소</h1>
+  <span class="tag">Studio v1</span>
+  <span class="tag" id="dsTag">dataset —</span>
+</header>
+
+<div class="layout">
+
+  <!-- 좌: 프로젝트 설정 -->
+  <div class="stack">
+    <div class="panel">
+      <h2>Project</h2>
+      <label>Topic</label>
+      <textarea id="topic" placeholder="예) 혈관 건강을 지키는 아침 습관"></textarea>
+      <label>Channel</label>
+      <select id="channel">
+        <option value="wellbeing">wellbeing</option>
+        <option value="foodbeat">foodbeat</option>
+        <option value="mindtail">mindtail</option>
+      </select>
+      <label>Target Platform</label>
+      <select id="platform"><option>YouTube Shorts</option>
+        <option>Instagram Reels</option><option>TikTok</option></select>
+      <label>Length</label>
+      <select id="length"><option>45초 (6 scene)</option></select>
+      <label>Language</label>
+      <select id="lang"><option>한국어</option></select>
+      <div style="height:12px"></div>
+      <button id="go">영상 생성</button>
+      <p class="muted" id="jobState" style="margin:9px 0 0">대기 중</p>
+      <p class="muted" style="margin:6px 0 0">
+        Platform / Length / Language는 현재 파이프라인 고정값입니다.
+        엔진을 바꾸지 않기로 한 범위라 표시만 합니다.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>최근 프로젝트</h2>
+      <div id="projects" class="muted">불러오는 중…</div>
+    </div>
+  </div>
+
+  <!-- 중: 진행 + 미리보기 + 콘솔 -->
+  <div class="stack">
+    <div class="panel">
+      <h2>Pipeline Progress</h2>
+      <div class="stages" id="stages"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Video Preview</h2>
+      <div id="videoBox" class="muted">아직 영상이 없습니다.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Console</h2>
+      <div class="console" id="console">준비됨.</div>
+    </div>
+  </div>
+
+  <!-- 우: scene / 품질 / inspector -->
+  <div class="stack">
+    <div class="panel">
+      <h2>Quality</h2>
+      <div class="scores" id="scores"><span class="muted">평가 전</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Thumbnail</h2>
+      <div id="thumbBox" class="muted">아직 썸네일이 없습니다.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Scene Explorer</h2>
+      <div id="scenes" class="muted">프로젝트를 선택하십시오.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Scene / Asset Inspector</h2>
+      <div id="inspector" class="muted">Scene을 클릭하십시오.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Upload</h2>
+      <div class="na-note">
+        업로드 경로가 아직 없습니다.
+        <code>app/providers/youtube_provider.py</code>가 0바이트입니다.
+        연결할 기존 기능이 없어 버튼을 만들지 않았습니다.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Analytics</h2>
+      <div class="na-note">Placeholder — 수집 중인 성과 데이터가 없습니다.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let currentProject = null, currentDetail = null, jobId = null;
+let consoleNext = 0, poll = null, selectedScene = null;
+
+const STAGE_FALLBACK = [
+  ["plan","기획"],["script","대본"],["image","이미지"],["voice","음성"],
+  ["subtitle","자막"],["video","영상"],["thumbnail","썸네일"],
+  ["quality","품질"],["upload","업로드"]
+];
+
+function renderStages(stages){
+  const list = stages || STAGE_FALLBACK.map(([k,l])=>({key:k,label:l,done:false}));
+  let firstPending = list.findIndex(s => !s.done && !s.unavailable);
+  $("stages").innerHTML = list.map((s,i)=>{
+    const cls = s.unavailable ? "na" : (s.done ? "done" : (i===firstPending && jobId ? "active" : ""));
+    const note = s.unavailable ? "연결 안 됨" : (s.done ? "완료" : "");
+    return `<div class="stage ${cls}"><span class="dot"></span>
+      <span class="name">${s.label}</span><span class="note">${note}</span></div>`;
+  }).join("");
+}
+
+async function loadProjects(){
+  const r = await fetch("/studio/api/projects");
+  const d = await r.json();
+  if(!d.projects.length){ $("projects").textContent = "아직 없습니다."; return; }
+  $("projects").innerHTML = d.projects.slice(0,12).map(p=>`
+    <div class="scene" onclick="openProject('${p.project_id}')">
+      <div class="row"><span class="t">${p.title || p.topic || p.project_id}</span>
+      ${p.overall_quality!=null?`<span class="badge">${p.overall_quality}</span>`:""}</div>
+      <div class="muted">${p.project_id} · scene ${p.scene_count}
+      ${p.has_video?" · 영상":""}</div>
+    </div>`).join("");
+}
+
+async function openProject(id){
+  currentProject = id; selectedScene = null;
+  const r = await fetch(`/studio/api/projects/${id}`);
+  if(!r.ok){ return; }
+  currentDetail = await r.json();
+  renderStages(currentDetail.stages);
+  renderScores(currentDetail.quality);
+  renderScenes(currentDetail.scenes);
+  renderMedia(currentDetail);
+  $("inspector").innerHTML = '<span class="muted">Scene을 클릭하십시오.</span>';
+}
+
+function renderScores(q){
+  const keys = [["overall_quality","Overall"],["image_realism","Realism"],
+    ["composition","Composition"],["character_consistency","Character"],
+    ["hook_strength","Hook"],["thumbnail_quality","Thumbnail"]];
+  if(!q || !Object.keys(q).length){
+    $("scores").innerHTML = '<span class="muted">평가 전</span>'; return; }
+  $("scores").innerHTML = keys.map(([k,l])=>
+    `<div class="score"><b>${q[k]??"—"}</b><span>${l}</span></div>`).join("");
+}
+
+function renderScenes(scenes){
+  if(!scenes || !scenes.length){
+    $("scenes").innerHTML = '<span class="muted">scene이 없습니다.</span>'; return; }
+  $("scenes").innerHTML = scenes.map(s=>{
+    const bad = s.regenerate;
+    return `<div class="scene ${selectedScene===s.scene?"sel":""}"
+      onclick="selectScene(${s.scene})">
+      <div class="row"><span class="t">Scene ${s.scene}</span>
+        <span>${s.realism!=null?`<span class="badge ${bad?"bad":"ok"}">${s.realism}</span>`:""}
+        ${s.observatory?'<span class="badge">후보 '+s.observatory.candidates.length+'</span>':""}</span>
+      </div>
+      <div class="muted">${s.provider||"—"} · ${s.camera||""}</div></div>`;
+  }).join("");
+}
+
+function selectScene(n){
+  selectedScene = n;
+  const s = (currentDetail.scenes||[]).find(x=>x.scene===n);
+  if(!s) return;
+  renderScenes(currentDetail.scenes);
+  const img = `/studio/api/projects/${currentProject}/media/scene?scene=${n}`;
+  let html = `<img class="preview" src="${img}" onerror="this.style.display='none'">
+    <div style="height:10px"></div>
+    <dl class="kv">
+      <dt>Provider</dt><dd>${s.provider||"—"}</dd>
+      <dt>Asset</dt><dd>${s.asset_type||"—"}</dd>
+      <dt>Camera</dt><dd>${s.camera||"—"}</dd>
+      <dt>Lighting</dt><dd>${s.lighting||"—"}</dd>
+      <dt>Character</dt><dd>${s.character_scene?"인물 scene":"—"}</dd>
+      <dt>Realism</dt><dd>${s.realism??"—"}</dd>
+      <dt>Composition</dt><dd>${s.composition??"—"}</dd>
+      <dt>Query</dt><dd>${s.search_query||"—"}</dd>
+      <dt>Narration</dt><dd>${s.narration||"—"}</dd>
+      <dt>Prompt</dt><dd>${s.image_prompt||"—"}</dd>
+    </dl>`;
+  if(s.reason){ html += `<div class="na-note" style="margin-top:10px">${s.reason}</div>`; }
+  if(s.observatory){
+    const o = s.observatory;
+    html += `<h2 style="margin-top:14px">Asset Inspector</h2>
+      <p class="muted">${o.selection_reason||""}</p>
+      <div class="cands">` + o.candidates.map((c,i)=>`
+        <div class="cand ${c.selected?"sel":""}">
+          <div>[${i}] ${c.alt || c.slug || "(설명 없음)"}</div>
+          <div class="s">score ${c.ranking_score} · rel ${c.relevance}
+            · human -${c.human_penalty} · ${c.provider}</div>
+        </div>`).join("") + `</div>`;
+    if(o.searches && o.searches.length){
+      html += `<p class="muted" style="margin-top:8px">검색 ` +
+        o.searches.map(x=>`${x.provider} ${x.cache_hit?"HIT":"MISS"} ${x.result_count}건`).join(" / ") + `</p>`;
+    }
+  }
+  $("inspector").innerHTML = html;
+}
+
+function renderMedia(d){
+  if(d.media && d.media.video){
+    $("videoBox").innerHTML =
+      `<video controls src="/studio/api/projects/${d.project_id}/media/video"></video>`;
+  } else { $("videoBox").innerHTML = '<span class="muted">아직 영상이 없습니다.</span>'; }
+  if(d.media && d.media.thumbnail){
+    const t = d.thumbnail_quality || {};
+    $("thumbBox").innerHTML =
+      `<img class="preview" src="/studio/api/projects/${d.project_id}/media/thumbnail">
+       <p class="muted" style="margin:8px 0 0">scene1 일치 ${t.consistency_with_scene1??"—"}
+        · CTR ${t.ctr_score??"—"}</p>`;
+  } else { $("thumbBox").innerHTML = '<span class="muted">아직 썸네일이 없습니다.</span>'; }
+}
+
+async function loadDataset(){
+  try{
+    const d = await (await fetch("/studio/api/dataset")).json();
+    $("dsTag").textContent =
+      `dataset ${d.rows}행 · 실패 ${d.failures} · v3 ${d.readiness.ready?"가능":"보류"}`;
+  }catch(e){ $("dsTag").textContent = "dataset —"; }
+}
+
+$("go").onclick = async () => {
+  const topic = $("topic").value.trim();
+  if(!topic){ alert("주제를 입력하십시오."); return; }
+  $("go").disabled = true; consoleNext = 0; $("console").textContent = "";
+  // 이전에 열어 둔 프로젝트의 진행 상태가 남아 있으면, 아직 아무것도
+  // 만들지 않았는데 "영상 완료"로 보인다.
+  currentDetail = null; currentProject = null; selectedScene = null;
+  renderStages(null); renderScores(null);
+  $("scenes").innerHTML = '<span class="muted">생성 중…</span>';
+  $("inspector").innerHTML = '<span class="muted">생성 중…</span>';
+  $("videoBox").innerHTML = '<span class="muted">아직 영상이 없습니다.</span>';
+  $("thumbBox").innerHTML = '<span class="muted">아직 썸네일이 없습니다.</span>';
+  const r = await fetch("/studio/api/jobs", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({topic, channel: $("channel").value})});
+  const d = await r.json();
+  jobId = d.job_id; $("jobState").textContent = "생성 중…";
+  if(poll) clearInterval(poll);
+  poll = setInterval(pollJob, 1500);
+};
+
+async function pollJob(){
+  if(!jobId) return;
+  const r = await fetch(`/studio/api/jobs/${jobId}?console_from=${consoleNext}`);
+  if(!r.ok) return;
+  const d = await r.json();
+  if(d.console && d.console.length){
+    const box = $("console");
+    box.textContent += d.console.join("\n") + "\n";
+    box.scrollTop = box.scrollHeight;
+    consoleNext = d.console_next;
+  }
+  if(d.stages) renderStages(d.stages);
+  if(d.state !== "running"){
+    clearInterval(poll); poll = null;
+    $("go").disabled = false;
+    $("jobState").textContent = d.state === "done" ? "완료" : ("실패: " + (d.error||""));
+    if(d.project_id){ await loadProjects(); await openProject(d.project_id); }
+    await loadDataset();
+    jobId = null;
+  }
+}
+
+renderStages(null);
+loadProjects();
+loadDataset();
+</script>
+</body>
+</html>

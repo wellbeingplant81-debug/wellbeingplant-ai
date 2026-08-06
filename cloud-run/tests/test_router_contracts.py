@@ -31,7 +31,7 @@ sys.path.insert(
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services import project_service
+from app.services import project_service, studio_jobs
 
 
 PROJECT_ID = "20260805_120000"
@@ -62,6 +62,21 @@ ENDPOINTS = [
      ["app.routers.video_builder.build_video"]),
     ("POST", "/merge-video", {"project_id": PROJECT_ID},
      ["app.routers.final_video.merge_video_audio"]),
+
+    # Sprint80 - Studio UI. 엔진을 부르지 않고 산출물을 읽기만 하므로
+    # 패치할 서비스가 없다. 생성만 factory_service를 그대로 탄다.
+    ("GET", "/studio", None, []),
+    ("GET", "/studio/", None, []),
+    ("GET", "/studio/api/projects", None, []),
+    ("GET", "/studio/api/projects/{project_id}", None, [],
+     f"/studio/api/projects/{PROJECT_ID}"),
+    ("GET", "/studio/api/projects/{project_id}/media/{kind}", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/media/thumbnail"),
+    ("GET", "/studio/api/dataset", None, []),
+    ("POST", "/studio/api/jobs", {"topic": "t"},
+     ["app.routers.studio.studio_jobs.start"]),
+    ("GET", "/studio/api/jobs/{job_id}", None, [],
+     "/studio/api/jobs/contract_job"),
 ]
 
 
@@ -70,7 +85,27 @@ class RouterContractTestCase(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
         self.tmp_dir = tempfile.mkdtemp()
-        os.makedirs(os.path.join(self.tmp_dir, PROJECT_ID))
+        project_dir = os.path.join(self.tmp_dir, PROJECT_ID)
+        os.makedirs(project_dir)
+
+        # Sprint80 - Studio 엔드포인트가 읽을 최소 산출물. 다른 계약
+        # 테스트는 이 파일들을 보지 않는다.
+        with open(os.path.join(project_dir, "project.json"),
+                  "w", encoding="utf-8") as f:
+            f.write('{"topic": "t", "channel": "wellbeing"}')
+        with open(os.path.join(project_dir, "thumbnail.png"), "wb") as f:
+            f.write(b"png")
+
+        # Studio 작업 하나를 미리 넣어 둔다. start()를 부르면 실제
+        # 파이프라인 스레드가 뜬다.
+        studio_jobs.reset()
+        studio_jobs._jobs["contract_job"] = {
+            "job_id": "contract_job", "topic": "t", "channel": "wellbeing",
+            "state": "done", "project_id": None, "project_path": None,
+            "title": None,
+            "error": None, "console": [],
+        }
+        self.addCleanup(studio_jobs.reset)
 
         patcher = patch.object(project_service, "OUTPUT_ROOT", self.tmp_dir)
         patcher.start()
@@ -103,7 +138,7 @@ class TestEveryEndpointIsCovered(RouterContractTestCase):
             for method in operations
         }
 
-        covered = {(method, path) for method, path, _, _ in ENDPOINTS}
+        covered = {(entry[0], entry[1]) for entry in ENDPOINTS}
 
         self.assertEqual(
             registered - covered,
@@ -123,9 +158,15 @@ class TestValidRequestsNeverRaiseTypeError(RouterContractTestCase):
     autospec 덕분에 불일치는 곧바로 TypeError로 드러난다."""
 
     def test_all_endpoints_accept_a_valid_request(self):
-        for method, path, payload, services in ENDPOINTS:
+        for entry in ENDPOINTS:
+            method, path, payload, services = entry[:4]
+            # 경로 파라미터가 있는 엔드포인트는 구체 경로로 호출한다.
+            call_path = entry[4] if len(entry) > 4 else path
+
             with self.subTest(endpoint=f"{method} {path}"):
-                response, mocks = self.call(method, path, payload, services)
+                response, mocks = self.call(
+                    method, call_path, payload, services,
+                )
 
                 self.assertEqual(
                     response.status_code, 200,
