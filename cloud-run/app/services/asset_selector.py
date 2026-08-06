@@ -6,6 +6,7 @@ from app.providers import pexels_provider
 from app.providers import pixabay_provider
 from app.services.image_service import generate_image
 from app.services.provider_factory import build_provider_chain
+from app.services import asset_observatory
 from app.services import search_cache
 from app.services import search_query_builder
 from app.services.search_query_extractor import extract_search_query
@@ -221,7 +222,17 @@ def get_candidates(
             # 그러면 바로 AI 폴백이었다. 같은 질의는 캐시가 막는다.
             results = []
             for attempt in queries:
+                cache_hit = search_cache.has(source, attempt)
                 results = search_cache.search(source, attempt, search_fn)
+
+                # Sprint77 - 무엇을 몇 번 시도했고 어디서 결과가 나왔는지.
+                # 확장이 몇 단계 돌았는지가 이 기록의 개수로 드러난다.
+                asset_observatory.record_search(
+                    (scene or {}).get("scene"),
+                    attempt, source,
+                    cache_hit=cache_hit, result_count=len(results),
+                )
+
                 if results:
                     query = attempt
                     break

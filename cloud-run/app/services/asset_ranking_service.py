@@ -1,3 +1,4 @@
+from app.services import asset_observatory
 from app.services import asset_relevance
 from app.services.asset_feedback_service import load_all
 from app.services.asset_learning_engine import compute_bias
@@ -48,6 +49,16 @@ def select_best_with_score(candidates: list, is_hook_scene: bool = False,
     # provider가 준 순서가 유지된다 - 우리가 가릴 근거가 없을 때 그쪽
     # 판단을 뒤집을 이유가 없다.
     best_score, best_candidate = max(scored, key=lambda pair: pair[0])
+
+    # Sprint77 - 후보 전체와 점수를 남긴다. 세션이 없으면 아무 일도
+    # 일어나지 않으므로 선택 자체에는 영향이 없다.
+    asset_observatory.record_ranking(
+        (scene or {}).get("scene"),
+        scene,
+        candidates,
+        chosen=best_candidate,
+        scores=[pair[0] for pair in scored],
+    )
 
     return best_candidate, best_score
 

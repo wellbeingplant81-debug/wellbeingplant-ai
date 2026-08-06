@@ -2,6 +2,7 @@ import os
 import subprocess
 
 from app.services import asset_feedback_service
+from app.services import asset_observatory
 from app.services import best_of_n_service
 from app.services import scene_prompt_service
 from app.services.asset_mode_config import get_pexels_quality_threshold
@@ -326,6 +327,12 @@ def integrate_asset(
         # Learning Layer는 optional overlay이므로, 기록 실패가 asset
         # 선택 자체를 막아서는 안 된다.
         print(f"[AssetIntegration] feedback 기록 실패(무시): {exc}")
+
+    # Sprint77 - 이 scene이 최종적으로 무엇을 썼는지. enriched에는
+    # 넣지 않는다 - script.json의 바이트가 달라지면 안 된다.
+    asset_observatory.record_outcome(
+        scene_number, provider=source, asset_path=final_image_path,
+    )
 
     enriched = dict(scene)
     enriched["search_query"] = result["metadata"].get("query")

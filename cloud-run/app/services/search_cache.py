@@ -24,6 +24,18 @@ def clear() -> None:
         _entries.clear()
 
 
+def has(provider: str, query: str) -> bool:
+    """Sprint77 - 이 질의가 이미 캐시에 있는가. 부작용 없는 조회다.
+
+    Observatory가 적중/미스를 기록하려면 search()를 부르기 전에 알아야
+    한다. search() 안에서 기록하게 만들면 캐시 모듈이 관측을 알게 되고,
+    그러면 관측이 생산 경로에 얽힌다.
+    """
+
+    with _lock:
+        return ((provider, (query or "").strip().lower())) in _entries
+
+
 def search(provider: str, query: str, search_fn):
     """
     캐시에 있으면 그것을, 없으면 search_fn(query)를 부르고 저장한다.

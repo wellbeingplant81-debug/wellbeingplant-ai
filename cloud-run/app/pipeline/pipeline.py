@@ -6,6 +6,7 @@ from app import config
 from app.services import ai_director_service
 from app.services import character_consistency_engine
 from app.steps import step01_script
+from app.services import asset_observatory
 from app.services import scene_prompt_service
 from app.services import search_cache
 from app.steps import step02_assets
@@ -121,6 +122,11 @@ def run_pipeline(
     # 검색 결과는 시간이 지나면 달라지므로, 다음 영상이 낡은 결과를
     # 물려받으면 안 된다.
     search_cache.clear()
+
+    # Sprint77 - Asset Observatory 세션. 관측 산출물이며 생산 경로에
+    # 아무 영향을 주지 않는다 - script.json에도, 이미지에도, 영상에도
+    # 들어가지 않고 별도 파일로만 나간다.
+    asset_observatory.start()
 
     timings = {
         "project_creation": project_creation_time,
@@ -277,6 +283,10 @@ def run_pipeline(
     )
     _save_script(project_path, data)
     timings["image_generation"] = time.perf_counter() - t0
+
+    # asset 선택이 끝난 직후에 남긴다. 실패해도 파이프라인을 막지
+    # 않는다(write 안에서 삼킨다).
+    asset_observatory.write(project_path)
 
     t0 = time.perf_counter()
     step03_tts.run(
