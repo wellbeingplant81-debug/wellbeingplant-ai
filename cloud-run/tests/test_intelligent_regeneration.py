@@ -371,3 +371,77 @@ class TestPassedScenesAreNeverTouched(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScopingToChosenScenes(unittest.TestCase):
+    """Sprint81 - UI가 "이 scene만" 재생성할 수 있어야 한다.
+
+    필터를 정책에 두는 이유는 다른 모든 결정(재시도 한도, 스톡 제외,
+    예산, 개선 판정)이 이미 여기 있기 때문이다. 서비스나 UI에 두면
+    같은 판정이 두 곳에 생긴다.
+
+    only_scenes를 주지 않으면 예전과 완전히 같다 - 기본값이 None이고
+    그때는 필터가 아예 적용되지 않는다.
+    """
+
+    def _evaluation(self):
+        return {
+            "scenes": [
+                {"scene": 1, "realism_score": 30, "composition_score": 20,
+                 "regenerate": True},
+                {"scene": 2, "realism_score": 95, "composition_score": 90,
+                 "regenerate": False},
+                {"scene": 3, "realism_score": 40, "composition_score": 30,
+                 "regenerate": True},
+            ]
+        }
+
+    def _scenes(self):
+        return {n: {"provider": "ai_image"} for n in (1, 2, 3)}
+
+    def test_without_a_filter_nothing_changes(self):
+        targets = policy.regeneration_targets(
+            self._evaluation(), self._scenes(), retry_counts={},
+        )
+
+        self.assertEqual(targets, [1, 3])
+
+    def test_a_filter_narrows_to_the_chosen_scene(self):
+        targets = policy.regeneration_targets(
+            self._evaluation(), self._scenes(), retry_counts={},
+            only_scenes=[3],
+        )
+
+        self.assertEqual(targets, [3])
+
+    def test_a_filter_can_never_add_a_passing_scene(self):
+        """이 엔진의 첫 번째 원칙은 필터로도 못 뚫는다.
+
+        UI가 통과한 scene을 지목해도 재생성하지 않는다 - 다시 그리면
+        나빠질 수도 있고 돈은 확실히 든다.
+        """
+
+        targets = policy.regeneration_targets(
+            self._evaluation(), self._scenes(), retry_counts={},
+            only_scenes=[2],
+        )
+
+        self.assertEqual(targets, [])
+
+    def test_a_filter_can_never_bypass_the_retry_cap(self):
+        targets = policy.regeneration_targets(
+            self._evaluation(), self._scenes(),
+            retry_counts={3: config.QUALITY_MAX_RETRY},
+            only_scenes=[3],
+        )
+
+        self.assertEqual(targets, [])
+
+    def test_an_empty_filter_selects_nothing(self):
+        # "아무 scene도 고르지 않았다"와 "필터가 없다"는 다르다.
+        targets = policy.regeneration_targets(
+            self._evaluation(), self._scenes(), retry_counts={},
+            only_scenes=[],
+        )
+
+        self.assertEqual(targets, [])

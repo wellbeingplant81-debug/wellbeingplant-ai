@@ -80,6 +80,16 @@ video,img.preview{width:100%;border-radius:8px;background:#000;display:block}
 .na-note{background:#231c0d;border:1px solid #4a3a1a;color:#d29922;
   border-radius:7px;padding:9px 11px;font-size:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ba{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.ba figure{margin:0}
+.ba figcaption{font-size:10.5px;color:var(--dim);margin-top:4px;
+  text-align:center}
+.cycle{background:var(--panel2);border-radius:7px;padding:8px 10px;
+  margin-bottom:6px;font-size:11.5px}
+.cycle .s{color:var(--dim);font-size:10.5px}
+.rb{color:var(--warn)}
+button.sm{width:auto;padding:6px 12px;font-size:12px}
+.rowbtns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 a{color:var(--accent)}
 </style>
 </head>
@@ -167,6 +177,11 @@ a{color:var(--accent)}
     </div>
 
     <div class="panel">
+      <h2>Regeneration</h2>
+      <div id="regenBox" class="muted">프로젝트를 선택하십시오.</div>
+    </div>
+
+    <div class="panel">
       <h2>Upload</h2>
       <div class="na-note">
         업로드 경로가 아직 없습니다.
@@ -185,7 +200,7 @@ a{color:var(--accent)}
 <script>
 const $ = (id) => document.getElementById(id);
 let currentProject = null, currentDetail = null, jobId = null;
-let consoleNext = 0, poll = null, selectedScene = null;
+let consoleNext = 0, poll = null, selectedScene = null, regenView = null;
 
 const STAGE_FALLBACK = [
   ["plan","기획"],["script","대본"],["image","이미지"],["voice","음성"],
@@ -227,6 +242,72 @@ async function openProject(id){
   renderScenes(currentDetail.scenes);
   renderMedia(currentDetail);
   $("inspector").innerHTML = '<span class="muted">Scene을 클릭하십시오.</span>';
+  await loadRegeneration();
+}
+
+async function loadRegeneration(){
+  if(!currentProject){ return; }
+  const r = await fetch(`/studio/api/projects/${currentProject}/regeneration`);
+  if(!r.ok){ return; }
+  regenView = await r.json();
+  renderRegeneration();
+}
+
+function failedScenes(){
+  return (currentDetail?.scenes || []).filter(s => s.regenerate).map(s => s.scene);
+}
+
+function renderRegeneration(){
+  const v = regenView, failed = failedScenes();
+  if(!v){ $("regenBox").innerHTML = '<span class="muted">—</span>'; return; }
+
+  let html = "";
+
+  if(!failed.length){
+    html += '<p class="muted">실패로 표시된 scene이 없습니다. 통과한 scene은 재생성하지 않습니다.</p>';
+  } else {
+    html += `<p class="muted">실패 scene ${failed.join(", ")}</p>
+      <div class="rowbtns">
+        <button class="sm" onclick="startRegen(null)">실패 scene 전부 재생성</button>
+      </div>
+      <p class="muted" style="margin:8px 0 0">
+        scene을 하나씩 따로 재생성하면 영상 렌더와 Gemini 평가가 그만큼
+        반복됩니다. 한 번에 돌리는 편이 쌉니다.</p>`;
+  }
+
+  if(v.has_run){
+    html += `<h2 style="margin-top:14px">결정 로그</h2>
+      <p class="muted">${v.stop_explanation || ""}</p>
+      <p class="muted">이미지 생성 ${v.total_image_calls} / 예산 ${v.max_image_calls}
+        (남은 ${v.budget_remaining}) · 최종 렌더 ${v.rendered ? "예" : "아니오"}</p>`;
+    html += v.cycles.map(c => `
+      <div class="cycle">
+        <div>cycle ${c.cycle} · 대상 [${c.targeted.join(", ")}]</div>
+        <div class="s">성공 [${c.succeeded.join(", ")}]
+          ${c.rolled_back && c.rolled_back.length
+            ? `· <span class="rb">되돌림 [${c.rolled_back.join(", ")}]</span>` : ""}
+          ${c.failed.length ? `· 실패 [${c.failed.join(", ")}]` : ""}</div>
+        <div class="s">품질 ${c.quality_before?.toFixed(1)} →
+          ${c.quality_after==null ? "평가실패" : c.quality_after.toFixed(1)}</div>
+      </div>`).join("");
+  } else {
+    html += '<p class="muted" style="margin-top:10px">아직 재생성한 적이 없습니다.</p>';
+  }
+
+  $("regenBox").innerHTML = html;
+}
+
+async function startRegen(scenes){
+  if(!currentProject) return;
+  consoleNext = 0; $("console").textContent = "";
+  $("jobState").textContent = "재생성 중…";
+  const r = await fetch(`/studio/api/projects/${currentProject}/regenerate`, {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({scenes})});
+  const d = await r.json();
+  jobId = d.job_id;
+  if(poll) clearInterval(poll);
+  poll = setInterval(pollJob, 1500);
 }
 
 function renderScores(q){
@@ -275,6 +356,35 @@ function selectScene(n){
       <dt>Prompt</dt><dd>${s.image_prompt||"—"}</dd>
     </dl>`;
   if(s.reason){ html += `<div class="na-note" style="margin-top:10px">${s.reason}</div>`; }
+
+  const rs = regenView && regenView.scenes ? regenView.scenes[n] : null;
+  if(rs){
+    const rolled = rs.was_rolled_back;
+    html += `<h2 style="margin-top:14px">재생성 상태</h2>
+      <dl class="kv">
+        <dt>재시도</dt><dd>${rs.retry_count}회</dd>
+        <dt>최종</dt><dd>${rs.final_status || "—"}</dd>
+        <dt>되돌림</dt><dd class="${rolled?"rb":""}">${rolled ? "예 — 결과가 더 나빠 원본 유지" : "아니오"}</dd>
+      </dl>`;
+    if(rs.history && rs.history.length){
+      html += rs.history.map(h =>
+        `<div class="cycle"><div>시도 ${h.attempt} · ${h.outcome}</div>
+         ${h.reason?`<div class="s">${h.reason}</div>`:""}</div>`).join("");
+    }
+    html += `<div class="ba">
+      <figure><img class="preview" src="/studio/api/projects/${currentProject}/media/before?scene=${n}"
+        onerror="this.parentElement.style.display='none'">
+        <figcaption>Before</figcaption></figure>
+      <figure><img class="preview" src="${img}">
+        <figcaption>After${rolled ? " (되돌림 = Before와 같음)" : ""}</figcaption></figure>
+    </div>`;
+  }
+
+  if(s.regenerate){
+    html += `<div class="rowbtns">
+      <button class="sm" onclick="startRegen([${n}])">이 scene 재생성</button>
+    </div>`;
+  }
   if(s.observatory){
     const o = s.observatory;
     html += `<h2 style="margin-top:14px">Asset Inspector</h2>
@@ -353,6 +463,7 @@ async function pollJob(){
     $("go").disabled = false;
     $("jobState").textContent = d.state === "done" ? "완료" : ("실패: " + (d.error||""));
     if(d.project_id){ await loadProjects(); await openProject(d.project_id); }
+    else if(currentProject){ await openProject(currentProject); }
     await loadDataset();
     jobId = null;
   }

@@ -90,23 +90,28 @@ def _append_line(job_id: str, line: str) -> None:
             del job["console"][:-MAX_CONSOLE_LINES]
 
 
+def _new_job(job_id, topic, channel, project_id=None, project_path=None):
+    return {
+        "job_id": job_id,
+        "kind": "generate",
+        "topic": topic,
+        "channel": channel,
+        "state": "running",
+        "project_id": project_id,
+        "project_path": project_path,
+        "title": None,
+        "error": None,
+        "console": [],
+    }
+
+
 def start(topic: str, channel: str = "wellbeing") -> str:
     """생성을 시작하고 job_id를 돌려준다."""
 
     job_id = uuid.uuid4().hex[:12]
 
     with _lock:
-        _jobs[job_id] = {
-            "job_id": job_id,
-            "topic": topic,
-            "channel": channel,
-            "state": "running",
-            "project_id": None,
-            "project_path": None,
-            "title": None,
-            "error": None,
-            "console": [],
-        }
+        _jobs[job_id] = _new_job(job_id, topic, channel)
 
     thread = threading.Thread(
         target=_run, args=(job_id, topic, channel), daemon=True,
@@ -114,6 +119,63 @@ def start(topic: str, channel: str = "wellbeing") -> str:
     thread.start()
 
     return job_id
+
+
+def start_regeneration(project_id: str, project_path: str,
+                       scenes=None) -> str:
+    """
+    Sprint81 - 재생성을 같은 작업 틀로 돌린다.
+
+    엔진을 부르는 것 말고는 생성 작업과 다를 것이 없다 - 몇 분이 걸리고,
+    stdout에 결정 로그가 흐르고, 화면은 그 둘을 폴링한다. 틀을 따로
+    만들면 콘솔 수집과 상태 전이를 두 번 구현하게 된다.
+    """
+
+    job_id = uuid.uuid4().hex[:12]
+
+    with _lock:
+        job = _new_job(job_id, None, None, project_id, project_path)
+        job["kind"] = "regenerate"
+        job["scenes"] = list(scenes) if scenes else None
+        _jobs[job_id] = job
+
+    thread = threading.Thread(
+        target=_run_regeneration, args=(job_id, project_path, scenes),
+        daemon=True,
+    )
+    thread.start()
+
+    return job_id
+
+
+def _run_regeneration(job_id: str, project_path: str, scenes) -> None:
+    import sys
+
+    from app.services import studio_regeneration
+
+    original = sys.stdout
+    sys.stdout = _Tee(original, job_id)
+
+    try:
+        studio_regeneration.regenerate(project_path, scenes)
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "done"
+
+    except Exception as exc:
+        _append_line(job_id, f"[Studio] 재생성 실패: {exc}")
+        _append_line(job_id, traceback.format_exc())
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "failed"
+                job["error"] = str(exc)
+
+    finally:
+        sys.stdout = original
 
 
 def _run(job_id: str, topic: str, channel: str) -> None:
@@ -168,6 +230,7 @@ def status(job_id: str, console_from: int = 0) -> dict:
         return {
             "found": True,
             "job_id": job["job_id"],
+            "kind": job.get("kind", "generate"),
             "state": job["state"],
             "topic": job["topic"],
             "channel": job["channel"],

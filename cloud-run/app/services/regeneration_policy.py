@@ -86,7 +86,8 @@ def explain_stop(reason: str) -> str:
     )
 
 
-def regeneration_targets(evaluation, scenes_by_number, retry_counts) -> list:
+def regeneration_targets(evaluation, scenes_by_number, retry_counts,
+                         only_scenes=None) -> list:
     """
     이번 사이클에 재생성할 scene 번호. 순수 함수입니다.
 
@@ -95,14 +96,27 @@ def regeneration_targets(evaluation, scenes_by_number, retry_counts) -> list:
     있지만 나빠질 수도 있고, 돈은 확실히 든다.
 
     스톡 scene도 후보가 아니다 - 이유는 STOCK_PROVIDERS 주석에 있다.
+
+    Sprint81 - only_scenes로 대상을 좁힐 수 있다. Studio UI가 "이 scene만
+    다시 그려 달라"고 지목하는 경로다.
+
+    좁히기만 한다. 통과한 scene을 지목해도 재생성하지 않고, 재시도
+    한도에 도달한 scene도 마찬가지다 - 필터는 후보를 걸러낼 뿐 만들어
+    내지 않는다. UI가 엔진의 원칙을 우회하는 문이 되면 안 된다.
+
+    None이면 필터가 아예 적용되지 않는다("전부"). 빈 목록은 "아무것도
+    고르지 않았다"이고 그 둘은 다르다.
     """
 
     scenes = (evaluation or {}).get("scenes") or []
+
+    chosen = None if only_scenes is None else set(only_scenes)
 
     return [
         scene["scene"]
         for scene in scenes
         if scene.get("regenerate")
+        and (chosen is None or scene["scene"] in chosen)
         and (scenes_by_number.get(scene["scene"], {}).get("provider")
              not in STOCK_PROVIDERS)
         and retry_counts.get(scene["scene"], 0) < QUALITY_MAX_RETRY

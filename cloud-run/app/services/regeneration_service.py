@@ -129,7 +129,7 @@ def _evaluate_images(project_path: str, script: dict):
     )
 
 
-def run(project_path: str):
+def run(project_path: str, only_scenes=None):
     """
     Step08 - Intelligent Regeneration Engine.
 
@@ -199,6 +199,9 @@ def run(project_path: str):
                 number: entry.regeneration.retry_count
                 for number, entry in regeneration_by_scene.items()
             },
+            # Sprint81 - Studio UI가 특정 scene만 지목할 수 있다. 판정은
+            # 정책이 그대로 하고 여기서는 인자만 흘린다.
+            only_scenes=only_scenes,
         )
 
         decision = policy.decide_continue(

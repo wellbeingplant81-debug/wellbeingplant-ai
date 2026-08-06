@@ -77,6 +77,14 @@ ENDPOINTS = [
      ["app.routers.studio.studio_jobs.start"]),
     ("GET", "/studio/api/jobs/{job_id}", None, [],
      "/studio/api/jobs/contract_job"),
+
+    # Sprint81 - 재생성. 엔진을 그대로 부르므로 실제 호출을 막기 위해
+    # orchestration 진입점만 패치한다.
+    ("GET", "/studio/api/projects/{project_id}/regeneration", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/regeneration"),
+    ("POST", "/studio/api/projects/{project_id}/regenerate", {"scenes": [2]},
+     ["app.routers.studio.studio_jobs.start_regeneration"],
+     f"/studio/api/projects/{PROJECT_ID}/regenerate"),
 ]
 
 

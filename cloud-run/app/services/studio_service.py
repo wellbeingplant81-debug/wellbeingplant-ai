@@ -207,7 +207,7 @@ def media_path(project_path: str, kind: str, scene_number=None) -> str:
     정수로만 받는다(Sprint65의 resolve_project_path와 같은 원칙).
     """
 
-    if kind == "scene":
+    if kind in ("scene", "before"):
         try:
             number = int(scene_number)
         except (TypeError, ValueError):
@@ -216,7 +216,12 @@ def media_path(project_path: str, kind: str, scene_number=None) -> str:
         if number < 1:
             raise ValueError(f"scene 번호가 올바르지 않습니다: {number}")
 
-        relative = f"images/scene{number}.png"
+        # Sprint81 - Before/After 비교. before는 재생성 직전 스냅샷이고
+        # studio_regeneration이 떠 둔다.
+        relative = (
+            f"images/scene{number}.png" if kind == "scene"
+            else f"studio_before/scene{number}.png"
+        )
 
     elif kind in _MEDIA_KINDS:
         relative = _MEDIA_KINDS[kind]

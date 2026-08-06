@@ -16,7 +16,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from app.services import project_service, studio_jobs, studio_service
+from app.services import (
+    project_service, studio_jobs, studio_regeneration, studio_service,
+)
 from app.tools import asset_dataset
 
 
@@ -32,6 +34,12 @@ _PAGE = os.path.join(
 class GenerateRequest(BaseModel):
     topic: str
     channel: str = "wellbeing"
+
+
+class RegenerateRequest(BaseModel):
+    # None이면 엔진이 실패 scene 전부를 알아서 고른다. 목록을 주면
+    # 그 안으로 좁혀진다 - 통과한 scene을 넣어도 정책이 걸러낸다.
+    scenes: list = None
 
 
 def _project_path(project_id: str) -> str:
@@ -116,6 +124,28 @@ def job(job_id: str, console_from: int = 0):
     )
 
     return result
+
+
+@router.get("/api/projects/{project_id}/regeneration")
+def regeneration(project_id: str):
+    """엔진이 남긴 결정 로그와 scene별 재시도/되돌리기 상태."""
+
+    return studio_regeneration.regeneration_view(_project_path(project_id))
+
+
+@router.post("/api/projects/{project_id}/regenerate")
+def regenerate(project_id: str, request: RegenerateRequest = None):
+    """
+    재생성을 시작한다. 무엇을 다시 그릴지는 엔진이 정한다 - 여기서는
+    범위만 넘긴다.
+    """
+
+    path = _project_path(project_id)
+    scenes = (request.scenes if request else None) or None
+
+    return {
+        "job_id": studio_jobs.start_regeneration(project_id, path, scenes),
+    }
 
 
 @router.get("/api/dataset")
