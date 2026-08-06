@@ -397,8 +397,13 @@ class TestNothingElseWasTouched(unittest.TestCase):
             with self.subTest(imported=name):
                 self.assertNotIn("services.publishing", name)
 
-    def test_nobody_imports_the_adapter_yet(self):
-        """이번 범위는 "조립되고 아직 호출되지 않는 상태"까지다.
+    def test_only_the_instagram_step_uses_the_adapter(self):
+        """Sprint100에는 "아직 아무도 부르지 않는다"였다. Sprint101이
+        instagram_upload_step_service를 붙였으므로 그 문장은 더 이상
+        사실이 아니다.
+
+        지켜야 할 경계는 그대로다 - Adapter를 쓰는 곳은 그 한 곳뿐이고,
+        Pipeline/Queue/Workflow/UI는 여전히 모른다.
 
         원문을 훑지 않는다 - instagram_runtime과 publishing_runtime_
         protocol의 설명 주석이 RuntimeBackedPublishAdapter를 언급한다
@@ -427,7 +432,9 @@ class TestNothingElseWasTouched(unittest.TestCase):
                 if "services.publishing." in module:
                     callers.append(path.name)
 
-        self.assertEqual(sorted(set(callers)), [])
+        self.assertEqual(
+            sorted(set(callers)), ["instagram_upload_step_service.py"],
+        )
 
     def test_no_publish_endpoint_exists(self):
         from app.main import app

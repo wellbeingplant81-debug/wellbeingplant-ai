@@ -261,3 +261,20 @@ YOUTUBE_DEFAULT_LANGUAGE = "ko"
 # .json의 title/script)로 돌아간다 - 기존 업로드와 호환이 유지된다는
 # 뜻이고, 그 폴백은 PV-02에서 실제로 검증된 길이다.
 ENABLE_METADATA_INTELLIGENCE = True
+
+
+# Sprint101 (Epic 53) - 실제 Instagram 업로드.
+#
+# instagram_upload_step_service가 이 플래그를 가장 먼저 본다. False면
+# Meta 자격증명도 로그인 상태도 확인하지 않고, Adapter와 Storage(boto3)
+# 를 import조차 하지 않는다.
+#
+# 이 저장소에서 Instagram 실업로드는 아직 한 번도 검증되지 않았다.
+# Evaluation Policy v3에 따라 True로 올리려면 Level 3 Release Gate가
+# 필요하다.
+#
+# 켜기 전에 준비돼야 하는 것이 둘 더 있다 - Meta App 자격증명
+# (INSTAGRAM_OAUTH_CLIENT_ID/SECRET)과 공개 URL을 만들 수 있는
+# Storage(STORAGE_PROVIDER=s3 + R2/S3 설정). 둘 중 하나라도 없으면
+# 플래그를 켜도 각 관문에서 정직하게 거절된다.
+ENABLE_INSTAGRAM_UPLOAD = False
