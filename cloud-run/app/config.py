@@ -61,10 +61,36 @@ ENABLE_PROMPT_ENRICHMENT = False
 # 실질적인 변별력은 Planner를 켜는 단계에서 생긴다.
 ENABLE_PROMPT_EFFECTIVENESS = True
 
-# Sprint48 - Adaptive Prompt Optimization Engine. Off by default. Only
-# takes effect when ENABLE_PROMPT_EFFECTIVENESS also produced
-# prompt_metrics - if Effectiveness is disabled (or failed), image_prompt
-# stays byte-for-byte identical regardless of this flag.
+# Sprint48 - Adaptive Prompt Optimization Engine.
+#
+# Sprint72에서 켜지 않기로 확정했다. 이 엔진은 prompt_metrics 점수를
+# 올리는 방향으로 프롬프트를 고치는데, 그 점수가 실제 품질과 상관이
+# 있다는 근거가 없다.
+#
+# 실측(프로젝트 36개, scene 216개, 기존 평가 산출물 재분석):
+#
+#   항목               변동    realism 상관   composition 상관
+#   prompt_preserved   없음(216/216 통과)   -          -
+#   camera             없음(216/216 통과)   -          -
+#   visual_type        없음(216/216 통과)   -          -
+#   purpose            없음(216/216 통과)   -          -
+#   duplicate_free     없음(216/216 통과)   -          -
+#   length             있음               r=0.098    r=0.221
+#   keywords           있음               r=-0.001   r=0.050
+#   score(합계)        있음               r=-0.023   r=0.000
+#
+# 100점 중 85점을 차지하는 다섯 항목이 216개 관측치에서 한 번도 실패한
+# 적이 없다. 상수는 무엇도 예측할 수 없다 - 상관이 0이라는 뜻이 아니라
+# 애초에 재고 있는 것이 없다는 뜻이다. 나머지 항목도 |r| < 0.3으로
+# 약하고, 총점과 realism의 상관은 사실상 0(-0.023)이다.
+#
+# 그래서 Optimization을 켜면 품질과 무관한 숫자를 향해 프롬프트를
+# 고치게 된다. Stage 3에서 실제로 그런 일이 있었다 - 점수가 90 -> 100으로
+# 오르는 동안 이미지는 나빠졌다.
+#
+# 착수 조건: 목적함수를 먼저 다시 정의해야 한다. 지금 있는 신호 중
+# 품질과 연결된 것은 Gemini Vision 평가뿐이고, 그건 생성 후에만 나온다.
+# scripts/validate_prompt_metrics.py로 언제든 다시 잴 수 있다.
 ENABLE_PROMPT_OPTIMIZATION = False
 
 # Sprint49 - Self-Learning Prompt Engine.
