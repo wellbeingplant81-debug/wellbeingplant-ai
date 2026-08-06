@@ -5,7 +5,7 @@ import time
 from app import config
 from app.services import ai_director_service
 from app.services import character_consistency_engine
-from app.steps import step01_script
+from app.steps import step01_script_resolve
 from app.services import asset_observatory
 from app.tools import asset_dataset
 from app.services import scene_prompt_service
@@ -146,8 +146,17 @@ def run_pipeline(
         "project_creation": project_creation_time,
     }
 
+    # Sprint106 - 대본을 어디서 얻을지는 Resolver가 정한다.
+    #
+    # AUTO면 Resolver가 step01_script.run(topic, project_path)를 인자
+    # 그대로 부른다 - 예전과 호출 형태도 횟수도 산출물도 같다.
+    # 미리 놓인 script.json이 있으면 그것을 읽고 Writer를 부르지 않는다.
+    #
+    # step01_script.py에는 손대지 않았다. 그 파일은 "AI가 대본을
+    # 쓴다"는 한 가지 일만 하고, 붙여넣은 대본을 쓸지 말지는 그 파일이
+    # 알 바가 아니다.
     t0 = time.perf_counter()
-    data = step01_script.run(
+    data = step01_script_resolve.run(
         topic,
         project_path,
     )

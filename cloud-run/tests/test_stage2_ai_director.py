@@ -89,7 +89,7 @@ class PipelineHarness(unittest.TestCase):
              patch.object(config, "ENABLE_PROMPT_ENRICHMENT", False), \
              patch.object(config, "ENABLE_PROMPT_OPTIMIZATION", False), \
              patch.object(config, "ENABLE_VIRAL_WRITER", False), \
-             patch.object(pipeline.step01_script, "run", fake_step01), \
+             patch.object(pipeline.step01_script_resolve, "run", fake_step01), \
              patch.object(
                  pipeline.step02_assets, "collect_assets", fake_collect_assets,
              ), \

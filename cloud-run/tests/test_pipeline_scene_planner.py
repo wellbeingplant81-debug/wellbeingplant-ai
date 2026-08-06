@@ -73,7 +73,7 @@ def patched_pipeline():
         ENABLE_AI_DIRECTOR=False,
         ENABLE_VIRAL_WRITER=False,
     ), \
-         patch("app.pipeline.pipeline.step01_script") as step01, \
+         patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
          patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
