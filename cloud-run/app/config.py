@@ -227,3 +227,37 @@ BEST_OF_N_MAX_CANDIDATES = 12
 # publish_package.json뿐인데 이 저장소에는 그것을 만드는 단계가 없어서,
 # youtube_upload_provider의 안전한 기본값이 그대로 쓰인다.
 ENABLE_YOUTUBE_UPLOAD = True
+
+
+# Sprint93 (Epic 47) - Metadata Intelligence.
+#
+# OneDrive 저장소의 Epic 17/19/47 값들을 그대로 가져왔다. 새로 정하지
+# 않는다 - 이미 실제 채널 운영에서 쓰이던 값이다.
+DESCRIPTION_TEMPLATE = "{summary}\n\n" "{medical_notice}\n\n" "{cta}\n\n" "{hashtags}"
+
+MEDICAL_DISCLAIMER_TEXT = (
+    "이 영상은 일반적인 건강 정보를 제공하며, 의학적 진단이나 치료를 "
+    "대체하지 않습니다. 증상이 지속되면 반드시 전문의와 상담하세요."
+)
+
+DEFAULT_CTA_TEXT = "이 영상이 도움이 되셨다면 좋아요와 구독 부탁드립니다!"
+
+DEFAULT_CATEGORY = "Howto & Style"
+
+HASHTAG_MIN_COUNT = 5
+HASHTAG_MAX_COUNT = 15
+
+SEO_KEYWORD_MIN_COUNT = 3
+SEO_KEYWORD_MAX_COUNT = 10
+
+# YouTube 표준 카테고리 26 = "Howto & Style". DEFAULT_CATEGORY와 같은
+# 것을 가리킨다 - 이름과 번호가 어긋나지 않게 둘을 나란히 둔다.
+YOUTUBE_CATEGORY_ID_HOWTO_AND_STYLE = "26"
+YOUTUBE_DEFAULT_LANGUAGE = "ko"
+
+# 켜져 있으면 파이프라인 끝에서 publish_package.json을 남긴다.
+#
+# 끄면 그 파일이 없어지고, 업로드는 Sprint91부터 있던 폴백 경로(script
+# .json의 title/script)로 돌아간다 - 기존 업로드와 호환이 유지된다는
+# 뜻이고, 그 폴백은 PV-02에서 실제로 검증된 길이다.
+ENABLE_METADATA_INTELLIGENCE = True

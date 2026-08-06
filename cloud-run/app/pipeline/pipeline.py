@@ -16,6 +16,7 @@ from app.steps import step04_subtitle
 from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
+from app.services import metadata_service
 from app.services import studio_upload
 from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
@@ -369,6 +370,23 @@ def run_pipeline(
             print(f"[Dataset] scene {added}행 축적")
     except Exception as exc:
         print(f"Dataset accumulation failed: {exc}")
+
+    # Sprint93 - 업로드 메타데이터. 반드시 업로드보다 앞이다.
+    #
+    # 여기까지 와야 실제 렌더 길이가 확정된다 - 원본(OneDrive)은 이
+    # 단계가 step01에 있어 추정치를 썼지만, 여기서는 측정값을 쓴다.
+    #
+    # Script만 보고 만든다. Gemini도 Imagen도 부르지 않는다. 실패해도
+    # 예외를 밖으로 내보내지 않는다 - 메타데이터는 부가 산출물이고,
+    # 없으면 업로드가 Sprint91부터 있던 script.json 폴백으로 돌아간다.
+    if config.ENABLE_METADATA_INTELLIGENCE:
+        try:
+            package = metadata_service.generate_publish_package(project_path)
+            if package:
+                print(f"[Metadata] publish_package.json 생성 · "
+                      f"playlist={package.get('playlist_title')}")
+        except Exception as exc:
+            print(f"Metadata step failed: {exc}")
 
     # Sprint92 - 업로드. 반드시 마지막이다.
     #
