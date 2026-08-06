@@ -46,6 +46,13 @@ class GenerateRequest(BaseModel):
     channel: str = "wellbeing"
 
 
+class ChatImportRequest(BaseModel):
+    # 사용자가 붙여넣은 것 그대로. 우리가 손대지 않는다.
+    raw: str
+    # 제목이 없는 붙여넣기를 메울 때만 쓴다.
+    topic: str = ""
+
+
 class RegenerateRequest(BaseModel):
     # None이면 엔진이 실패 scene 전부를 알아서 고른다. 목록을 주면
     # 그 안으로 좁혀진다 - 통과한 scene을 넣어도 정책이 걸러낸다.
@@ -139,6 +146,113 @@ def approve(project_id: str):
         return studio_workflow.approve(project_id, _workflow_store())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# Sprint105 - 제작 방식 화면.
+#
+# 등록소를 여기서 따로 만든다. 전역 default_registry()에 올리면
+# app.main을 import하는 것만으로 등록이 일어나고, "등록은 명시적으로
+# 부를 때만"이라는 Sprint103의 계약이 깨진다.
+_production_registry = None
+
+
+def _registry():
+    global _production_registry
+
+    if _production_registry is None:
+        from app.production.providers import bootstrap
+        from app.production.registry import StageProviderRegistry
+
+        _production_registry = StageProviderRegistry()
+        bootstrap.register_current_providers(_production_registry)
+
+    return _production_registry
+
+
+@router.get("/api/production/modes")
+def production_modes_view():
+    """제작 방식 목록과 각 방식의 예상 비용.
+
+    비용을 지어내지 않는다 - Provider가 단가를 모르면 그 단계는
+    unknown으로 오고, 화면이 그것을 그대로 보여준다."""
+
+    from app.production import production_modes as modes
+    from app.production import source_modes, stages
+    from app.production.production_plan import build_automatic_plan
+
+    registry = _registry()
+    rows = []
+
+    for mode in modes.PRODUCTION_MODES:
+        policy = modes.policy_for(mode)
+        row = {
+            "mode": mode,
+            "label": modes.LABELS[mode],
+            "description": modes.DESCRIPTIONS[mode],
+            "user_chooses_per_stage": policy.user_chooses_per_stage,
+            "calls_api": modes.calls_api(mode),
+            "auto_regenerate": policy.auto_regenerate,
+            "cost": None,
+            "missing_stages": [],
+        }
+
+        if not policy.user_chooses_per_stage:
+            plan = build_automatic_plan(mode, registry)
+            row["cost"] = plan.estimate_cost(registry=registry).as_dict()
+            row["missing_stages"] = [
+                stages.LABELS[s] for s in plan.missing_stages()
+            ]
+
+        rows.append(row)
+
+    return {
+        "modes": rows,
+        "current_engine_mode": modes.CURRENT_ENGINE_MODE,
+        "stage_labels": stages.LABELS,
+    }
+
+
+@router.post("/api/production/import")
+def production_import(request: ChatImportRequest):
+    """
+    붙여넣은 대본을 읽어 무엇이 들어왔는지 보여준다.
+
+    여기서 프로젝트를 만들지 않는다. 파이프라인의 step01이 기존
+    script.json을 읽는 분기 없이 항상 새로 만들기 때문에, 지금 저장해
+    두어도 영상 생성이 시작되는 순간 덮어써진다 - 그 연결은 파이프라인을
+    고쳐야 하고 이번 스프린트는 그것을 금지한다.
+
+    읽기와 검증은 실제 Provider가 한다. 화면 전용 파서를 따로 만들지
+    않는다.
+    """
+
+    from app.production.chat_script_parser import ChatImportError
+    from app.production.stage_request import StageRequest
+
+    provider = _registry().get("script", "chat_import")
+
+    try:
+        script = provider.import_content(
+            request.raw, StageRequest(topic=request.topic),
+        )
+    except ChatImportError as exc:
+        # 사람이 읽고 고칠 수 있는 문장이 그대로 화면에 가야 한다.
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "title": script["title"],
+        "hook": script["hook"],
+        "scene_count": len(script["scenes"]),
+        "scenes": [
+            {
+                "scene": scene["scene"],
+                "narration": scene["narration"],
+                "image_prompt": scene.get("image_prompt", ""),
+            }
+            for scene in script["scenes"]
+        ],
+        "script": script["script"],
+    }
 
 
 @router.post("/api/projects/{project_id}/upload")

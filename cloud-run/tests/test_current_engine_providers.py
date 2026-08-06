@@ -433,12 +433,22 @@ class TestTheEngineWasNotTouched(unittest.TestCase):
                                        "elevenlabs", "requests"):
                             self.assertNotIn(banned, name)
 
-    def test_no_production_endpoint_exists(self):
+    def test_production_endpoints_are_read_only(self):
+        """Sprint102/103에는 "production 엔드포인트가 없어야 한다"였다.
+        Sprint105가 제작 방식 화면을 붙이며 둘을 만들었으므로 그
+        문장은 더 이상 사실이 아니다.
+
+        지켜야 할 경계는 그대로다 - 그 둘은 목록을 보여주고 붙여넣은
+        것을 읽어 볼 뿐, 영상 생성을 시작하지 않는다."""
+
         from app.main import app
 
-        for path in app.openapi()["paths"]:
-            with self.subTest(path=path):
-                self.assertNotIn("production", path.lower())
+        paths = [p for p in app.openapi()["paths"] if "production" in p.lower()]
+
+        self.assertEqual(
+            sorted(paths),
+            ["/studio/api/production/import", "/studio/api/production/modes"],
+        )
 
 
 if __name__ == "__main__":

@@ -91,6 +91,22 @@ video,img.preview{width:100%;border-radius:8px;background:#000;display:block}
 button.sm{width:auto;padding:6px 12px;font-size:12px}
 .rowbtns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 a{color:var(--accent)}
+.mode{display:block;padding:10px 11px;background:var(--panel2);border-radius:8px;
+  margin-bottom:7px;cursor:pointer;border:1px solid transparent}
+.mode:hover{border-color:var(--line)}
+.mode.on{border-color:var(--accent);background:#12243d}
+.mode input{width:auto;margin-right:7px;vertical-align:middle}
+.mode .t{font-weight:600;font-size:13px}
+.mode .d{color:var(--dim);font-size:11.5px;margin:3px 0 0 20px}
+.mode .c{font-size:11.5px;margin:4px 0 0 20px}
+.mode .c.free{color:var(--ok)}
+.mode .c.unknown{color:var(--warn)}
+.modebox{margin:8px 0 0 20px;display:none}
+.mode.on .modebox{display:block}
+.modebox textarea{min-height:120px;font:11.5px/1.5 Consolas,monospace}
+.preview{background:var(--panel2);border-radius:7px;padding:9px 11px;
+  margin-top:8px;font-size:12px}
+.preview .err{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -108,6 +124,15 @@ a{color:var(--accent)}
 
   <!-- 좌: 프로젝트 설정 -->
   <div class="stack">
+    <div class="panel">
+      <h2>제작 방식</h2>
+      <div id="modes" class="muted">불러오는 중…</div>
+      <div class="na-note" id="modeNote" style="margin-top:10px;display:none">
+        붙여넣기·직접 작성은 아직 영상 생성에 연결되지 않았습니다.
+        읽어서 확인하는 것까지만 됩니다 — 파이프라인 연결은 다음 단계입니다.
+      </div>
+    </div>
+
     <div class="panel">
       <h2>Project</h2>
       <label>Topic</label>
@@ -470,6 +495,118 @@ async function oauthAction(action){
   }, 1200);
 }
 
+let productionMode = null;
+
+const MODE_ICON = {
+  auto_premium: "🤖", auto_standard: "⚖️", auto_economy: "💰",
+  assisted: "📋", manual: "✍",
+};
+
+function costLine(row){
+  // 지어내지 않는다 - Provider가 모르면 모른다고 쓴다.
+  if(row.cost === null) return "";
+  const c = row.cost;
+  if(c.complete && c.known_total === 0) return '<div class="c free">예상 비용 : 무료</div>';
+  if(!c.complete){
+    return '<div class="c unknown">예상 비용 계산 불가 — 단가를 모르는 단계 '
+      + c.unknown_stages.length + '개</div>';
+  }
+  return '<div class="c">예상 비용 : $' + c.known_total.toFixed(4) + '</div>';
+}
+
+function modeBox(mode){
+  if(mode === "assisted"){
+    return `<div class="modebox">
+      <p class="muted">ChatGPT · Claude · Gemini · DeepSeek에서 만든 대본을
+        그대로 붙여넣으세요. API를 호출하지 않아 비용이 들지 않습니다.</p>
+      <textarea id="importRaw" placeholder="여기에 붙여넣기"></textarea>
+      <div class="rowbtns">
+        <button class="sm" onclick="runImport('importRaw')">가져오기</button>
+      </div>
+      <div id="importPreview"></div>
+    </div>`;
+  }
+  if(mode === "manual"){
+    return `<div class="modebox">
+      <p class="muted">script.json 파일을 고르거나 직접 작성하세요.</p>
+      <input type="file" id="manualFile" accept=".json,.txt"
+             onchange="loadManualFile(this)">
+      <textarea id="manualRaw" placeholder="script.json 내용 또는 직접 작성"
+                style="margin-top:8px"></textarea>
+      <div class="rowbtns">
+        <button class="sm" onclick="runImport('manualRaw')">가져오기</button>
+      </div>
+      <div id="manualPreview"></div>
+    </div>`;
+  }
+  return "";
+}
+
+function renderModes(data){
+  $("modes").innerHTML = data.modes.map(row => `
+    <label class="mode ${row.mode===productionMode?"on":""}" data-mode="${row.mode}">
+      <input type="radio" name="pmode" value="${row.mode}"
+        ${row.mode===productionMode?"checked":""} onchange="pickMode('${row.mode}')">
+      <span class="t">${MODE_ICON[row.mode]||""} ${row.label}</span>
+      <div class="d">${row.description}</div>
+      ${costLine(row)}
+      ${row.missing_stages.length
+        ? `<div class="c unknown">담당 Provider 없는 단계: ${row.missing_stages.join(", ")}</div>`
+        : ""}
+      ${modeBox(row.mode)}
+    </label>`).join("");
+}
+
+function pickMode(mode){
+  productionMode = mode;
+  document.querySelectorAll(".mode").forEach(el =>
+    el.classList.toggle("on", el.dataset.mode === mode));
+  const manualish = (mode === "assisted" || mode === "manual");
+  $("modeNote").style.display = manualish ? "block" : "none";
+}
+
+function loadManualFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { $("manualRaw").value = reader.result; };
+  reader.readAsText(file);
+}
+
+async function runImport(sourceId){
+  const box = sourceId === "importRaw" ? $("importPreview") : $("manualPreview");
+  const raw = $(sourceId).value;
+  box.innerHTML = '<div class="preview muted">읽는 중…</div>';
+
+  const r = await fetch("/studio/api/production/import", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({raw, topic: $("topic").value.trim()})});
+  const d = await r.json();
+
+  if(!r.ok){
+    box.innerHTML = `<div class="preview err">${d.detail}</div>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="preview">
+    <div><b>${d.title}</b></div>
+    ${d.hook?`<div class="muted">${d.hook}</div>`:""}
+    <div class="muted" style="margin-top:6px">scene ${d.scene_count}개</div>
+    ${d.scenes.slice(0,6).map(s=>
+      `<div class="muted" style="margin-top:4px">${s.scene}. ${s.narration}</div>`).join("")}
+  </div>`;
+}
+
+async function loadModes(){
+  try{
+    const d = await (await fetch("/studio/api/production/modes")).json();
+    productionMode = productionMode || d.current_engine_mode;
+    renderModes(d);
+    pickMode(productionMode);
+  }catch(e){ $("modes").innerHTML =
+    '<span class="muted">제작 방식을 불러오지 못했습니다.</span>'; }
+}
+
 async function loadDataset(){
   try{
     const d = await (await fetch("/studio/api/dataset")).json();
@@ -525,6 +662,7 @@ async function pollJob(){
 renderStages(null);
 loadDataset();
 loadOAuth();
+loadModes();
 
 // Sprint84 - Queue에서 프로젝트를 직접 열 수 있어야 한다.
 // 목록이 먼저 그려진 뒤에 열어야 선택 표시가 맞는다.

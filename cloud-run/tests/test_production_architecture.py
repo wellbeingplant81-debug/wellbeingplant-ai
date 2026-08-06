@@ -455,7 +455,7 @@ class TestNothingWasWiredIn(unittest.TestCase):
             with self.subTest(imported=name):
                 self.assertNotIn("app.production", name)
 
-    def test_nobody_outside_the_package_imports_it(self):
+    def test_only_the_studio_router_uses_it(self):
         import pathlib
 
         app_root = pathlib.Path(stages.__file__).parent.parent
@@ -484,7 +484,10 @@ class TestNothingWasWiredIn(unittest.TestCase):
                 if "app.production" in module:
                     callers.append(path.name)
 
-        self.assertEqual(sorted(set(callers)), [])
+        # Sprint102에는 "아무도 안 쓴다"였다. Sprint105가 제작 방식
+        # 화면을 붙이며 라우터 하나가 쓰게 됐다 - 경계는 그 하나뿐이라는
+        # 것으로 다시 세운다. Pipeline과 엔진은 여전히 모른다.
+        self.assertEqual(sorted(set(callers)), ["studio.py"])
 
     def test_the_package_calls_no_api(self):
         """구조만 만든다 - Gemini/Imagen/ElevenLabs 연결 금지."""
@@ -508,12 +511,22 @@ class TestNothingWasWiredIn(unittest.TestCase):
                                        "tts_provider", "openai", "anthropic"):
                             self.assertNotIn(banned, name)
 
-    def test_no_production_endpoint_exists(self):
+    def test_production_endpoints_are_read_only(self):
+        """Sprint102/103에는 "production 엔드포인트가 없어야 한다"였다.
+        Sprint105가 제작 방식 화면을 붙이며 둘을 만들었으므로 그
+        문장은 더 이상 사실이 아니다.
+
+        지켜야 할 경계는 그대로다 - 그 둘은 목록을 보여주고 붙여넣은
+        것을 읽어 볼 뿐, 영상 생성을 시작하지 않는다."""
+
         from app.main import app
 
-        for path in app.openapi()["paths"]:
-            with self.subTest(path=path):
-                self.assertNotIn("production", path.lower())
+        paths = [p for p in app.openapi()["paths"] if "production" in p.lower()]
+
+        self.assertEqual(
+            sorted(paths),
+            ["/studio/api/production/import", "/studio/api/production/modes"],
+        )
 
 
 if __name__ == "__main__":
