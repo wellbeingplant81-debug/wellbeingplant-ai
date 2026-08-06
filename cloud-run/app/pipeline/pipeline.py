@@ -7,6 +7,7 @@ from app.services import ai_director_service
 from app.services import character_consistency_engine
 from app.steps import step01_script
 from app.services import asset_observatory
+from app.tools import asset_dataset
 from app.services import scene_prompt_service
 from app.services import search_cache
 from app.steps import step02_assets
@@ -45,6 +46,17 @@ MEASUREMENT_ONLY_KEYS = ("prompt_metrics", "director_decision")
 # 이제 프롬프트 점수만 담는 파일이 아니므로 이름도 그에 맞춘다. 모든
 # 참조가 이 상수를 거치므로 파급은 없다.
 MEASUREMENT_FILENAME = "measurements.json"
+
+# Sprint79 - 축적 데이터셋이 사는 곳. 프로젝트 산출물이 아니라
+# 저장소 차원의 관측 기록이므로 프로젝트 디렉터리 밖에 둔다 -
+# 프로젝트는 임시 디렉터리에 만들어질 수 있고, 그때마다 사라지면
+# 축적이 되지 않는다.
+DATASET_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__),
+    ))),
+    ".dataset",
+)
 
 
 def _save_script(project_path, data):
@@ -339,5 +351,22 @@ def run_pipeline(
             regeneration_service.run(project_path)
         except Exception as exc:
             print(f"Regeneration step failed: {exc}")
+
+    # Sprint79 - Observatory와 평가를 한 곳에 쌓는다.
+    #
+    # 반드시 마지막이어야 한다. 평가(step07)와 재생성이 끝난 뒤여야
+    # 실패 여부가 확정되고, 그것이 붙어야 후보 풀이 분석 가치를 갖는다.
+    #
+    # 같은 프로젝트를 두 번 쌓지 않고(append_project가 판정), 무슨 일이
+    # 있어도 예외를 밖으로 내보내지 않는다. 관측이 생산을 막지 않는다.
+    try:
+        added = asset_dataset.append_project(
+            project_path,
+            os.path.join(DATASET_ROOT, asset_dataset.DATASET_FILENAME),
+        )
+        if added:
+            print(f"[Dataset] scene {added}행 축적")
+    except Exception as exc:
+        print(f"Dataset accumulation failed: {exc}")
 
     return data
