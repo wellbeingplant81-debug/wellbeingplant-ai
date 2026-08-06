@@ -1,0 +1,263 @@
+"""
+Sprint84 - Production Workflow.
+
+상태를 저장하지 않고 산출물에서 유도한다. 사람이 내린 결정(승인)만
+저장한다.
+
+유도하는 이유가 있다. 상태를 파일에 굳혀 두면 그 순간의 사실이 박제된다 -
+"Inspection"으로 적어 둔 프로젝트를 나중에 재생성해서 scene이 실패해도
+파일은 여전히 Inspection이라고 말한다. Sprint80에서 파이프라인 진행을
+로그가 아니라 산출물로 판정한 것과 같은 이유다. script.json이 있으면
+대본이 끝난 것이고, 실패한 scene이 있으면 재생성이 필요한 것이다.
+
+승인은 다르다. 파일에서 유도할 수 없는 사람의 판단이므로 저장해야
+하고, 새로고침을 넘어 살아남아야 한다.
+
+저장 위치는 프로젝트 디렉터리 밖이다. 생산 산출물은 한 바이트도 손대지
+않는다.
+
+여기서는 엔진을 부르지 않는다. 승인은 workflow 상태만 바꾸며 이미지,
+영상, 평가는 그대로다.
+"""
+
+import json
+import os
+import re
+from datetime import datetime, timezone
+
+
+DRAFT = "draft"
+GENERATING = "generating"
+INSPECTION = "inspection"
+NEEDS_REGENERATION = "needs_regeneration"
+APPROVED = "approved"
+PUBLISHED = "published"
+
+STATUSES = (
+    DRAFT, GENERATING, INSPECTION, NEEDS_REGENERATION, APPROVED, PUBLISHED,
+)
+
+LABELS = {
+    DRAFT: "Draft",
+    GENERATING: "Generating",
+    INSPECTION: "Inspection",
+    NEEDS_REGENERATION: "Needs Regeneration",
+    APPROVED: "Approved",
+    PUBLISHED: "Published",
+}
+
+# 사람이 내린 결정만 저장한다. 나머지는 유도한다.
+STORED_STATUSES = (APPROVED, PUBLISHED)
+
+STORE_FILENAME = "workflow.json"
+
+_TIMESTAMP = re.compile(r"^(\d{8})_(\d{6})")
+
+
+def _valid_id(project_id: str) -> str:
+    """저장소 키로 쓸 수 있는 이름인지. 경로 구분자가 섞이면 거부한다 -
+    Sprint65의 resolve_project_path와 같은 원칙이다."""
+
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise ValueError("project_id가 비어 있습니다.")
+
+    candidate = project_id.strip()
+
+    if candidate in (".", "..") or os.path.basename(candidate) != candidate:
+        raise ValueError(f"project_id가 올바르지 않습니다: {project_id!r}")
+
+    return candidate
+
+
+def _load(path: str):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def load_store(store_path: str) -> dict:
+    """저장된 결정들. 깨져 있으면 빈 것으로 읽는다 - 승인 기록 하나가
+    망가졌다고 큐 전체가 죽을 이유는 없다."""
+
+    stored = _load(store_path)
+
+    return stored if isinstance(stored, dict) else {}
+
+
+def _save_store(store_path: str, stored: dict) -> None:
+    directory = os.path.dirname(store_path)
+
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    from app.utils.atomic_write import atomic_write_json
+
+    atomic_write_json(store_path, stored)
+
+
+def approve(project_id: str, store_path: str) -> dict:
+    """
+    승인한다. workflow 상태만 바뀐다 - 이미지도 영상도 평가도 그대로다.
+
+    이미 승인된 것을 다시 승인해도 처음 시각을 유지한다. 언제 판단했는지가
+    기록의 요점인데 다시 누를 때마다 갱신되면 그것이 사라진다.
+    """
+
+    key = _valid_id(project_id)
+    stored = load_store(store_path)
+
+    if stored.get(key, {}).get("status") != APPROVED:
+        stored[key] = {
+            "status": APPROVED,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _save_store(store_path, stored)
+
+    return stored[key]
+
+
+def unapprove(project_id: str, store_path: str) -> None:
+    """승인을 거둔다. 유도 상태로 돌아간다."""
+
+    key = _valid_id(project_id)
+    stored = load_store(store_path)
+
+    if key in stored:
+        del stored[key]
+        _save_store(store_path, stored)
+
+
+def _failed_scenes(project_path: str) -> list:
+    report = _load(os.path.join(project_path, "quality_report.json"))
+
+    if not report:
+        return []
+
+    evaluation = report.get("ai_quality_evaluation") or {}
+
+    return [
+        scene.get("scene")
+        for scene in evaluation.get("scenes", [])
+        if scene.get("regenerate")
+    ]
+
+
+def status_for(project_path: str, stored: dict = None,
+               running: bool = False) -> str:
+    """
+    지금의 상태. 순수 읽기입니다.
+
+    우선순위가 의미를 갖는다. 지금 돌고 있으면 그것이 가장 최신 사실이고,
+    사람이 승인했으면 그것이 유도보다 우선한다.
+    """
+
+    if running:
+        return GENERATING
+
+    decided = (stored or {}).get("status")
+
+    if decided in STORED_STATUSES:
+        return decided
+
+    if not os.path.exists(os.path.join(project_path, "script.json")):
+        return DRAFT
+
+    if not os.path.exists(os.path.join(project_path, "quality_report.json")):
+        # 대본은 있는데 평가가 없다 - 아직 만드는 중이거나 중간에 멈췄다.
+        return GENERATING
+
+    return NEEDS_REGENERATION if _failed_scenes(project_path) else INSPECTION
+
+
+def _created_at(project_id: str):
+    """프로젝트 이름이 곧 생성 시각이다. 형식이 다르면 None -
+    파일 mtime으로 추측하지 않는다."""
+
+    match = _TIMESTAMP.match(project_id or "")
+
+    if not match:
+        return None
+
+    try:
+        stamp = datetime.strptime(
+            f"{match.group(1)}{match.group(2)}", "%Y%m%d%H%M%S",
+        )
+    except ValueError:
+        return None
+
+    return stamp.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def queue(root: str, store_path: str, running=None) -> list:
+    """
+    프로젝트 목록과 각각의 상태. 순수 읽기입니다.
+
+    없는 값은 None으로 둔다. 0이나 빈 문자열을 넣으면 화면이 그것을
+    값으로 읽는다 - "Unknown"이라고 쓰는 것은 화면의 일이다.
+    """
+
+    if not os.path.isdir(root):
+        return []
+
+    stored = load_store(store_path)
+    running = set(running or ())
+
+    rows = []
+
+    for name in sorted(os.listdir(root), reverse=True):
+        path = os.path.join(root, name)
+
+        if not os.path.isdir(path):
+            continue
+
+        meta = _load(os.path.join(path, "project.json"))
+
+        if meta is None:
+            continue
+
+        script = _load(os.path.join(path, "script.json")) or {}
+        report = _load(os.path.join(path, "quality_report.json")) or {}
+
+        evaluation = report.get("ai_quality_evaluation") or {}
+        checks = (report.get("technical_validation") or {}).get("checks") or {}
+        duration = (checks.get("video_duration") or {}).get("duration_seconds")
+
+        failed = _failed_scenes(path)
+
+        rows.append({
+            "project_id": name,
+            "topic": meta.get("topic"),
+            "title": script.get("title"),
+            "channel": meta.get("channel"),
+            "created_at": _created_at(name),
+            "duration": duration,
+            "quality": (evaluation.get("scores") or {}).get("overall_quality"),
+            "scene_count": len(script.get("scenes") or []),
+            "failed_scenes": failed,
+            "has_video": os.path.exists(
+                os.path.join(path, "video", "final_short.mp4"),
+            ),
+            "status": status_for(
+                path, stored.get(name), name in running,
+            ),
+            "approved_at": (stored.get(name) or {}).get("approved_at"),
+        })
+
+    return rows
+
+
+def filter_rows(rows: list, status: str) -> list:
+    """상태로 거른다. 모르는 값은 조용히 전체를 돌려주지 않고 거부한다."""
+
+    if status in (None, "", "all"):
+        return list(rows or [])
+
+    if status not in STATUSES:
+        raise ValueError(
+            f"알 수 없는 상태입니다: {status!r}. "
+            f"사용 가능한 값: {['all'] + list(STATUSES)}"
+        )
+
+    return [row for row in (rows or []) if row.get("status") == status]

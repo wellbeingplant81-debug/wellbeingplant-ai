@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Production Queue — AI 영상제작소</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161b22; --panel2:#1c2430; --line:#2a3240;
+  --text:#e6edf3; --dim:#8b98a9; --accent:#4c9aff; --ok:#3fb950;
+  --warn:#d29922; --bad:#f85149; --purple:#a371f7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.55 "Segoe UI","Malgun Gothic",system-ui,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 18px;
+  border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:16px;margin:0;font-weight:650}
+header .tag{font-size:11px;color:var(--dim);border:1px solid var(--line);
+  padding:2px 8px;border-radius:99px}
+a{color:var(--accent);text-decoration:none;font-size:12px}
+.wrap{padding:14px;max-width:1500px}
+.panel{background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:14px;margin-bottom:12px}
+.panel h2{font-size:12px;margin:0 0 10px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.8px}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.f{padding:6px 13px;border-radius:99px;border:1px solid var(--line);
+  color:var(--dim);cursor:pointer;font-size:13px}
+.f.on{color:var(--text);border-color:var(--accent);background:#12243d}
+.f b{color:var(--text);margin-left:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--dim);font-weight:500;padding:8px 10px;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid #1e2530;vertical-align:middle}
+tr:hover td{background:#1a212c}
+.st{font-size:11px;padding:3px 10px;border-radius:99px;white-space:nowrap;
+  border:1px solid var(--line);color:var(--dim)}
+.st.draft{color:var(--dim)}
+.st.generating{color:var(--accent);border-color:#1d3557}
+.st.inspection{color:var(--text)}
+.st.needs_regeneration{color:var(--warn);border-color:#4a3a1a}
+.st.approved{color:var(--ok);border-color:#1d4429}
+.st.published{color:var(--purple);border-color:#3a2a5c}
+.unknown{color:var(--warn);font-style:italic}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+button{background:var(--accent);color:#04101f;border:0;border-radius:6px;
+  padding:5px 11px;font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+button.ghost{background:transparent;color:var(--dim);
+  border:1px solid var(--line);font-weight:500}
+.ready{color:var(--ok);font-size:11.5px}
+.na-note{background:#231c0d;border:1px solid #4a3a1a;color:#d29922;
+  border-radius:7px;padding:10px 12px;font-size:12.5px;margin-top:10px}
+.muted{color:var(--dim);font-size:12px}
+.acts{display:flex;gap:6px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<header>
+  <h1>Production Queue</h1>
+  <a href="/studio">Studio</a>
+  <a href="/studio/replay">Replay Viewer</a>
+  <span class="tag" id="total">—</span>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>필터</h2>
+    <div class="filters" id="filters"></div>
+  </div>
+
+  <div class="panel">
+    <h2>프로젝트</h2>
+    <div id="table"></div>
+    <div class="na-note" id="uploadNote" style="display:none">
+      업로드 경로가 아직 없습니다
+      (<code>app/providers/youtube_provider.py</code>가 0바이트).
+      승인된 프로젝트는 "Ready for Upload"까지만 갑니다 — Published
+      상태에 도달할 방법이 없어 그 필터는 항상 비어 있습니다.
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let current = "all", data = null;
+
+const ORDER = ["all","draft","generating","inspection",
+               "needs_regeneration","approved","published"];
+
+function unknown(v, fmt){
+  return (v===null || v===undefined) ? '<span class="unknown">Unknown</span>'
+    : (fmt ? fmt(v) : v);
+}
+
+function renderFilters(d){
+  $("filters").innerHTML = ORDER.map(k=>{
+    const label = k==="all" ? "All" : (d.labels[k] || k);
+    const n = k==="all" ? d.total : (d.counts[k] ?? 0);
+    return `<div class="f ${k===current?"on":""}" onclick="pick('${k}')">
+      ${label}<b>${n}</b></div>`;
+  }).join("");
+}
+
+function renderTable(d){
+  if(!d.rows.length){
+    $("table").innerHTML = `<p class="muted">이 상태의 프로젝트가 없습니다.</p>`;
+    return;
+  }
+  $("table").innerHTML = `<table>
+    <tr><th>Project</th><th>Topic</th><th>Created</th>
+      <th class="num">Duration</th><th class="num">Quality</th>
+      <th>Status</th><th></th></tr>
+    ${d.rows.map(r=>`
+      <tr>
+        <td><a href="/studio?project=${r.project_id}">${r.project_id}</a>
+          ${r.title?`<div class="muted">${r.title}</div>`:""}</td>
+        <td>${unknown(r.topic)}</td>
+        <td>${unknown(r.created_at)}</td>
+        <td class="num">${unknown(r.duration, v=>v.toFixed(1)+"s")}</td>
+        <td class="num">${unknown(r.quality)}</td>
+        <td><span class="st ${r.status}">${d.labels[r.status]}</span>
+          ${r.status==="needs_regeneration"
+            ? `<div class="muted">scene ${r.failed_scenes.join(", ")}</div>`:""}
+          ${r.status==="approved"
+            ? `<div class="ready">Ready for Upload</div>`:""}</td>
+        <td><div class="acts">
+          <button class="ghost" onclick="open_('${r.project_id}')">열기</button>
+          ${r.status==="approved"
+            ? `<button class="ghost" onclick="unapprove('${r.project_id}')">승인 취소</button>`
+            : (r.has_video
+                ? `<button onclick="approve('${r.project_id}')">승인</button>`
+                : "")}
+        </div></td>
+      </tr>`).join("")}
+  </table>`;
+}
+
+function open_(id){ location.href = `/studio?project=${id}`; }
+
+async function approve(id){
+  await fetch(`/studio/api/projects/${id}/approve`, {method:"POST"});
+  load();
+}
+async function unapprove(id){
+  await fetch(`/studio/api/projects/${id}/unapprove`, {method:"POST"});
+  load();
+}
+
+async function load(){
+  const r = await fetch(`/studio/api/queue?status=${current}`);
+  if(!r.ok){ $("table").innerHTML =
+    '<p class="muted">불러오지 못했습니다.</p>'; return; }
+  data = await r.json();
+  $("total").textContent = `${data.total}개 프로젝트`;
+  renderFilters(data);
+  renderTable(data);
+  $("uploadNote").style.display = data.upload_available ? "none" : "block";
+}
+
+function pick(k){
+  current = k;
+  // 새로고침을 넘어 살아남게 - 승인은 서버에, 보고 있던 필터는 URL에.
+  history.replaceState(null, "", `?status=${k}`);
+  load();
+}
+
+current = new URLSearchParams(location.search).get("status") || "all";
+load();
+</script>
+</body>
+</html>

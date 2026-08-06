@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from app.services import (
     project_service, studio_jobs, studio_regeneration, studio_replay,
-    studio_service,
+    studio_service, studio_workflow,
 )
 from app.tools import asset_dataset
 
@@ -33,6 +33,11 @@ _STATIC = os.path.join(
 
 _PAGE = os.path.join(_STATIC, "studio.html")
 _REPLAY_PAGE = os.path.join(_STATIC, "replay.html")
+_QUEUE_PAGE = os.path.join(_STATIC, "queue.html")
+
+# Sprint84 - 사람이 내린 결정만 여기 쌓인다. 프로젝트 디렉터리
+# 밖이라 생산 산출물은 손대지 않는다.
+_WORKFLOW_STORE = None
 
 
 class GenerateRequest(BaseModel):
@@ -65,6 +70,86 @@ def studio_page():
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="studio.html이 없습니다.")
+
+
+def _workflow_store() -> str:
+    from app.pipeline.pipeline import DATASET_ROOT
+
+    return os.path.join(
+        os.path.dirname(DATASET_ROOT), ".workflow",
+        studio_workflow.STORE_FILENAME,
+    )
+
+
+def _running_projects() -> set:
+    """지금 생성/재생성이 돌고 있는 프로젝트."""
+
+    return {
+        job["project_id"]
+        for job in studio_jobs.recent(50)
+        if job.get("state") == "running" and job.get("project_id")
+    }
+
+
+@router.get("/queue", response_class=HTMLResponse)
+def queue_page():
+    """Production Queue 화면."""
+
+    try:
+        with open(_QUEUE_PAGE, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="queue.html이 없습니다.")
+
+
+@router.get("/api/queue")
+def queue(status: str = "all"):
+    rows = studio_workflow.queue(
+        project_service.OUTPUT_ROOT, _workflow_store(), _running_projects(),
+    )
+
+    try:
+        filtered = studio_workflow.filter_rows(rows, status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    counts = {key: 0 for key in studio_workflow.STATUSES}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+
+    return {
+        "status": status,
+        "labels": studio_workflow.LABELS,
+        "counts": counts,
+        "total": len(rows),
+        "rows": filtered,
+        # 업로드 경로가 없으므로 Published에 도달할 방법이 없다.
+        "upload_available": False,
+    }
+
+
+@router.post("/api/projects/{project_id}/approve")
+def approve(project_id: str):
+    """승인은 workflow 상태만 바꾼다. 엔진 산출물은 그대로다."""
+
+    _project_path(project_id)
+
+    try:
+        return studio_workflow.approve(project_id, _workflow_store())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/projects/{project_id}/unapprove")
+def unapprove(project_id: str):
+    _project_path(project_id)
+
+    try:
+        studio_workflow.unapprove(project_id, _workflow_store())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {"ok": True}
 
 
 @router.get("/replay", response_class=HTMLResponse)

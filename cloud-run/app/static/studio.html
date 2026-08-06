@@ -98,6 +98,10 @@ a{color:var(--accent)}
   <h1>AI 영상제작소</h1>
   <span class="tag">Studio v1</span>
   <span class="tag" id="dsTag">dataset —</span>
+  <a href="/studio/queue" style="color:#4c9aff;font-size:12px;
+     text-decoration:none">Production Queue</a>
+  <a href="/studio/replay" style="color:#4c9aff;font-size:12px;
+     text-decoration:none">Replay Viewer</a>
 </header>
 
 <div class="layout">
@@ -470,8 +474,15 @@ async function pollJob(){
 }
 
 renderStages(null);
-loadProjects();
 loadDataset();
+
+// Sprint84 - Queue에서 프로젝트를 직접 열 수 있어야 한다.
+// 목록이 먼저 그려진 뒤에 열어야 선택 표시가 맞는다.
+(async () => {
+  await loadProjects();
+  const wanted = new URLSearchParams(location.search).get("project");
+  if(wanted){ await openProject(wanted); }
+})();
 </script>
 </body>
 </html>

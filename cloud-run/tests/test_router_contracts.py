@@ -91,6 +91,17 @@ ENDPOINTS = [
     ("GET", "/studio/api/replay", None, []),
     ("GET", "/studio/api/projects/{project_id}/replay", None, [],
      f"/studio/api/projects/{PROJECT_ID}/replay"),
+
+    # Sprint84 - Production Queue. 승인은 workflow 상태만 바꾸므로
+    # 엔진을 부르지 않는다.
+    ("GET", "/studio/queue", None, []),
+    ("GET", "/studio/api/queue", None, []),
+    ("POST", "/studio/api/projects/{project_id}/approve", None,
+     ["app.routers.studio.studio_workflow.approve"],
+     f"/studio/api/projects/{PROJECT_ID}/approve"),
+    ("POST", "/studio/api/projects/{project_id}/unapprove", None,
+     ["app.routers.studio.studio_workflow.unapprove"],
+     f"/studio/api/projects/{PROJECT_ID}/unapprove"),
 ]
 
 
