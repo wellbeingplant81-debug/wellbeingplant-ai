@@ -161,3 +161,18 @@ ENABLE_VIRAL_WRITER = False
 # 비용: 인물 scene이 Pexels(무료)에서 Imagen으로 옮겨가므로 영상당
 # Imagen 호출이 3~4회 늘어난다. 그만한 값을 한다는 것이 위 수치다.
 ENABLE_CHARACTER_CONSISTENCY = True
+
+# Sprint73 - Intelligent Regeneration Engine 비용 상한.
+#
+# 재생성 루프는 원래 재시도 횟수(QUALITY_MAX_RETRY)로만 제한됐다.
+# scene 6개짜리 영상이면 최대 18번의 Imagen 호출이 가능하고, 그 사이
+# 사이클마다 Gemini 평가도 한 번씩 붙는다.
+#
+# 이 값은 영상 하나에 쓸 수 있는 재생성 이미지 생성의 총 횟수다.
+# 6으로 둔 것은 "한 영상의 scene 수만큼"이라는 감각 - 평균적으로
+# 문제 있는 scene을 한 번씩 다시 그릴 만큼이고, 그 이상은 개선이
+# 확인될 때만 의미가 있는데 그 확인은 MIN_IMPROVEMENT가 따로 한다.
+#
+# 예산이 남아도 품질이 오르지 않으면 멈추고, 품질이 올라도 예산이
+# 없으면 멈춘다. 둘 다 로그에 사유가 남는다.
+REGENERATION_MAX_IMAGE_CALLS = 6
