@@ -234,14 +234,20 @@ class TestTheFlagIsTheOuterGate(unittest.TestCase):
         loader.assert_not_called()
         svc.assert_not_called()
 
-    def test_the_shipped_default_is_off(self):
-        """Evaluation Policy v3 - Production Flag를 True로 올리려면
-        Level 3 Release Gate가 필요하다. 실제 업로드는 아직 한 번도
-        검증되지 않았다."""
+    def test_the_flag_is_on_only_because_it_was_actually_validated(self):
+        """Sprint91에는 "배포 기본값은 꺼져 있어야 한다"였다. 실제
+        업로드가 한 번도 검증되지 않았기 때문이다.
+
+        PV-02(2026-08-06)에서 웰빙플랜트lab 채널에 실제로 올렸다
+        (meK3LBoNroo, private). 그래서 켰다.
+
+        켜져 있다는 것이 "아무거나 올라간다"는 뜻이 아니라는 것은
+        TestTheGateOrder가 지킨다 - 승인과 로그인이라는 문이 더 있다.
+        """
 
         from app import config
 
-        self.assertFalse(config.ENABLE_YOUTUBE_UPLOAD)
+        self.assertTrue(config.ENABLE_YOUTUBE_UPLOAD)
 
 
 class TestUploadMediaCarriesTheRealFailure(unittest.TestCase):

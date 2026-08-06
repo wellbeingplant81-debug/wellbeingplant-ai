@@ -86,8 +86,24 @@ class TestTheGateOrder(_Case):
     """플래그가 먼저고, 승인이 그다음이다. 앞에서 막히면 뒤쪽 코드는
     실행되지 않는다."""
 
-    def test_the_flag_is_off_by_default(self):
-        self.assertFalse(config.ENABLE_YOUTUBE_UPLOAD)
+    def test_the_flag_is_on_after_pv02_validation(self):
+        """PV-02에서 실제 업로드를 확인하고 켰다. 이 플래그가 켜져
+        있어도 승인 없이는 올라가지 않는다는 것이 이 클래스의 나머지
+        테스트다."""
+
+        self.assertTrue(config.ENABLE_YOUTUBE_UPLOAD)
+
+    def test_an_unapproved_project_is_still_refused_with_the_flag_on(self):
+        """플래그를 켠 것이 승인 문까지 연 것은 아니다. 파이프라인이
+        영상을 다 만들었다는 사실만으로는 올라가지 않는다."""
+
+        path = _project(self.root, "flagon")
+
+        with patch.object(step_service, "run_youtube_upload_step") as step:
+            result = studio_upload.run_upload(path, self.store)
+
+        step.assert_not_called()
+        self.assertEqual(result["outcome"], studio_upload.SKIPPED)
 
     def test_a_disabled_flag_skips_before_anything_else(self):
         path = _project(self.root, "p1", self.store)

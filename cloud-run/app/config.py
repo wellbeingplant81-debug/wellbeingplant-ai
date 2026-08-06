@@ -214,6 +214,16 @@ BEST_OF_N_MAX_CANDIDATES = 12
 # 플래그를 먼저 본다. False면 자격증명 체인을 아예 건드리지 않는다 -
 # 실제 토큰이 있어도 마찬가지다.
 #
-# 이 저장소에서 실제 업로드는 아직 한 번도 검증되지 않았다. Evaluation
-# Policy v3에 따라 True로 올리려면 Level 3 Release Gate가 필요하다.
-ENABLE_YOUTUBE_UPLOAD = False
+# PV-02(2026-08-06)에서 실환경 검증을 마치고 True로 올렸다. 웰빙플랜트lab
+# 채널(UCQxaJ3bq-mtNCj6WAZk5njQ)에 실제로 올라간 영상이 근거다 -
+# meK3LBoNroo, 44초, 커스텀 썸네일 적용, privacyStatus=private.
+#
+# 켜져 있어도 아무 영상이나 올라가지 않는다. 문이 둘 더 있다 - 사람이
+# Queue에서 승인해야 하고(studio_upload), 로그인이 살아 있어야 한다
+# (oauth_manager.check_health). 파이프라인이 끝나는 것만으로는 올라가지
+# 않는다.
+#
+# 공개 상태는 항상 private다. privacy_status를 정해 주는 곳이
+# publish_package.json뿐인데 이 저장소에는 그것을 만드는 단계가 없어서,
+# youtube_upload_provider의 안전한 기본값이 그대로 쓰인다.
+ENABLE_YOUTUBE_UPLOAD = True
