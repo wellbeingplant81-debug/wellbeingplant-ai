@@ -165,9 +165,12 @@ class TestTheImportEndpoint(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(project_service.OUTPUT_ROOT)), before)
 
 
-class TestThePipelineStillOverwritesAnyPastedScript(unittest.TestCase):
-    """이번 스프린트가 붙여넣기를 생성에 연결하지 못한 이유다.
-    화면이 그 사실을 숨기지 않는지까지 확인한다."""
+class TestStep01StillOnlyGenerates(unittest.TestCase):
+    """Sprint105에는 "붙여넣기를 생성에 연결하지 못한 이유"였다.
+    Sprint106의 Resolver와 Sprint107의 프로젝트 생성이 그 길을 열었다.
+
+    step01 자체는 그대로다 - 여전히 기존 script.json을 읽지 않고
+    항상 새로 만든다. 달라진 것은 그 앞에 Resolver가 섰다는 것뿐이다."""
 
     def test_step01_never_reads_an_existing_script(self):
         from app.steps import step01_script
@@ -184,10 +187,12 @@ class TestThePipelineStillOverwritesAnyPastedScript(unittest.TestCase):
 
         self.assertEqual(reads, [])
 
-    def test_the_screen_says_import_is_not_wired_yet(self):
+    def test_the_screen_explains_the_three_steps(self):
         page = _page()
 
-        self.assertIn("아직 영상 생성에 연결되지 않았습니다", page)
+        self.assertIn("가져오기", page)
+        self.assertIn("프로젝트 생성", page)
+        self.assertIn("영상 생성", page)
 
 
 class TestTheScreen(unittest.TestCase):
@@ -269,14 +274,20 @@ class TestNothingElseWasTouched(unittest.TestCase):
 
         self.assertEqual(len(default_registry()), 0)
 
-    def test_the_generate_endpoint_is_unchanged(self):
-        """기존 Auto 생성 경로에 모드 인자가 끼어들지 않았다."""
+    def test_the_generate_endpoint_gained_only_an_optional_project(self):
+        """Sprint105에는 "모드 인자가 끼어들지 않았다"였다. Sprint107이
+        미리 만들어 둔 프로젝트를 쓰게 하면서 선택 인자 하나를 더했다.
+
+        지켜야 할 경계는 그대로다 - 모드가 끼어들지 않았고, 주지
+        않으면 예전과 완전히 같다."""
 
         from app.routers.studio import GenerateRequest
 
         self.assertEqual(
-            sorted(GenerateRequest.model_fields), ["channel", "topic"],
+            sorted(GenerateRequest.model_fields),
+            ["channel", "project_id", "topic"],
         )
+        self.assertIsNone(GenerateRequest.model_fields["project_id"].default)
 
 
 if __name__ == "__main__":

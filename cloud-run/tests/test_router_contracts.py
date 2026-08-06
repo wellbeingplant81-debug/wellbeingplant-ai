@@ -108,6 +108,11 @@ ENDPOINTS = [
      ["app.routers.studio.studio_workflow.approve"],
      f"/studio/api/projects/{PROJECT_ID}/approve"),
     ("GET", "/studio/api/production/modes", None, []),
+    # Sprint107 - 프로젝트를 실제로 만드는 엔드포인트다. create_project를
+    # 패치해 디스크에 남기지 않는다 - 계약만 확인한다.
+    ("POST", "/studio/api/production/project",
+     {"raw": "{\"title\":\"t\",\"scenes\":[{\"narration\":\"n\"}]}"},
+     ["app.production.imported_project.create_from_script"]),
     ("POST", "/studio/api/production/import",
      {"raw": "{\"title\":\"t\",\"scenes\":[{\"narration\":\"n\"}]}"},
      []),

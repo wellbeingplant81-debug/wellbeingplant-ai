@@ -105,16 +105,20 @@ def _new_job(job_id, topic, channel, project_id=None, project_path=None):
     }
 
 
-def start(topic: str, channel: str = "wellbeing") -> str:
-    """생성을 시작하고 job_id를 돌려준다."""
+def start(topic: str, channel: str = "wellbeing",
+          project_id: str = None) -> str:
+    """생성을 시작하고 job_id를 돌려준다.
+
+    Sprint107 - project_id를 주면 미리 만들어 둔 프로젝트로 만든다.
+    주지 않으면 예전과 같다."""
 
     job_id = uuid.uuid4().hex[:12]
 
     with _lock:
-        _jobs[job_id] = _new_job(job_id, topic, channel)
+        _jobs[job_id] = _new_job(job_id, topic, channel, project_id)
 
     thread = threading.Thread(
-        target=_run, args=(job_id, topic, channel), daemon=True,
+        target=_run, args=(job_id, topic, channel, project_id), daemon=True,
     )
     thread.start()
 
@@ -178,7 +182,8 @@ def _run_regeneration(job_id: str, project_path: str, scenes) -> None:
         sys.stdout = original
 
 
-def _run(job_id: str, topic: str, channel: str) -> None:
+def _run(job_id: str, topic: str, channel: str,
+         project_id: str = None) -> None:
     import sys
 
     # 늦은 import - 이 모듈을 읽는 것만으로 파이프라인 전체가 딸려
@@ -189,7 +194,9 @@ def _run(job_id: str, topic: str, channel: str) -> None:
     sys.stdout = _Tee(original, job_id)
 
     try:
-        result = generate_short_video(topic=topic, channel=channel)
+        result = generate_short_video(
+            topic=topic, channel=channel, project_id=project_id,
+        )
 
         with _lock:
             job = _jobs.get(job_id)

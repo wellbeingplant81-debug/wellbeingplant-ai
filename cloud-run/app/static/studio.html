@@ -128,8 +128,8 @@ a{color:var(--accent)}
       <h2>제작 방식</h2>
       <div id="modes" class="muted">불러오는 중…</div>
       <div class="na-note" id="modeNote" style="margin-top:10px;display:none">
-        붙여넣기·직접 작성은 아직 영상 생성에 연결되지 않았습니다.
-        읽어서 확인하는 것까지만 됩니다 — 파이프라인 연결은 다음 단계입니다.
+        붙여넣기·직접 작성은 <b>가져오기 → 프로젝트 생성 → 영상 생성</b> 순서입니다.
+        대본은 준 것을 그대로 쓰고 다시 만들지 않습니다.
       </div>
     </div>
 
@@ -496,6 +496,9 @@ async function oauthAction(action){
 }
 
 let productionMode = null;
+// Sprint107 - 붙여넣기/직접 작성으로 만들어 둔 프로젝트.
+// 있으면 기존 생성 버튼이 그것으로 만든다.
+let preparedProjectId = null;
 
 const MODE_ICON = {
   auto_premium: "🤖", auto_standard: "⚖️", auto_economy: "💰",
@@ -563,6 +566,13 @@ function pickMode(mode){
     el.classList.toggle("on", el.dataset.mode === mode));
   const manualish = (mode === "assisted" || mode === "manual");
   $("modeNote").style.display = manualish ? "block" : "none";
+
+  // Auto로 돌아가면 준비된 대본을 버린다 - Auto는 대본부터 새로
+  // 만드는 방식이고, 준비된 것이 남아 있으면 고른 것과 다르게 돈다.
+  if(!manualish && preparedProjectId){
+    preparedProjectId = null;
+    $("jobState").textContent = "대기 중";
+  }
 }
 
 function loadManualFile(input){
@@ -588,13 +598,53 @@ async function runImport(sourceId){
     return;
   }
 
+  const source = sourceId === "importRaw" ? "import" : "manual";
+
   box.innerHTML = `<div class="preview">
     <div><b>${d.title}</b></div>
     ${d.hook?`<div class="muted">${d.hook}</div>`:""}
     <div class="muted" style="margin-top:6px">scene ${d.scene_count}개</div>
     ${d.scenes.slice(0,6).map(s=>
       `<div class="muted" style="margin-top:4px">${s.scene}. ${s.narration}</div>`).join("")}
+    <div class="rowbtns">
+      <button class="sm" onclick="createFromImport('${sourceId}','${source}')">
+        프로젝트 생성</button>
+    </div>
   </div>`;
+}
+
+async function createFromImport(sourceId, source){
+  const box = sourceId === "importRaw" ? $("importPreview") : $("manualPreview");
+
+  const r = await fetch("/studio/api/production/project", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      raw: $(sourceId).value, topic: $("topic").value.trim(),
+      channel: $("channel").value, source,
+    })});
+  const d = await r.json();
+
+  if(!r.ok){
+    box.innerHTML = `<div class="preview err">${d.detail}</div>`;
+    return;
+  }
+
+  // 이 프로젝트로 만들라고 기존 생성 버튼에 알려 준다. 버튼을 새로
+  // 만들지 않는다 - 같은 버튼이 project_id를 들고 갈 뿐이다.
+  preparedProjectId = d.project_id;
+
+  box.innerHTML = `<div class="preview">
+    <div><b>${d.title}</b></div>
+    <div class="muted" style="margin-top:4px">
+      프로젝트 ${d.project_id} · scene ${d.scene_count}개 · 대본 ${d.source}</div>
+    <div class="muted" style="margin-top:6px">
+      아래 <b>영상 생성</b>을 누르면 이 대본으로 만듭니다.
+      대본은 다시 만들지 않습니다.</div>
+  </div>`;
+
+  await loadProjects();
+  await openProject(d.project_id);
+  $("jobState").textContent = `대기 중 · 준비된 대본 ${d.project_id}`;
 }
 
 async function loadModes(){
@@ -629,7 +679,8 @@ $("go").onclick = async () => {
   $("thumbBox").innerHTML = '<span class="muted">아직 썸네일이 없습니다.</span>';
   const r = await fetch("/studio/api/jobs", {method:"POST",
     headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({topic, channel: $("channel").value})});
+    body: JSON.stringify({topic, channel: $("channel").value,
+                          project_id: preparedProjectId})});
   const d = await r.json();
   jobId = d.job_id; $("jobState").textContent = "생성 중…";
   if(poll) clearInterval(poll);
@@ -652,6 +703,7 @@ async function pollJob(){
     clearInterval(poll); poll = null;
     $("go").disabled = false;
     $("jobState").textContent = d.state === "done" ? "완료" : ("실패: " + (d.error||""));
+    preparedProjectId = null;
     if(d.project_id){ await loadProjects(); await openProject(d.project_id); }
     else if(currentProject){ await openProject(currentProject); }
     await loadDataset();

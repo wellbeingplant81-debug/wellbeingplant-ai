@@ -62,8 +62,38 @@ def script_path(project_path: str) -> str:
     return os.path.join(project_path, SCRIPT_FILENAME)
 
 
+# Sprint107 - 프로젝트를 만들 때 적어 두는 출처. project.json에 산다.
+SOURCE_FIELD = "production_source"
+
+
+def source_from_metadata(project_path: str):
+    """project.json에 적힌 출처. 없으면 None.
+
+    적혀 있으면 그것이 가장 확실한 근거다 - 프로젝트를 만든 쪽이
+    직접 남긴 것이므로 디스크 상태를 보고 추측할 필요가 없다."""
+
+    try:
+        with open(
+            os.path.join(project_path, "project.json"), "r", encoding="utf-8",
+        ) as f:
+            metadata = json.load(f)
+    except Exception:
+        return None
+
+    value = metadata.get(SOURCE_FIELD) if isinstance(metadata, dict) else None
+
+    return value if value in SOURCES else None
+
+
 def detect_source(project_path: str) -> str:
-    """무엇으로 볼 것인가. 순수 읽기입니다."""
+    """무엇으로 볼 것인가. 순수 읽기입니다.
+
+    적혀 있으면 그것을 쓰고, 없으면 디스크 상태로 판단한다."""
+
+    recorded = source_from_metadata(project_path)
+
+    if recorded is not None:
+        return recorded
 
     return IMPORT if os.path.exists(script_path(project_path)) else AUTO
 

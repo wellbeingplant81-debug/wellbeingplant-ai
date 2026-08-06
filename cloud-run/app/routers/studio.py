@@ -44,6 +44,9 @@ _WORKFLOW_STORE = None
 class GenerateRequest(BaseModel):
     topic: str
     channel: str = "wellbeing"
+    # Sprint107 - 붙여넣기/직접 작성으로 미리 만들어 둔 프로젝트가
+    # 있으면 그것으로 만든다. 없으면(기본값) 예전과 똑같이 새로 만든다.
+    project_id: str = None
 
 
 class ChatImportRequest(BaseModel):
@@ -51,6 +54,13 @@ class ChatImportRequest(BaseModel):
     raw: str
     # 제목이 없는 붙여넣기를 메울 때만 쓴다.
     topic: str = ""
+
+
+class ImportProjectRequest(ChatImportRequest):
+    channel: str = "wellbeing"
+    # import(붙여넣기) 또는 manual(직접 작성). 읽는 방법은 같고
+    # 기록으로만 남는다.
+    source: str = "import"
 
 
 class RegenerateRequest(BaseModel):
@@ -255,6 +265,40 @@ def production_import(request: ChatImportRequest):
     }
 
 
+@router.post("/api/production/project")
+def production_create_project(request: ImportProjectRequest):
+    """
+    붙여넣은 대본으로 프로젝트를 만든다.
+
+    여기서 영상을 만들지 않는다 - 만드는 것은 기존 "영상 생성"
+    버튼이고, 그 버튼이 이 project_id를 들고 간다. Generate 경로를
+    새로 만들지 않는다.
+    """
+
+    from app.production.chat_script_parser import ChatImportError
+    from app.production.imported_project import create_from_script
+    from app.production.stage_request import StageRequest
+
+    provider = _registry().get("script", "chat_import")
+
+    try:
+        script = provider.import_content(
+            request.raw, StageRequest(topic=request.topic),
+        )
+    except ChatImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        return create_from_script(
+            script,
+            request.topic or script["title"],
+            request.channel,
+            request.source,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/api/projects/{project_id}/upload")
 def upload(project_id: str):
     """
@@ -345,8 +389,12 @@ def create_job(request: GenerateRequest):
     if not request.topic or not request.topic.strip():
         raise HTTPException(status_code=400, detail="주제를 입력하십시오.")
 
+    # Sprint107 - project_id가 오면 미리 만들어 둔 프로젝트로 만든다.
+    # 없으면 예전과 똑같이 새 프로젝트를 만든다. 버튼도 엔드포인트도
+    # 하나 그대로다.
     return {"job_id": studio_jobs.start(request.topic.strip(),
-                                        request.channel)}
+                                        request.channel,
+                                        request.project_id)}
 
 
 @router.get("/api/jobs/{job_id}")
