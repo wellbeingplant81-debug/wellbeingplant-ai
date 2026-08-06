@@ -461,8 +461,15 @@ class TestNothingWasWiredIn(unittest.TestCase):
         app_root = pathlib.Path(stages.__file__).parent.parent
         callers = []
 
+        production_root = pathlib.Path(stages.__file__).parent
+
         for path in app_root.rglob("*.py"):
-            if "__pycache__" in str(path) or path.parent.name == "production":
+            if "__pycache__" in str(path):
+                continue
+            # 패키지 안에서 서로를 부르는 것은 당연하다. Sprint103이
+            # app/production/providers/ 하위 패키지를 더했으므로 바로
+            # 위 디렉터리 이름만 보면 걸린다 - 경로로 판단한다.
+            if production_root in path.parents:
                 continue
             try:
                 tree = ast.parse(path.read_text(encoding="utf-8"))

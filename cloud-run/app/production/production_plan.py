@@ -125,7 +125,7 @@ class ProductionPlan:
         unknown으로 남는다 - CostBreakdown이 그것을 숨기지 않는다.
         """
 
-        registry = registry or default_registry()
+        registry = default_registry() if registry is None else registry
         breakdown = CostBreakdown()
 
         for stage in stages.STAGES:
@@ -197,7 +197,7 @@ def build_automatic_plan(
             "고르는 방식이라 자동으로 계획을 만들 수 없습니다."
         )
 
-    registry = registry or default_registry()
+    registry = default_registry() if registry is None else registry
     plan = ProductionPlan(mode=mode)
 
     for stage in stages.STAGES:
