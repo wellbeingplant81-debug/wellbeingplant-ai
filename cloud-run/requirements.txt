@@ -59,3 +59,14 @@ urllib3==2.7.0
 uvicorn==0.49.0
 watchfiles==1.2.0
 websockets==16.0
+
+# Sprint99 (Epic 51) - Cloud Storage Layer.
+#
+# Sprint89에서 "S3, 무관"이라며 제외했던 것들이다. YouTube 범위에서는
+# 옳은 판단이었지만, Instagram Graph API는 로컬 파일을 받지 않고 공개
+# URL만 받는다 - 그 URL을 만드는 S3CompatibleStorageProvider가 이것을
+# 쓴다(실제 성공 사례가 Cloudflare R2였다).
+boto3==1.43.65
+botocore==1.43.65
+s3transfer==0.19.2
+jmespath==1.1.0
