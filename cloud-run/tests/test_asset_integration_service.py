@@ -144,7 +144,7 @@ class TestAssetIntegrationService(unittest.TestCase):
 
     # --- AI fallback when no candidates exist ---
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_no_candidates_falls_back_to_ai_image(
@@ -242,7 +242,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             outcome="success",
         )
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_records_feedback_as_fallback_when_ai_used(
         self, mock_get_candidates, mock_generate_image,
@@ -297,7 +297,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             outcome="success",
         )
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_prefer_ai_true_still_uses_pexels_when_quality_is_high_enough(
@@ -321,7 +321,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             outcome="success",
         )
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_prefer_ai_true_uses_ai_when_pexels_quality_is_too_low(
@@ -351,7 +351,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.assertEqual(kwargs["outcome"], "ai_priority")
         self.assertEqual(kwargs["provider"], "ai_image")
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_prefer_ai_true_with_no_candidates_is_still_reported_as_fallback(
         self, mock_get_candidates, mock_generate_image,
@@ -374,7 +374,7 @@ class TestAssetIntegrationService(unittest.TestCase):
 
     # --- Sprint60: Smart Visual Selection v1 (visual_type hard branch) ---
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_visual_type_real_uses_pexels_first(
@@ -389,7 +389,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.assertEqual(result["provider"], "pexels_image")
         mock_generate_image.assert_not_called()
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_visual_type_real_falls_back_to_ai_when_no_candidates(
         self, mock_get_candidates, mock_generate_image,
@@ -410,7 +410,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         _, kwargs = self.mock_record.call_args
         self.assertEqual(kwargs["outcome"], "fallback")
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_visual_type_real_falls_back_to_ai_when_download_fails(
@@ -432,7 +432,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.assertEqual(result["provider"], "ai_image")
 
     @patch("app.services.asset_integration_service.get_candidates")
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     def test_visual_type_ai_uses_imagen_first(
         self, mock_generate_image, mock_get_candidates,
     ):
@@ -453,7 +453,7 @@ class TestAssetIntegrationService(unittest.TestCase):
 
     @patch("app.services.asset_integration_service.download_candidate")
     @patch("app.services.asset_integration_service.get_candidates")
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     def test_visual_type_ai_falls_back_to_pexels_when_imagen_fails(
         self, mock_generate_image, mock_get_candidates, mock_download,
     ):
@@ -469,7 +469,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.assertEqual(kwargs["outcome"], "success")
 
     @patch("app.services.asset_integration_service.get_candidates")
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     def test_visual_type_ai_raises_when_both_imagen_and_pexels_fail(
         self, mock_generate_image, mock_get_candidates,
     ):
@@ -500,7 +500,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     # --- Sprint60 Hotfix 문제1: generate_image가 visual_type을 받아야
     # 의료 일러스트 스타일 분기(image_service.py)가 실제로 동작한다 ---
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_visual_type_ai_passes_the_medical_style_to_generate_image(
         self, mock_get_candidates, mock_generate_image,
@@ -522,7 +522,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             kwargs["image_style"], image_service.IMAGE_STYLE_MEDICAL,
         )
 
-    @patch("app.services.asset_integration_service.generate_image")
+    @patch("app.services.image_service.generate_image")
     @patch("app.services.asset_integration_service.get_candidates")
     def test_visual_type_real_fallback_passes_the_default_style(
         self, mock_get_candidates, mock_generate_image,
@@ -555,7 +555,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         mock_get_candidates.return_value = []
 
         with patch(
-            "app.services.asset_integration_service.generate_image",
+            "app.services.image_service.generate_image",
         ) as mock_generate_image:
 
             def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):

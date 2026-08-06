@@ -1,5 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app import config
+from app.services import best_of_n_service
 from app.services.asset_integration_service import integrate_asset
 from app.services.asset_mode_config import get_ai_ratio_cap
 from app.services.asset_priority_classifier import select_ai_priority_scenes
@@ -33,6 +35,17 @@ def collect_assets(
         scenes, get_ai_ratio_cap(),
     )
 
+    # Sprint74 - 후보 배분은 여기서 끝낸다. integrate_asset은 아래에서
+    # 스레드 3개로 병렬 실행되므로, 그 안에서 공유 예산을 깎으면 경쟁
+    # 상태가 되고 같은 입력이 실행마다 다른 배분을 낸다.
+    candidate_plan = best_of_n_service.plan_candidates(
+        scenes,
+        default_n=(
+            config.BEST_OF_N_CANDIDATES if config.ENABLE_BEST_OF_N else 1
+        ),
+        budget=config.BEST_OF_N_MAX_CANDIDATES,
+    )
+
     futures = []
     results = []
 
@@ -47,6 +60,7 @@ def collect_assets(
                     project_path,
                     channel,
                     prefer_ai=scene["scene"] in ai_priority_scenes,
+                    candidate_count=candidate_plan[scene["scene"]],
                 )
             )
 

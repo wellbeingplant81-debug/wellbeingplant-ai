@@ -176,3 +176,33 @@ ENABLE_CHARACTER_CONSISTENCY = True
 # 예산이 남아도 품질이 오르지 않으면 멈추고, 품질이 올라도 예산이
 # 없으면 멈춘다. 둘 다 로그에 사유가 남는다.
 REGENERATION_MAX_IMAGE_CALLS = 6
+
+# Sprint74 - Best-of-N Asset Selection Engine.
+#
+# 지금은 Imagen이 그린 첫 장을 그대로 쓴다. 그 장이 나쁘면 렌더가 끝나고
+# Gemini 평가가 나온 뒤에야 알게 되고, 거기서부터 재생성 사이클이 돈다 -
+# 이미지 한 장, 전체 평가 한 번, 그리고 영상 전체 재렌더.
+#
+# Best-of-N은 그 판단을 렌더 앞으로 당긴다. 후보를 N장 뽑아 그 자리에서
+# 고르고, 재생성은 그러고도 안 될 때만 돈다.
+#
+# 근거: 축적된 평가 53건에서 ai_image scene 점수는 평균 78.9, 표준편차
+# 24.2, 재생성 권고 20%였다. Best-of-N이 버는 것은 전적으로 그 분산인데,
+# 그 표본은 스프린트마다 설정이 다른 실행을 섞은 것이라 분산의 얼마가
+# "같은 프롬프트의 후보 사이" 것인지는 구분되지 않는다.
+#
+# False로 둔다. Production 플래그를 True로 올리는 것은 Evaluation
+# Policy v3에서 Level 3(Release Gate, arm당 5회, 통계 검정)를 요구한다.
+ENABLE_BEST_OF_N = False
+
+# scene 하나에 뽑을 후보 장수. 1이면 예전 동작 그대로다.
+BEST_OF_N_CANDIDATES = 2
+
+# 영상 하나에 쓸 수 있는 후보 이미지의 총량. scene의 첫 장도 여기
+# 포함된다 - 그것이 실제로 나가는 Imagen 호출 수이고, 비용을 볼 때
+# 필요한 숫자도 그것이기 때문이다.
+#
+# 12는 scene 6개짜리 영상에서 전부 2장씩 뽑을 수 있는 값이다. 예산이
+# 모자라면 앞 scene부터 두 번째 장을 받고, 뒤 scene은 한 장으로 간다.
+# 어느 scene도 0장이 되지는 않는다.
+BEST_OF_N_MAX_CANDIDATES = 12

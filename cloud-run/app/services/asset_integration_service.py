@@ -2,13 +2,13 @@ import os
 import subprocess
 
 from app.services import asset_feedback_service
+from app.services import best_of_n_service
 from app.services.asset_mode_config import get_pexels_quality_threshold
 from app.services.asset_priority_classifier import effective_pexels_threshold
 from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
 from app.services import image_service
 from app.services.character_consistency_engine import CHARACTER_SCENE_FIELD
-from app.services.image_service import generate_image
 from app.services.search_query_extractor import extract_search_query
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
 
@@ -41,24 +41,48 @@ def resolve_image_style(scene: dict) -> str:
 
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
-               image_style=image_service.IMAGE_STYLE_DEFAULT):
-    ai_path = generate_image(
+               image_style=image_service.IMAGE_STYLE_DEFAULT,
+               candidate_count=1, scene=None):
+    """
+    Sprint74 - Imagen을 부르는 유일한 지점. Best-of-N이 여기 붙는다.
+
+    candidate_count가 1이면 예전과 완전히 같은 경로다 - generate_image를
+    한 번 부르고 끝난다. 플래그가 꺼져 있으면 항상 1이 들어온다.
+
+    여러 장일 때는 뽑고, 고르고, 나머지를 지운다. 고른 결과는
+    selection에 담아 호출자에게 돌려준다 - 어떤 후보를 왜 골랐는지는
+    scene에 남아야 하고, 그것이 이 엔진이 실제로 무엇을 했는지 확인할
+    유일한 기록이다.
+    """
+
+    candidate_paths = best_of_n_service.generate_candidates(
         image_prompt,
         staging_path,
+        candidate_count,
         channel=channel,
         is_hook_scene=is_hook_scene,
         image_style=image_style,
     )
 
+    winner, selection = best_of_n_service.select_best(
+        candidate_paths, scene or {},
+    )
+
+    best_of_n_service.discard_losers(candidate_paths, winner)
+
     return {
         "source": "ai_image",
-        "local_path": ai_path,
+        "local_path": candidate_paths[winner],
         "metadata": {"query": extract_search_query(image_prompt)},
+        "candidate_count": len(candidate_paths),
+        "selected_candidate": winner,
+        "selection": selection,
     }
 
 
 def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
-                       image_style=image_service.IMAGE_STYLE_DEFAULT):
+                       image_style=image_service.IMAGE_STYLE_DEFAULT,
+                       scene=None):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
@@ -79,16 +103,21 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
                 f"실패, Imagen으로 폴백: {exc}"
             )
 
+    # Sprint74 - 여기 오는 것은 Pexels가 실패한 폴백 상황이다. 후보
+    # 배정(plan_candidates)은 Imagen을 먼저 보는 scene만 계산하므로,
+    # 이 경로에는 예산이 잡혀 있지 않다. 한 장으로 간다.
     return (
         _ai_result(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
+            candidate_count=1, scene=scene,
         ),
         False,
     )
 
 
 def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
-                     image_style=image_service.IMAGE_STYLE_DEFAULT):
+                     image_style=image_service.IMAGE_STYLE_DEFAULT,
+                     candidate_count=1, scene=None):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
 
@@ -102,6 +131,7 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
         return (
             _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
+                candidate_count=candidate_count, scene=scene,
             ),
             True,
         )
@@ -158,6 +188,7 @@ def integrate_asset(
     project_path: str,
     channel: str = "wellbeing",
     prefer_ai: bool = False,
+    candidate_count: int = 1,
 ) -> dict:
     """
     Sprint30 - Multi-Candidate + Scoring 기반 선택.
@@ -217,10 +248,12 @@ def integrate_asset(
     if visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
+            scene=scene,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
+            candidate_count=candidate_count, scene=scene,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
@@ -243,6 +276,7 @@ def integrate_asset(
         else:
             result = _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
+                candidate_count=candidate_count, scene=scene,
             )
 
     source = result["source"]
@@ -289,5 +323,28 @@ def integrate_asset(
     enriched["asset_type"] = asset_type
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
+
+    # Sprint74 - 후보를 여러 장 뽑은 경우에만 기록을 남긴다. 한 장이면
+    # 고른 것이 없으므로 남길 결정도 없고, 예전 scene dict와 필드가
+    # 완전히 같다.
+    if result.get("candidate_count", 1) > 1:
+        selection = result.get("selection")
+
+        enriched["candidate_count"] = result["candidate_count"]
+        enriched["selected_candidate"] = result["selected_candidate"]
+        # 세 항목의 평균. 합계가 아니라 평균인 이유는 이 프로젝트의
+        # 다른 점수가 전부 0-100이라 그래야 나란히 읽히기 때문이다.
+        enriched["candidate_scores"] = (
+            [] if selection is None else [
+                round(
+                    (score.prompt_fidelity + score.character_match
+                     + score.composition) / 3
+                )
+                for score in selection.candidates
+            ]
+        )
+        enriched["selection_reason"] = (
+            None if selection is None else selection.reason
+        )
 
     return enriched

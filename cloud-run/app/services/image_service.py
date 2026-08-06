@@ -148,6 +148,93 @@ def _resolve_style(image_style: str, channel: str, is_hook_scene: bool):
     )
 
 
+def _build_prompt(prompt: str, image_style: str, channel: str,
+                  is_hook_scene: bool):
+    style_prompt, negative_prompt = _resolve_style(
+        image_style, channel, is_hook_scene,
+    )
+
+    return (
+        f"""
+{style_prompt}
+
+{prompt}
+""",
+        negative_prompt,
+    )
+
+
+def _write_generated(generated, output_file: str) -> str:
+    """생성된 이미지 한 장을 파일로 쓴다."""
+
+    if generated.image is None:
+        raise Exception(
+            "Image 객체가 없습니다."
+        )
+
+    if generated.image.image_bytes is None:
+        raise Exception(
+            "image_bytes가 없습니다."
+        )
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+    with open(output_file, "wb") as f:
+        f.write(generated.image.image_bytes)
+
+    enhance_image(output_file)
+
+    print(f"Saved : {output_file}")
+
+    return output_file
+
+
+def generate_image_candidates(
+    prompt: str,
+    output_files: list,
+    channel: str = "wellbeing",
+    is_hook_scene: bool = False,
+    image_style: str = IMAGE_STYLE_DEFAULT,
+):
+    """
+    Sprint74 - 같은 프롬프트로 후보를 여러 장 받는다.
+
+    Imagen은 한 요청에 여러 장을 돌려준다. generate_image를 N번 부르면
+    왕복도 N번이지만, 이쪽은 한 번이다.
+
+    요청한 것보다 적게 돌아올 수 있다(안전 필터 등). 그것은 오류가
+    아니라 후보가 줄어든 것이므로, 받은 만큼만 쓰고 그만큼의 경로를
+    돌려준다. 한 장도 못 받은 경우만 예외다.
+    """
+
+    final_prompt, negative_prompt = _build_prompt(
+        prompt, image_style, channel, is_hook_scene,
+    )
+
+    response = client.models.generate_images(
+        model="imagen-4.0-generate-001",
+        prompt=final_prompt,
+        config=types.GenerateImagesConfig(
+            aspect_ratio="9:16",
+            negative_prompt=negative_prompt,
+            add_watermark=False,
+            number_of_images=len(output_files),
+        ),
+    )
+
+    if not response.generated_images:
+        raise Exception(
+            "Imagen이 이미지를 생성하지 않았습니다."
+        )
+
+    return [
+        _write_generated(generated, output_file)
+        for generated, output_file in zip(
+            response.generated_images, output_files,
+        )
+    ]
+
+
 def generate_image(
     prompt: str,
     output_file: str,

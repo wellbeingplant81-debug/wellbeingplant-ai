@@ -19,7 +19,8 @@ SAMPLE_SCENES = [
 ]
 
 
-def _fake_integrate_asset(scene, project_path, channel="wellbeing", prefer_ai=False):
+def _fake_integrate_asset(scene, project_path, channel="wellbeing",
+                          prefer_ai=False, candidate_count=1):
     # scene 번호가 클수록 늦게 끝나도록 지연을 줘서 as_completed 순서가
     # 입력 순서와 다를 수 있음을 시뮬레이션한다.
     time.sleep(0.01 * (len(SAMPLE_SCENES) - scene["scene"]))
