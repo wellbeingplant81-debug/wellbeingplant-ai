@@ -19,6 +19,9 @@ REPORT_FILENAME = "quality_report.json"
 # Sprint79 - 축적 파일. 영상을 만들 때마다 여기 쌓인다.
 DATASET_FILENAME = "asset_dataset.jsonl"
 
+# Sprint83 - Observatory v2가 남기는 scene 계획. 구버전 기록에는 없다.
+PLANNED_FIELDS = ("camera", "composition", "visual_type", "purpose")
+
 # Sprint79 - Ranking v3 착수 조건. 사용자가 정한 값이다.
 #
 # 사람이 눈대중으로 "이 정도면 됐다"고 판단하면 Best-of-N을 다시 한다.
@@ -179,6 +182,17 @@ def build(root: str) -> list:
                 # 없다 - scratchpad는 임시 디렉터리다.
                 "candidates": candidates,
                 "scene_terms": list(entry.get("scene_terms") or []),
+                # Sprint83 - scene이 계획한 것. Sprint82까지 쌓인 기록에는
+                # 없으므로 전부 None으로 채워 준다 - 없다고 행을 버리면
+                # 지금까지 모은 것이 통째로 죽는다.
+                "planned": {
+                    field: (entry.get("planned") or {}).get(field)
+                    for field in PLANNED_FIELDS
+                },
+                "has_plan": any(
+                    (entry.get("planned") or {}).get(field)
+                    for field in PLANNED_FIELDS
+                ),
             })
 
     return rows

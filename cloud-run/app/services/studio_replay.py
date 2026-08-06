@@ -110,6 +110,13 @@ def _row_view(row: dict, scorer) -> dict:
         "regenerate": bool(row.get("regenerate")),
         "gemini_reason": row.get("gemini_reason"),
         "realism": row.get("realism"),
+        # Sprint83 - scene이 계획한 것. 구버전 행에는 없어서 전부
+        # None이고, 화면은 그것을 "기록되지 않음"으로 보여 준다.
+        "planned": {
+            field: (row.get("planned") or {}).get(field)
+            for field in ("camera", "composition", "visual_type", "purpose")
+        },
+        "has_plan": bool(row.get("has_plan")),
         "candidates": view_candidates,
         "original_winner": _label(original_index),
         "new_winner": _label(new_index),

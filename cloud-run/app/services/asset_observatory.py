@@ -26,7 +26,7 @@ from app.utils.atomic_write import atomic_write_json
 
 OBSERVATORY_FILENAME = "asset_observatory.json"
 
-SCHEMA_VERSION = "sprint77"
+SCHEMA_VERSION = "sprint83"
 
 
 _lock = threading.Lock()
@@ -75,6 +75,7 @@ def _entry(scene_number: int) -> dict:
         "searches": [],
         "candidates": [],
         "scene_terms": [],
+        "planned": {field: None for field in PLANNED_FIELDS},
         "selection_reason": None,
         "final_provider": None,
         "final_asset": None,
@@ -99,6 +100,35 @@ def record_search(scene_number: int, query: str, provider: str,
             "cache_hit": bool(cache_hit),
             "result_count": int(result_count),
         })
+
+
+# Sprint83 - scene이 계획한 것. Sprint82에서 구도 어휘 규칙이 재생에서
+# 한 건도 바꾸지 못했는데, 규칙이 나빠서가 아니라 볼 것이 없어서였다 -
+# scene_terms는 subject/action/environment만 담고, camera/composition은
+# Sprint76이 검색어에서 뺀 뒤로 아무 데도 기록되지 않았다.
+#
+# scene에 있는 것만 적는다. 추론하지 않는다.
+#
+# purpose는 scene에 없다. 만드는 곳은 scene_planner_service인데
+# ENABLE_SCENE_PLANNER가 False다(Sprint69/70에서 A/B 결론이 나지 않아
+# 껐다). 자리만 두고 비워 둔다 - 나중에 그 플래그가 켜져 scene에
+# purpose가 실리면 그때 그대로 적힌다.
+PLANNED_FIELDS = ("camera", "composition", "visual_type", "purpose")
+
+
+def _planned(scene: dict) -> dict:
+    """scene이 계획한 값. 없으면 None이다 - "기록되지 않음"과 "빈 값"은
+    다르고, 화면이 그 둘을 다르게 보여 줘야 한다."""
+
+    scene = scene or {}
+
+    plan = {}
+
+    for field in PLANNED_FIELDS:
+        value = scene.get(field)
+        plan[field] = str(value).strip() if value else None
+
+    return plan
 
 
 def _slug(candidate: dict) -> str:
@@ -188,6 +218,7 @@ def record_ranking(scene_number: int, scene: dict, candidates: list,
 
     reason = _explain(chosen, list(candidates or []), scores, scene)
     terms = sorted(asset_relevance._scene_words(scene))
+    plan = _planned(scene)
 
     with _lock:
         if not _active:
@@ -196,6 +227,7 @@ def record_ranking(scene_number: int, scene: dict, candidates: list,
         entry = _entry(scene_number)
         entry["candidates"] = recorded
         entry["scene_terms"] = terms
+        entry["planned"] = plan
         entry["selection_reason"] = reason
 
 
