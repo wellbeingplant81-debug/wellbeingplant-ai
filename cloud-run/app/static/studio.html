@@ -432,13 +432,18 @@ const OAUTH_LABEL = {
   UNKNOWN: "⚪ 알 수 없음",
 };
 
-async function loadOAuth(){
+async function loadOAuth(verified){
   try{
     const d = await (await fetch("/studio/api/oauth/status")).json();
+    // PV-01에서 발견한 버그. 상태 조회는 로컬 토큰 파일만 읽으므로
+    // 서버에서 취소된 토큰을 알지 못한다 - 만료 전이면 그냥 "정상
+    // 연결됨"이라고 답한다. 실제 확인(verify_now)을 하고 왔다면 그
+    // 결과가 더 정확하므로 그것을 보여준다. 경로는 조회 쪽에만 있다.
+    const shown = verified || d;
     $("oauthBox").innerHTML = `
       <div style="font-size:15px;font-weight:600">
-        ${OAUTH_LABEL[d.status] || d.status}</div>
-      <div class="muted" style="margin-top:4px">${d.message || ""}</div>
+        ${OAUTH_LABEL[shown.status] || shown.status}</div>
+      <div class="muted" style="margin-top:4px">${shown.message || ""}</div>
       <dl class="kv" style="margin-top:8px">
         <dt>account</dt><dd>${d.account_id}</dd>
         <dt>token</dt><dd>${d.token_store_path || "—"}</dd>
@@ -460,7 +465,7 @@ async function oauthAction(action){
     const j = await (await fetch(`/studio/api/jobs/${d.job_id}`)).json();
     if(j.state !== "running"){
       clearInterval(poll);
-      await loadOAuth();
+      await loadOAuth(j.health);
     }
   }, 1200);
 }

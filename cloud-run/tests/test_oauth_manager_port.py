@@ -421,6 +421,29 @@ class TestOAuthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_the_screen_shows_the_verified_result_not_the_local_guess(self):
+        """PV-01에서 발견한 버그.
+
+        상태 조회(check_health)는 로컬 토큰 파일만 읽는다 - 서버에서
+        취소된 토큰을 알지 못하고, 만료 전이면 그냥 "정상 연결됨"이라고
+        답한다. 화면이 "상태 확인"(verify_now) 결과를 버리고 그 조회로
+        덮어쓰면, 취소된 토큰에도 초록불이 켜진다.
+
+        고친 뒤에는 작업이 들고 온 health를 그대로 쓴다.
+        """
+
+        page = open(
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                "app", "static", "studio.html",
+            ),
+            encoding="utf-8",
+        ).read()
+
+        self.assertIn("loadOAuth(j.health)", page)
+        self.assertIn("function loadOAuth(verified)", page)
+        self.assertIn("const shown = verified || d;", page)
+
     def test_the_oauth_endpoints_do_not_upload_anything(self):
         """Sprint90에서는 "업로드 엔드포인트가 하나도 없어야 한다"였다.
         Sprint92가 승인된 프로젝트를 올리는 경로를 붙였으므로 그 문장은
