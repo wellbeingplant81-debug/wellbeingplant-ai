@@ -25,33 +25,20 @@ morphological_normalization_service.extract_stem()(이미 검증된 규칙
 기본값 False면 100% 기존과 동일하다(Regression Zero).
 """
 
-import re
-from typing import Dict, Optional
+from typing import Optional
 
 from app import config
 from app.services import korean_noun_filter
 from app.services.morphological_normalization_service import extract_stem
 
-STOPWORDS = {
-    "합니다",
-    "습니다",
-    "됩니다",
-    "있습니다",
-    "해보세요",
-    "됩니다",
-    "중요합니다",
-    "좋습니다",
-    "필요합니다",
-    "때문에",
-    "위해서",
-    "그리고",
-}
-
-TOKEN_PATTERN = re.compile(r"[가-힣]{2,}")
-
-
-def _identity(token: str) -> str:
-    return token
+# Sprint96 - STOPWORDS/TOKEN_PATTERN/_identity를 지웠다.
+#
+# 셋 다 Sprint94 이전 추출기(2글자 이상 토큰을 빈도순으로 나열하던
+# 방식)의 부품이다. 판정이 korean_noun_filter로 넘어간 뒤로는 이
+# 파일에서도 다른 어디에서도 부르지 않는다.
+#
+# search_query_extractor에도 STOPWORDS가 있지만 그것은 스톡 검색어용
+# 별개 목록이다 - 이름만 같고 관계가 없다.
 
 
 def extract_keywords(script_data: dict, merge_similar_forms: bool = False,
