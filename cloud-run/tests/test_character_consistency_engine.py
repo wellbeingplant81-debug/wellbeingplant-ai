@@ -69,8 +69,19 @@ REAL_SCENES = [
 
 class TestFlagState(unittest.TestCase):
 
-    def test_flag_exists_and_is_off_until_the_ab_says_otherwise(self):
-        self.assertFalse(config.ENABLE_CHARACTER_CONSISTENCY)
+    def test_flag_is_on_after_passing_the_release_gate(self):
+        """arm당 5회 통계 검정을 통과해서 켰다.
+
+        character_consistency 0.0 -> 86.6 (p=0.0040),
+        overall_quality 11.0 -> 75.0 (p=0.0040). 둘 다 5 vs 5에서 나올
+        수 있는 최소 p값이다 - candidate 5회가 baseline 5회보다 전부
+        높았다는 뜻이다.
+
+        되돌리려면 같은 근거가 있어야 한다. 이 단언이 이유 없이
+        뒤집히면 그때는 A/B 없이 꺼진 것이다.
+        """
+
+        self.assertTrue(config.ENABLE_CHARACTER_CONSISTENCY)
 
     def test_engines_pending_their_own_evaluation_stay_disabled(self):
         self.assertFalse(config.ENABLE_SCENE_PLANNER)

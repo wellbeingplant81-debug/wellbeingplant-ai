@@ -102,28 +102,36 @@ ENABLE_AI_DIRECTOR = True
 # behavior to pre-Sprint51.
 ENABLE_VIRAL_WRITER = False
 
-# Sprint71 - Character Consistency Engine v1. Off by default.
+# Sprint71 - Character Consistency Engine v1.
 #
-# Evaluation Framework v2로 5회 측정했더니 character_consistency가 5회
-# 전부 0점이었다. 원인은 렌더가 아니라 대본이었다 - Writer가 scene 1에
-# "middle-aged Korean man", scene 3에 "Korean woman in her 50s",
-# scene 5에 "elderly Korean couple"을 써 놓으니 같은 사람이 나올 수가
-# 없다.
+# Release Gate를 통과해서 켰다. 이 저장소에서 A/B로 승인된 첫 엔진이다.
 #
-# 이 플래그는 두 가지를 함께 켠다.
+# 무엇을 고쳤나: character_consistency가 5회 측정에서 전부 0점이었는데,
+# 원인은 렌더가 아니라 대본이었다. Writer가 scene 1에 "middle-aged
+# Korean man", scene 3에 "Korean woman in her 50s", scene 5에 "elderly
+# Korean couple"을 써 놓으니 같은 사람이 나올 수가 없었다.
+#
+# 이 플래그는 두 가지를 함께 켠다. 분리할 수 없다 - 대본만 고치면
+# Pexels 스톡이 매번 다른 실제 사람을 돌려주고, 라우팅만 바꾸면 대본이
+# 여전히 다른 사람을 요구한다.
 #
 # 1. Writer에게 "인물은 한 명, 외형 묘사는 매 scene 동일" 규칙을 준다
 #    (app/prompts/character_consistency_rules.py).
 # 2. 인물이 등장하는 scene을 Imagen으로 보낸다
-#    (app/services/character_consistency_engine.py). Pexels 스톡은
-#    매번 다른 실제 사람이라 대본이 무엇을 적든 지킬 수 없다.
+#    (app/services/character_consistency_engine.py).
 #
-# 둘은 분리할 수 없다. 대본만 고치면 스톡이 무시하고, 라우팅만 바꾸면
-# 대본이 여전히 다른 사람을 요구한다.
+# Release Gate (Evaluation Framework v2, arm당 5회, 단측 정확 순열검정):
+#
+#   character_consistency   0.0 -> 86.6   p=0.0040
+#   overall_quality        11.0 -> 75.0   p=0.0040
+#   composition            39.0 -> 88.0   p=0.0079
+#   image_realism          67.0 -> 72.0   p(열세)=0.6151  악화 없음
+#
+# 앞의 두 지표는 p가 1/252로 이 표본에서 나올 수 있는 최소값이다 -
+# candidate 5회가 baseline 5회보다 전부 높았다는 뜻이다.
+# character_consistency는 baseline이 5회 모두 0, candidate가 65~100으로
+# 분포가 아예 겹치지 않았다.
 #
 # 비용: 인물 scene이 Pexels(무료)에서 Imagen으로 옮겨가므로 영상당
-# Imagen 호출이 3~4회 늘어난다.
-#
-# Evaluation Framework v2에서 character_consistency와 overall_quality가
-# 둘 다 통계적으로 개선될 때만 True로 바꾼다.
-ENABLE_CHARACTER_CONSISTENCY = False
+# Imagen 호출이 3~4회 늘어난다. 그만한 값을 한다는 것이 위 수치다.
+ENABLE_CHARACTER_CONSISTENCY = True

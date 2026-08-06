@@ -248,10 +248,16 @@ def main():
     )
     decision = evaluation.decide(comparison)
 
+    # 라벨은 실제로 검정한 후보 이름에서 온다. 예전에는 문자열이
+    # 하드코딩돼 있어서, character-consistency를 재고도 리포트에는
+    # "Scene Planner v2 + Enrichment"라고 찍혔다 - 리포트가 무엇을
+    # 측정했는지 잘못 적는 것은 결과를 틀리게 적는 것과 같다.
+    flags = ", ".join(sorted(CANDIDATES[args.candidate]))
+
     report = evaluation.render_report(
         comparison, decision,
         baseline_label="baseline",
-        candidate_label="candidate (Scene Planner v2 + Enrichment)",
+        candidate_label=f"{args.candidate} ({flags})",
     )
 
     report += "\n## 생성 산출물 (사람이 직접 볼 것)\n\n"
