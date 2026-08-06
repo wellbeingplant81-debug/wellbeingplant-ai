@@ -16,6 +16,7 @@ from app.steps import step04_subtitle
 from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
+from app.services import studio_upload
 from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
 from app.services import prompt_learning_service
@@ -368,5 +369,19 @@ def run_pipeline(
             print(f"[Dataset] scene {added}행 축적")
     except Exception as exc:
         print(f"Dataset accumulation failed: {exc}")
+
+    # Sprint92 - 업로드. 반드시 마지막이다.
+    #
+    # 갓 만든 프로젝트는 아직 사람이 보지 않았으므로 승인 상태가 아니고,
+    # studio_upload가 그것을 보고 건너뛴다. 실제로 올라가는 것은 Queue에서
+    # 승인한 뒤다 - 검수 전에 올라가면 되돌릴 수 없다.
+    #
+    # 업로드가 어떻게 되든 영상 생성은 이미 끝났다. 여기서 예외가 나도
+    # 파이프라인은 성공이다.
+    upload = studio_upload.run_upload_quietly(
+        project_path, studio_upload.default_store_path(),
+    )
+    if upload.get("outcome") != studio_upload.SKIPPED:
+        print(f"[Upload] {upload.get('outcome')} {upload.get('url') or ''}")
 
     return data

@@ -275,9 +275,13 @@ class TestFiltering(unittest.TestCase):
 
         self.assertEqual([r["project_id"] for r in rows], ["a"])
 
-    def test_published_is_empty_because_upload_does_not_exist(self):
-        """업로드 경로가 없으므로 Published에 도달할 방법이 없다.
-        필터는 있고 결과는 비어 있는 것이 사실이다."""
+    def test_published_only_comes_from_an_actual_upload(self):
+        """Sprint84에는 "업로드 경로가 없으므로 Published에 도달할 방법이
+        없다"고 적혀 있었다. Sprint92가 그 경로를 붙였으므로 그 문장은
+        더 이상 사실이 아니다.
+
+        지켜야 할 계약은 그대로다 - Published는 승인만으로 되지 않는다.
+        실제로 올라간 산출물이 있어야 한다."""
 
         rows = workflow.filter_rows(self._rows(), workflow.PUBLISHED)
 

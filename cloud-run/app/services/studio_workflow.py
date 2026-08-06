@@ -31,10 +31,12 @@ GENERATING = "generating"
 INSPECTION = "inspection"
 NEEDS_REGENERATION = "needs_regeneration"
 APPROVED = "approved"
+UPLOAD_FAILED = "upload_failed"
 PUBLISHED = "published"
 
 STATUSES = (
-    DRAFT, GENERATING, INSPECTION, NEEDS_REGENERATION, APPROVED, PUBLISHED,
+    DRAFT, GENERATING, INSPECTION, NEEDS_REGENERATION, APPROVED,
+    UPLOAD_FAILED, PUBLISHED,
 )
 
 LABELS = {
@@ -43,13 +45,29 @@ LABELS = {
     INSPECTION: "Inspection",
     NEEDS_REGENERATION: "Needs Regeneration",
     APPROVED: "Approved",
+    UPLOAD_FAILED: "Upload Failed",
     PUBLISHED: "Published",
 }
 
 # 사람이 내린 결정만 저장한다. 나머지는 유도한다.
-STORED_STATUSES = (APPROVED, PUBLISHED)
+#
+# Sprint92 - PUBLISHED는 저장하지 않는다. 업로드가 남긴 산출물
+# (youtube_upload_result.json)에서 유도한다 - script.json이 있으면
+# 대본이 끝난 것이라고 판정하는 것과 같은 방식이다. 사람이 내린 결정은
+# 승인 하나뿐이고, 업로드 성공은 사실이지 판단이 아니다.
+STORED_STATUSES = (APPROVED,)
 
 STORE_FILENAME = "workflow.json"
+
+# Sprint91의 youtube_upload_step_service가 남기는 파일.
+#
+# 이름을 여기에 다시 적었다. import해 오는 편이 낫지만, 그러면 이
+# 모듈이 Upload Core와 OAuth 전체를 끌고 들어온다 - workflow는 산출물을
+# 읽기만 하는 순수 계층이고 그 사실을 지키는 테스트가 있다. 대신 두
+# 이름이 어긋나면 걸리도록 테스트로 묶어 두었다.
+_UPLOAD_RESULT_FILENAME = "youtube_upload_result.json"
+_UPLOADED = "uploaded"
+_FAILED = "failed"
 
 _TIMESTAMP = re.compile(r"^(\d{8})_(\d{6})")
 
@@ -144,17 +162,61 @@ def _failed_scenes(project_path: str) -> list:
     ]
 
 
+def _upload_outcome(project_path: str):
+    """업로드가 남긴 사실. 시도한 적이 없으면 None.
+
+    건너뛴 것(outcome=skipped)은 아무 일도 없었던 것과 같게 다룬다 -
+    플래그가 꺼져 있거나 아직 승인되지 않아서 안 올린 프로젝트가
+    업로드 실패로 보이면 안 된다."""
+
+    result = _load(os.path.join(project_path, _UPLOAD_RESULT_FILENAME))
+
+    if not isinstance(result, dict):
+        return None
+
+    outcome = result.get("outcome")
+
+    return outcome if outcome in (_UPLOADED, _FAILED) else None
+
+
+def _upload_row(project_path: str):
+    """화면이 보여줄 업로드 사실. 시도한 적이 없으면 None."""
+
+    result = _load(os.path.join(project_path, _UPLOAD_RESULT_FILENAME))
+
+    if not isinstance(result, dict):
+        return None
+
+    return {
+        "outcome": result.get("outcome"),
+        "url": result.get("url"),
+        "error": result.get("error"),
+        "thumbnail_error": result.get("thumbnail_error"),
+        "playlist_error": result.get("playlist_error"),
+    }
+
+
 def status_for(project_path: str, stored: dict = None,
                running: bool = False) -> str:
     """
     지금의 상태. 순수 읽기입니다.
 
     우선순위가 의미를 갖는다. 지금 돌고 있으면 그것이 가장 최신 사실이고,
-    사람이 승인했으면 그것이 유도보다 우선한다.
+    업로드 결과가 있으면 그것이 승인보다 나중의 사실이며, 사람이
+    승인했으면 그것이 유도보다 우선한다.
     """
 
     if running:
         return GENERATING
+
+    # Sprint92 - 승인보다 뒤에 일어난 일이므로 승인보다 먼저 본다.
+    outcome = _upload_outcome(project_path)
+
+    if outcome == _UPLOADED:
+        return PUBLISHED
+
+    if outcome == _FAILED:
+        return UPLOAD_FAILED
 
     decided = (stored or {}).get("status")
 
@@ -243,6 +305,9 @@ def queue(root: str, store_path: str, running=None) -> list:
                 path, stored.get(name), name in running,
             ),
             "approved_at": (stored.get(name) or {}).get("approved_at"),
+            # Sprint92 - 업로드가 실패했으면 왜인지 화면이 그대로
+            # 보여줄 수 있어야 한다. 시도한 적이 없으면 None이다.
+            "upload": _upload_row(path),
         })
 
     return rows

@@ -16,9 +16,10 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
+from app import config
 from app.services import (
     oauth_manager, project_service, studio_jobs, studio_regeneration,
-    studio_replay, studio_service, studio_workflow,
+    studio_replay, studio_service, studio_upload, studio_workflow,
 )
 from app.tools import asset_dataset
 
@@ -73,12 +74,9 @@ def studio_page():
 
 
 def _workflow_store() -> str:
-    from app.pipeline.pipeline import DATASET_ROOT
-
-    return os.path.join(
-        os.path.dirname(DATASET_ROOT), ".workflow",
-        studio_workflow.STORE_FILENAME,
-    )
+    # Sprint92 - 경로 정의는 studio_upload 한 곳에만 둔다. 파이프라인도
+    # 같은 것을 본다.
+    return studio_upload.default_store_path()
 
 
 def _running_projects() -> set:
@@ -123,8 +121,11 @@ def queue(status: str = "all"):
         "counts": counts,
         "total": len(rows),
         "rows": filtered,
-        # 업로드 경로가 없으므로 Published에 도달할 방법이 없다.
-        "upload_available": False,
+        # Sprint92 - 업로드 경로가 생겼다. 다만 플래그가 꺼져 있으면
+        # 실제로는 올라가지 않으므로, 화면이 그 사실을 그대로 말할 수
+        # 있게 두 가지를 따로 알려준다.
+        "upload_available": True,
+        "upload_enabled": bool(config.ENABLE_YOUTUBE_UPLOAD),
     }
 
 
@@ -138,6 +139,22 @@ def approve(project_id: str):
         return studio_workflow.approve(project_id, _workflow_store())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/projects/{project_id}/upload")
+def upload(project_id: str):
+    """
+    Sprint92 - 승인된 프로젝트를 YouTube에 올린다.
+
+    승인 여부는 studio_upload가 본다 - 여기서 다시 판정하지 않는다.
+    승인되지 않았으면 작업은 정상으로 끝나고 outcome이 skipped로 온다.
+    """
+
+    path = _project_path(project_id)
+
+    job_id = studio_jobs.start_upload(project_id, path)
+
+    return {"job_id": job_id}
 
 
 @router.post("/api/projects/{project_id}/unapprove")

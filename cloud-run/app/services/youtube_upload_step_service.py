@@ -70,7 +70,15 @@ _DEFAULT_CLIENT_SECRET_PATH = "credentials/client_secret.json"
 _DEFAULT_TOKEN_STORE_PATH = "credentials/youtube_oauth_tokens.json"
 _DEFAULT_ACCOUNT_ID = "default"
 
-RESULT_FILENAME = "youtube_upload_result.json"
+# Sprint92 - 결과 파일 이름과 outcome 어휘는 studio_upload가 갖는다.
+# 파이프라인이 그 층만 import하고도 결과를 읽을 수 있어야 하기 때문이다
+# (여기를 import하면 Upload Core 전체가 딸려 간다).
+from app.services.studio_upload import (  # noqa: E402
+    FAILED,
+    RESULT_FILENAME,
+    SKIPPED,
+    UPLOADED,
+)
 
 # 갱신만으로 해결되는 상태. 나머지는 사람이 브라우저에서 다시
 # 로그인해야 하고, 그것은 서버가 대신 할 수 있는 일이 아니다.
@@ -174,6 +182,7 @@ def _refused(project_path: str, message: str) -> dict:
 
     return _record(project_path, {
         "success": False,
+        "outcome": SKIPPED,
         "upload_id": None,
         "url": None,
         "error": message,
@@ -241,6 +250,9 @@ def run_youtube_upload_step(
 
     return _record(project_path, {
         "success": result.success,
+        # 여기까지 왔으면 실제로 YouTube에 올려 봤다. 실패했다면 그것은
+        # 시도한 끝의 실패다 - 건너뛴 것과 다르다.
+        "outcome": UPLOADED if result.success else FAILED,
         "upload_id": result.upload_id,
         "url": result.url,
         "error": result.error,

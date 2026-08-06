@@ -254,6 +254,69 @@ def start_oauth(action: str) -> str:
     return job_id
 
 
+def start_upload(project_id: str, project_path: str) -> str:
+    """
+    Sprint92 - 승인된 프로젝트를 올린다.
+
+    백그라운드로 돌리는 이유는 생성/재생성과 같다 - 실제 업로드는
+    영상 파일을 통째로 전송하므로 요청 스레드에서 부르면 그동안 HTTP
+    응답이 돌아오지 않는다.
+    """
+
+    from app.services import studio_upload
+
+    job_id = uuid.uuid4().hex[:12]
+
+    with _lock:
+        job = _new_job(job_id, None, None, project_id, project_path)
+        job["kind"] = "upload"
+        job["upload"] = None
+        _jobs[job_id] = job
+
+    def run():
+        return studio_upload.run_upload(
+            project_path, studio_upload.default_store_path(),
+        )
+
+    thread = threading.Thread(
+        target=_run_upload, args=(job_id, run), daemon=True,
+    )
+    thread.start()
+
+    return job_id
+
+
+def _run_upload(job_id: str, target_fn) -> None:
+    import sys
+
+    original = sys.stdout
+    sys.stdout = _Tee(original, job_id)
+
+    try:
+        result = target_fn()
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                # 업로드가 거절되거나 실패해도 작업 자체는 끝난 것이다 -
+                # 무슨 일이 있었는지는 upload가 그대로 담는다.
+                job["state"] = "done"
+                job["upload"] = result
+
+    except Exception as exc:
+        _append_line(job_id, f"[Studio] 업로드 실패: {exc}")
+        _append_line(job_id, traceback.format_exc())
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "failed"
+                job["error"] = str(exc)
+
+    finally:
+        sys.stdout = original
+
+
 def _run_oauth(job_id: str, target_fn) -> None:
     import sys
 
@@ -314,6 +377,7 @@ def status(job_id: str, console_from: int = 0) -> dict:
             "title": job["title"],
             "error": job["error"],
             "health": job.get("health"),
+            "upload": job.get("upload"),
             "console": list(console[start_at:]),
             "console_next": len(console),
         }

@@ -421,14 +421,20 @@ class TestOAuthEndpoints(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_upload_runtime_is_not_wired_yet(self):
-        """이번 Sprint의 경계 - OAuth만이고 업로드는 아직이다."""
+    def test_the_oauth_endpoints_do_not_upload_anything(self):
+        """Sprint90에서는 "업로드 엔드포인트가 하나도 없어야 한다"였다.
+        Sprint92가 승인된 프로젝트를 올리는 경로를 붙였으므로 그 문장은
+        더 이상 사실이 아니다.
+
+        지켜야 할 경계는 그대로다 - OAuth 동작 셋은 인증만 다루고
+        업로드를 시작하지 않는다."""
 
         from app.main import app
 
         paths = list(app.openapi()["paths"])
+        oauth_paths = [p for p in paths if "oauth" in p.lower()]
 
-        self.assertFalse(
-            [p for p in paths if "upload" in p.lower()],
-            "Upload 엔드포인트가 아직 있으면 안 된다",
-        )
+        self.assertTrue(oauth_paths)
+        for path in oauth_paths:
+            with self.subTest(path=path):
+                self.assertNotIn("upload", path.lower())

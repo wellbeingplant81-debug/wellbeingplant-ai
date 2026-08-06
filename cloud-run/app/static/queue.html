@@ -42,6 +42,10 @@ tr:hover td{background:#1a212c}
 .st.needs_regeneration{color:var(--warn);border-color:#4a3a1a}
 .st.approved{color:var(--ok);border-color:#1d4429}
 .st.published{color:var(--purple);border-color:#3a2a5c}
+.st.upload_failed{color:var(--bad);border-color:#5c2320}
+.uperr{color:var(--bad);font-size:11px;margin-top:3px}
+.upok{font-size:11px;margin-top:3px}
+.upok a{color:var(--purple)}
 .unknown{color:var(--warn);font-style:italic}
 .num{text-align:right;font-variant-numeric:tabular-nums}
 button{background:var(--accent);color:#04101f;border:0;border-radius:6px;
@@ -71,12 +75,13 @@ button.ghost{background:transparent;color:var(--dim);
 
   <div class="panel">
     <h2>프로젝트</h2>
+    <div class="na-note" id="uploadMsg" style="display:none"></div>
     <div id="table"></div>
     <div class="na-note" id="uploadNote" style="display:none">
-      업로드 경로가 아직 없습니다
-      (<code>app/providers/youtube_provider.py</code>가 0바이트).
-      승인된 프로젝트는 "Ready for Upload"까지만 갑니다 — Published
-      상태에 도달할 방법이 없어 그 필터는 항상 비어 있습니다.
+      <b>ENABLE_YOUTUBE_UPLOAD가 꺼져 있습니다.</b>
+      업로드 경로는 연결됐지만(Sprint89~92) 실제 업로드는 아직 한 번도
+      검증되지 않았습니다 — 업로드 버튼을 눌러도 Skipped로 끝나고
+      영상은 올라가지 않습니다.
     </div>
   </div>
 </div>
@@ -86,7 +91,7 @@ const $ = (id) => document.getElementById(id);
 let current = "all", data = null;
 
 const ORDER = ["all","draft","generating","inspection",
-               "needs_regeneration","approved","published"];
+               "needs_regeneration","approved","upload_failed","published"];
 
 function unknown(v, fmt){
   return (v===null || v===undefined) ? '<span class="unknown">Unknown</span>'
@@ -123,12 +128,18 @@ function renderTable(d){
           ${r.status==="needs_regeneration"
             ? `<div class="muted">scene ${r.failed_scenes.join(", ")}</div>`:""}
           ${r.status==="approved"
-            ? `<div class="ready">Ready for Upload</div>`:""}</td>
+            ? `<div class="ready">Ready for Upload</div>`:""}
+          ${r.upload && r.upload.outcome==="uploaded" && r.upload.url
+            ? `<div class="upok"><a href="${r.upload.url}" target="_blank"
+                 rel="noopener">${r.upload.url}</a></div>`:""}
+          ${r.upload && r.upload.outcome==="failed"
+            ? `<div class="uperr">${r.upload.error || "업로드 실패"}</div>`:""}</td>
         <td><div class="acts">
           <button class="ghost" onclick="open_('${r.project_id}')">열기</button>
-          ${r.status==="approved"
-            ? `<button class="ghost" onclick="unapprove('${r.project_id}')">승인 취소</button>`
-            : (r.has_video
+          ${r.status==="approved" || r.status==="upload_failed"
+            ? `<button onclick="upload('${r.project_id}')">업로드</button>
+               <button class="ghost" onclick="unapprove('${r.project_id}')">승인 취소</button>`
+            : (r.has_video && r.status!=="published"
                 ? `<button onclick="approve('${r.project_id}')">승인</button>`
                 : "")}
         </div></td>
@@ -142,6 +153,28 @@ async function approve(id){
   await fetch(`/studio/api/projects/${id}/approve`, {method:"POST"});
   load();
 }
+async function upload(id){
+  const r = await fetch(`/studio/api/projects/${id}/upload`, {method:"POST"});
+  const d = await r.json();
+  const t = setInterval(async () => {
+    const j = await (await fetch(`/studio/api/jobs/${d.job_id}`)).json();
+    if(j.state !== "running"){
+      clearInterval(t);
+      const u = j.upload;
+      const box = $("uploadMsg");
+      if(u && u.outcome !== "uploaded"){
+        box.textContent =
+          (u.outcome === "skipped" ? "업로드하지 않았습니다 — " : "업로드 실패 — ")
+          + (u.error || "");
+        box.style.display = "block";
+      } else {
+        box.style.display = "none";
+      }
+      load();
+    }
+  }, 1500);
+}
+
 async function unapprove(id){
   await fetch(`/studio/api/projects/${id}/unapprove`, {method:"POST"});
   load();
@@ -155,7 +188,7 @@ async function load(){
   $("total").textContent = `${data.total}개 프로젝트`;
   renderFilters(data);
   renderTable(data);
-  $("uploadNote").style.display = data.upload_available ? "none" : "block";
+  $("uploadNote").style.display = data.upload_enabled ? "none" : "block";
 }
 
 function pick(k){
