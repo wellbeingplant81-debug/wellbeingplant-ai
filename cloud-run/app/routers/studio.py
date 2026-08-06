@@ -17,8 +17,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.services import (
-    project_service, studio_jobs, studio_regeneration, studio_replay,
-    studio_service, studio_workflow,
+    oauth_manager, project_service, studio_jobs, studio_regeneration,
+    studio_replay, studio_service, studio_workflow,
 )
 from app.tools import asset_dataset
 
@@ -266,6 +266,58 @@ def regenerate(project_id: str, request: RegenerateRequest = None):
     return {
         "job_id": studio_jobs.start_regeneration(project_id, path, scenes),
     }
+
+
+# Sprint90 - OAuth 4개 엔드포인트. Upload Runtime은 아직 연결하지 않는다.
+#
+# 상태 조회만 동기다(로컬 토큰 파일만 읽으므로 즉시 끝난다). 나머지
+# 셋은 백그라운드 작업으로 돌린다 - 특히 로그인은 브라우저 리다이렉트를
+# 기다리며 수백 초 블로킹할 수 있다.
+_OAUTH_ACTIONS = ("login", "refresh", "logout")
+
+
+@router.get("/api/oauth/status")
+def oauth_status():
+    """
+    저장된 자격증명 상태. 로컬 파일만 읽고 Network를 치지 않는다 -
+    화면을 열 때마다 불려도 안전해야 하고, 무엇보다 브라우저가 저절로
+    열리면 안 된다.
+    """
+
+    manager = oauth_manager.build_default_oauth_manager()
+    health = manager.check_health()
+
+    return {
+        "status": health.status,
+        "message": health.message,
+        "checked_at": health.checked_at,
+        "account_id": manager.account_id,
+        # 어디를 읽고 있는지 화면이 보여줄 수 있어야 한다 - 자격증명이
+        # 없을 때 어디에 두면 되는지가 그것으로 드러난다.
+        "token_store_path": getattr(manager.token_store, "storage_path", None),
+        "client_secret_path": getattr(
+            manager.oauth_service, "client_secret_path", None,
+        ),
+    }
+
+
+@router.post("/api/oauth/{action}")
+def oauth_action(action: str):
+    """
+    login / refresh / logout.
+
+    login만 브라우저를 연다. 사용자가 버튼을 눌렀을 때만 이 경로가
+    호출되며, 상태 조회(GET)는 절대 여기로 오지 않는다.
+    """
+
+    if action not in _OAUTH_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 OAuth 동작입니다: {action!r}. "
+                   f"사용 가능한 값: {list(_OAUTH_ACTIONS)}",
+        )
+
+    return {"job_id": studio_jobs.start_oauth(action)}
 
 
 @router.get("/api/dataset")

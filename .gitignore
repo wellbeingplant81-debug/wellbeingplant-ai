@@ -9,3 +9,10 @@ cloud-run/.dataset/
 # 데이터셋과 같은 성격이다 - 운영하면서 자라고, 소스와 함께
 # 버전 관리할 것이 아니다.
 cloud-run/.workflow/
+
+# Sprint90 - OAuth 자격증명.
+#
+# client_secret.json은 Google Cloud가 발급한 앱 비밀이고,
+# youtube_oauth_tokens.json에는 살아 있는 refresh token이 들어간다.
+# 저장소에 들어가면 그 순간 유출이다.
+cloud-run/credentials/

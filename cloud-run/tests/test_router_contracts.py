@@ -92,6 +92,14 @@ ENDPOINTS = [
     ("GET", "/studio/api/projects/{project_id}/replay", None, [],
      f"/studio/api/projects/{PROJECT_ID}/replay"),
 
+    # Sprint90 - OAuth. status는 로컬 파일만 읽으므로 패치 없이 부른다.
+    # POST는 백그라운드 작업을 띄우므로 진입점만 패치한다 - 패치하지
+    # 않으면 실제 브라우저 로그인이 시작된다.
+    ("GET", "/studio/api/oauth/status", None, []),
+    ("POST", "/studio/api/oauth/{action}", None,
+     ["app.routers.studio.studio_jobs.start_oauth"],
+     "/studio/api/oauth/login"),
+
     # Sprint84 - Production Queue. 승인은 workflow 상태만 바꾸므로
     # 엔진을 부르지 않는다.
     ("GET", "/studio/queue", None, []),

@@ -186,11 +186,16 @@ a{color:var(--accent)}
     </div>
 
     <div class="panel">
-      <h2>Upload</h2>
-      <div class="na-note">
-        업로드 경로가 아직 없습니다.
-        <code>app/providers/youtube_provider.py</code>가 0바이트입니다.
-        연결할 기존 기능이 없어 버튼을 만들지 않았습니다.
+      <h2>YouTube 연결</h2>
+      <div id="oauthBox" class="muted">상태 확인 중…</div>
+      <div class="rowbtns">
+        <button class="sm" onclick="oauthAction('login')">Google 로그인</button>
+        <button class="sm ghost" onclick="oauthAction('refresh')">상태 확인</button>
+        <button class="sm ghost" onclick="oauthAction('logout')">로그아웃</button>
+      </div>
+      <div class="na-note" style="margin-top:10px">
+        Upload Runtime은 아직 연결되지 않았습니다 (Porting Phase 4).
+        여기서는 인증 상태만 다룹니다 — 실제 업로드는 일어나지 않습니다.
       </div>
     </div>
 
@@ -421,6 +426,45 @@ function renderMedia(d){
   } else { $("thumbBox").innerHTML = '<span class="muted">아직 썸네일이 없습니다.</span>'; }
 }
 
+const OAUTH_LABEL = {
+  READY: "🟢 정상 연결됨", EXPIRED: "🟡 Access Token 만료",
+  REAUTH_REQUIRED: "🔴 로그인 필요", INVALID_SCOPE: "🔴 권한 부족",
+  UNKNOWN: "⚪ 알 수 없음",
+};
+
+async function loadOAuth(){
+  try{
+    const d = await (await fetch("/studio/api/oauth/status")).json();
+    $("oauthBox").innerHTML = `
+      <div style="font-size:15px;font-weight:600">
+        ${OAUTH_LABEL[d.status] || d.status}</div>
+      <div class="muted" style="margin-top:4px">${d.message || ""}</div>
+      <dl class="kv" style="margin-top:8px">
+        <dt>account</dt><dd>${d.account_id}</dd>
+        <dt>token</dt><dd>${d.token_store_path || "—"}</dd>
+        <dt>client_secret</dt><dd>${d.client_secret_path || "—"}</dd>
+      </dl>`;
+  }catch(e){ $("oauthBox").innerHTML =
+    '<span class="muted">상태를 불러오지 못했습니다.</span>'; }
+}
+
+async function oauthAction(action){
+  if(action === "login" &&
+     !confirm("브라우저가 열리고 Google 로그인 창이 뜹니다. 계속할까요?")){
+    return;
+  }
+  $("oauthBox").innerHTML = '<span class="muted">진행 중…</span>';
+  const r = await fetch(`/studio/api/oauth/${action}`, {method:"POST"});
+  const d = await r.json();
+  const poll = setInterval(async () => {
+    const j = await (await fetch(`/studio/api/jobs/${d.job_id}`)).json();
+    if(j.state !== "running"){
+      clearInterval(poll);
+      await loadOAuth();
+    }
+  }, 1200);
+}
+
 async function loadDataset(){
   try{
     const d = await (await fetch("/studio/api/dataset")).json();
@@ -475,6 +519,7 @@ async function pollJob(){
 
 renderStages(null);
 loadDataset();
+loadOAuth();
 
 // Sprint84 - Queue에서 프로젝트를 직접 열 수 있어야 한다.
 // 목록이 먼저 그려진 뒤에 열어야 선택 표시가 맞는다.

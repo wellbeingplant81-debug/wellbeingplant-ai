@@ -212,6 +212,81 @@ def _run(job_id: str, topic: str, channel: str) -> None:
         sys.stdout = original
 
 
+def start_oauth(action: str) -> str:
+    """
+    Sprint90 - OAuth 동작을 백그라운드로 돌린다.
+
+    OneDrive 원본은 이것을 OAuthWorker(QThread)로 했다. 그 클래스가 한
+    일은 "콜러블 하나를 백그라운드에서 실행하고 끝나면 알린다"가 전부라,
+    이미 있는 이 작업 틀이 그대로 대신한다 - 새 동시성 구조를 만들지
+    않는다.
+
+    백그라운드로 돌리는 이유도 원본과 같다. reauthenticate()는 브라우저
+    리다이렉트를 기다리며 최장 수백 초 블로킹한다. 요청 스레드에서
+    그대로 부르면 HTTP 응답이 그동안 돌아오지 않는다.
+    """
+
+    from app.services import oauth_manager as oauth_module
+
+    job_id = uuid.uuid4().hex[:12]
+
+    with _lock:
+        job = _new_job(job_id, None, None)
+        job["kind"] = "oauth"
+        job["action"] = action
+        job["health"] = None
+        _jobs[job_id] = job
+
+    def run():
+        manager = oauth_module.build_default_oauth_manager()
+        target = {
+            "login": manager.reauthenticate,
+            "refresh": manager.verify_now,
+            "logout": manager.logout,
+        }[action]
+        return target()
+
+    thread = threading.Thread(
+        target=_run_oauth, args=(job_id, run), daemon=True,
+    )
+    thread.start()
+
+    return job_id
+
+
+def _run_oauth(job_id: str, target_fn) -> None:
+    import sys
+
+    original = sys.stdout
+    sys.stdout = _Tee(original, job_id)
+
+    try:
+        health = target_fn()
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "done"
+                job["health"] = {
+                    "status": health.status,
+                    "message": health.message,
+                    "checked_at": health.checked_at,
+                }
+
+    except Exception as exc:
+        _append_line(job_id, f"[Studio] OAuth 실패: {exc}")
+        _append_line(job_id, traceback.format_exc())
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "failed"
+                job["error"] = str(exc)
+
+    finally:
+        sys.stdout = original
+
+
 def status(job_id: str, console_from: int = 0) -> dict:
     """
     작업 상태와 콘솔. console_from부터의 줄만 돌려준다 - 화면이 1초마다
@@ -238,6 +313,7 @@ def status(job_id: str, console_from: int = 0) -> dict:
             "project_path": job["project_path"],
             "title": job["title"],
             "error": job["error"],
+            "health": job.get("health"),
             "console": list(console[start_at:]),
             "console_next": len(console),
         }

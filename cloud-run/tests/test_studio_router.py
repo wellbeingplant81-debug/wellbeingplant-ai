@@ -46,12 +46,26 @@ class TestStudioPage(unittest.TestCase):
             with self.subTest(panel=panel):
                 self.assertIn(panel, text)
 
-    def test_upload_is_shown_as_unavailable_not_as_a_working_button(self):
-        """youtube_provider.py가 0바이트다. 연결할 기존 기능이 없다."""
+    def test_upload_runtime_is_shown_as_not_connected(self):
+        """Sprint80에는 "youtube_provider.py가 0바이트"라고 적혀 있었다.
+        Sprint89에서 OneDrive의 검증된 Upload Core를 이식했으므로 그
+        문구는 더 이상 사실이 아니다.
+
+        지켜야 할 계약은 그대로다 - 없는 능력을 있는 것처럼 보이지
+        않는다. 지금 사실은 "인증은 되지만 Upload Runtime은 아직
+        연결되지 않았다"이고, 화면이 그렇게 말해야 한다.
+        """
 
         text = client.get("/studio").text
 
-        self.assertIn("youtube_provider.py", text)
+        self.assertIn("Upload Runtime은 아직 연결되지 않았습니다", text)
+        self.assertIn("실제 업로드는 일어나지 않습니다", text)
+
+    def test_the_oauth_panel_is_present(self):
+        text = client.get("/studio").text
+
+        self.assertIn("YouTube 연결", text)
+        self.assertIn("Google 로그인", text)
 
 
 class TestProjectApi(unittest.TestCase):
