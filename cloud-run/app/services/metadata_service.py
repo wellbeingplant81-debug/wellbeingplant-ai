@@ -43,12 +43,12 @@ from app.services import (
 PACKAGE_FILENAME = "publish_package.json"
 
 
-def build_metadata(script_data: dict) -> Metadata:
+def build_metadata(script_data: dict, topic: str = None) -> Metadata:
     """Script만 보고 만든다. 제목은 이미 있는 것을 쓴다."""
 
     title = script_data.get("title") or ""
-    hashtags = hashtag_generator.generate_hashtags(script_data)
-    keywords = hashtag_generator.extract_keywords(script_data)[
+    hashtags = hashtag_generator.generate_hashtags(script_data, topic=topic)
+    keywords = hashtag_generator.extract_keywords(script_data, topic=topic)[
         : config.HASHTAG_MAX_COUNT
     ]
     description = description_generator.generate_description(script_data, hashtags)
@@ -79,10 +79,10 @@ def build_package(
     YouTubeUploadProvider가 찾고 있는 이름과 같다.
     """
 
-    metadata = build_metadata(script_data)
+    metadata = build_metadata(script_data, topic)
     strategy = metadata_strategy_service.get_metadata_strategy()
     playlist = playlist_recommendation_service.recommend_playlist(topic or "")
-    tags = hashtag_generator.generate_seo_keywords(script_data)
+    tags = hashtag_generator.generate_seo_keywords(script_data, topic=topic)
 
     return publish_package_service.build_publish_package(
         metadata,

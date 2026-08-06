@@ -341,26 +341,26 @@ class TestThePipelineWiring(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "0")
 
 
-class TestKnownLimitOfKeywordExtraction(unittest.TestCase):
-    """이식한 추출기는 조사가 붙은 형태를 그대로 토큰으로 남긴다 -
-    원본이 문서화해 둔 한계다. 여기에 못을 박아 두는 이유는, 이것이
-    고쳐졌는지 아닌지를 나중에 분명히 알 수 있게 하기 위해서다.
+class TestKeywordExtractionIsNounsOnly(unittest.TestCase):
+    """Sprint93에는 "부사와 조사 부착형이 해시태그로 나온다"를 한계로
+    적어 두고 그것이 사실임을 못 박아 뒀다. Sprint94가 고쳤으므로
+    계약을 뒤집는다."""
 
-    지금은 '않는'/'특히' 같은 부사와 조사 부착형이 해시태그로 나온다.
-    품질 개선은 별도 과제이며, 이 테스트는 개선되면 실패해서 그
-    사실을 알려 준다."""
-
-    def test_particles_and_adverbs_still_leak_into_hashtags(self):
+    def test_adverbs_no_longer_leak(self):
         data = _script(script="특히 혈압이 높으면 정말 위험합니다. 혈압을 낮추세요.")
 
         tags = hashtag_generator.generate_hashtags(data)
 
-        leaked = [t for t in tags if t in ("#특히", "#정말")]
-        self.assertTrue(
-            leaked,
-            "부사가 더 이상 새지 않는다면 추출기가 개선된 것이다 - "
-            "이 테스트와 Sprint93 보고서의 '알려진 한계'를 갱신하십시오.",
-        )
+        for adverb in ("#특히", "#정말", "#그냥", "#방금", "#혹시"):
+            with self.subTest(adverb=adverb):
+                self.assertNotIn(adverb, tags)
+
+    def test_the_real_nouns_are_still_found(self):
+        """거르기만 하고 아무것도 안 남기면 고친 것이 아니다."""
+
+        data = _script(script="특히 혈압이 높으면 정말 위험합니다. 혈압을 낮추세요.")
+
+        self.assertIn("#혈압", hashtag_generator.generate_hashtags(data))
 
 
 if __name__ == "__main__":
