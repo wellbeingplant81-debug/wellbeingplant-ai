@@ -27,6 +27,15 @@ def run(
         f"attempts={gate_outcome['attempts']} "
         f"estimated_seconds={gate_outcome['estimated_seconds']:.2f}"
     )
+
+    # Sprint95 - 주제를 지켰는지. 게이트가 이미 판정한 결과를 그대로
+    # 보여 준다 - 여기서 다시 계산하지 않는다.
+    fidelity = gate_outcome.get("topic_fidelity") or {}
+    print(
+        f"Topic Fidelity: passed={fidelity.get('passed')} "
+        f"title={fidelity.get('in_title')} "
+        f"keywords={fidelity.get('keywords')}"
+    )
     print("=" * 80)
 
     with open(
