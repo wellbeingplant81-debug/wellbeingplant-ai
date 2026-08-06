@@ -48,6 +48,9 @@ def search_photos(
 
     photos = response.json().get("photos", [])
 
+    # Sprint76 - alt는 Pexels가 붙여 둔 사진 설명이고, url에는 내용을
+    # 적은 슬러그가 들어 있다. 후보 순위를 매길 유일한 의미 정보인데
+    # 여기서 버리고 있었다. 추가 호출은 없다 - 이미 받은 응답이다.
     return [
         {
             "source": "pexels_image",
@@ -55,6 +58,7 @@ def search_photos(
             "download_url": photo.get("src", {}).get("original"),
             "width": photo.get("width"),
             "height": photo.get("height"),
+            "alt": photo.get("alt") or "",
             "query": query,
         }
         for photo in photos
@@ -99,12 +103,16 @@ def search_videos(
             key=lambda f: (f.get("width") or 0) * (f.get("height") or 0),
         )
 
+        # 비디오 응답에는 alt가 없다. 슬러그가 유일한 단서이고,
+        # duration은 Shorts scene에 쓸 만한 길이인지를 가른다.
         results.append({
             "source": "pexels_video",
             "source_url": video.get("url"),
             "download_url": best_file.get("link"),
             "width": best_file.get("width"),
             "height": best_file.get("height"),
+            "alt": "",
+            "duration": video.get("duration"),
             "query": query,
         })
 

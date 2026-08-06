@@ -93,9 +93,11 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
     자체가 실패한 경우(네트워크 오류 등) 둘 다 포함한다.
     """
 
-    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    stock_candidates = get_candidates(
+        image_prompt, allow_video=True, scene=scene,
+    )
     best_candidate, _ = select_best_with_score(
-        stock_candidates, is_hook_scene=is_hook_scene,
+        stock_candidates, is_hook_scene=is_hook_scene, scene=scene,
     )
 
     if best_candidate is not None:
@@ -145,9 +147,11 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
             f"Pexels로 폴백: {exc}"
         )
 
-    stock_candidates = get_candidates(image_prompt, allow_video=True)
+    stock_candidates = get_candidates(
+        image_prompt, allow_video=True, scene=scene,
+    )
     best_candidate, _ = select_best_with_score(
-        stock_candidates, is_hook_scene=is_hook_scene,
+        stock_candidates, is_hook_scene=is_hook_scene, scene=scene,
     )
 
     if best_candidate is None:
@@ -262,9 +266,11 @@ def integrate_asset(
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
         # 기존 prefer_ai 소프트 품질 게이트 경로를 그대로 유지한다.
-        stock_candidates = get_candidates(image_prompt, allow_video=True)
+        stock_candidates = get_candidates(
+            image_prompt, allow_video=True, scene=scene,
+        )
         best_candidate, best_score = select_best_with_score(
-            stock_candidates, is_hook_scene=is_hook_scene,
+            stock_candidates, is_hook_scene=is_hook_scene, scene=scene,
         )
 
         ai_priority_choice = (

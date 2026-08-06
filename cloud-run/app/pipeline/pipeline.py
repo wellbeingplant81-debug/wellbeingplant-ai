@@ -7,6 +7,7 @@ from app.services import ai_director_service
 from app.services import character_consistency_engine
 from app.steps import step01_script
 from app.services import scene_prompt_service
+from app.services import search_cache
 from app.steps import step02_assets
 from app.steps import step03_tts
 from app.steps import step04_subtitle
@@ -115,6 +116,11 @@ def run_pipeline(
 
     if pipeline_start is None:
         pipeline_start = time.perf_counter()
+
+    # Sprint76 - 검색 캐시는 한 영상을 만드는 동안만 유효하다. 스톡
+    # 검색 결과는 시간이 지나면 달라지므로, 다음 영상이 낡은 결과를
+    # 물려받으면 안 된다.
+    search_cache.clear()
 
     timings = {
         "project_creation": project_creation_time,

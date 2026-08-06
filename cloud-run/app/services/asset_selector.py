@@ -6,6 +6,8 @@ from app.providers import pexels_provider
 from app.providers import pixabay_provider
 from app.services.image_service import generate_image
 from app.services.provider_factory import build_provider_chain
+from app.services import search_cache
+from app.services import search_query_builder
 from app.services.search_query_extractor import extract_search_query
 from app.utils import asset_cache
 
@@ -163,6 +165,7 @@ def get_candidates(
     image_prompt: str,
     allow_video: bool = True,
     max_per_provider: int = MAX_CANDIDATES_PER_PROVIDER,
+    scene: dict = None,
 ) -> list:
     """
     Sprint30 - Multi-Candidate 수집.
@@ -185,14 +188,23 @@ def get_candidates(
     유효한 후보를 찾지 못했는지를 명확히 구분한 요약 로그를 남깁니다.
     """
 
-    query = extract_search_query(image_prompt)
+    # Sprint76 - scene이 있으면 요소에서 검색어를 만든다. camera/
+    # composition/lighting은 그림을 그릴 때 필요한 지시이지 사진을
+    # 찾는 말이 아니다. scene이 없는 호출부는 예전 그대로 동작한다.
+    if scene:
+        queries = search_query_builder.expand(scene)
+    else:
+        primary = extract_search_query(image_prompt)
+        queries = [primary] if primary else []
 
-    if not query:
+    if not queries:
         print(
             "[ProviderLog] 검색 쿼리가 비어 있어 provider를 호출하지 "
             "않고 AI fallback으로 진행합니다."
         )
         return []
+
+    query = queries[0]
 
     candidates = []
     status_log = []
@@ -204,7 +216,15 @@ def get_candidates(
         print(f"[ProviderLog] {source}: ATTEMPTING (API Key 보유={key_present})")
 
         try:
-            results = search_fn(query)
+            # 좁은 검색어가 0건이면 넓혀 가며 다시 시도한다. 스톡
+            # 검색은 어휘가 조금만 어긋나도 0건이 나오는데, 지금까지는
+            # 그러면 바로 AI 폴백이었다. 같은 질의는 캐시가 막는다.
+            results = []
+            for attempt in queries:
+                results = search_cache.search(source, attempt, search_fn)
+                if results:
+                    query = attempt
+                    break
         except Exception as exc:
             if not key_present:
                 print(f"[ProviderLog] {source}: SKIPPED - API Key 없음 ({exc})")

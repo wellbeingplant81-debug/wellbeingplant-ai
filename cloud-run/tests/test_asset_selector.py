@@ -10,6 +10,7 @@ sys.path.insert(
 )
 
 from app.services import asset_selector
+from app.services import search_cache
 
 
 PROMPT = "Ultra realistic photo of a tired woman in a messy office."
@@ -199,6 +200,13 @@ class TestAssetSelector(unittest.TestCase):
 
 
 class TestGetCandidates(unittest.TestCase):
+
+    def setUp(self):
+        # Sprint76 - 검색 캐시는 프로세스 전역이다. 케이스
+        # 사이로 새면 mock이 호출되지 않아 계약이 흐려진다.
+        search_cache.clear()
+        self.addCleanup(search_cache.clear)
+
     """Sprint30 - get_candidates()는 select_asset()과 별개의 새 함수이며,
     기존 select_asset() 테스트는 위에서 전혀 변경하지 않았습니다."""
 
