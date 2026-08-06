@@ -246,6 +246,9 @@ class TestRegenerationService(unittest.TestCase):
             channel="wellbeing",
             is_hook_scene=False,
             image_style=image_service.IMAGE_STYLE_DEFAULT,
+            # Sprint75 - 이 테스트의 scene은 image_prompt만 있는
+            # 구버전 형태라 요소가 비어 있다.
+            elements={},
         )
         mock_build_video.assert_called_once_with(self.project_path)
         mock_merge.assert_called_once_with(self.project_path)
@@ -420,7 +423,7 @@ class TestRegenerationService(unittest.TestCase):
         )
 
         def _side_effect(prompt, output_file, channel, is_hook_scene,
-                         image_style=None):
+                         image_style=None, elements=None):
             if "scene1" in output_file:
                 raise Exception("scene1 failed")
 
@@ -657,6 +660,9 @@ class TestRegenerationService(unittest.TestCase):
             channel="wellbeing",
             is_hook_scene=True,
             image_style=image_service.IMAGE_STYLE_DEFAULT,
+            # Sprint75 - 이 테스트의 scene은 image_prompt만 있는
+            # 구버전 형태라 요소가 비어 있다.
+            elements={},
         )
 
         entries = {e.scene: e for e in result.regeneration}
@@ -722,6 +728,7 @@ class TestRegenerationService(unittest.TestCase):
             channel="wellbeing",
             is_hook_scene=False,
             image_style=image_service.IMAGE_STYLE_MEDICAL,
+            elements={},
         )
 
     def test_visual_type_missing_uses_the_default_style(

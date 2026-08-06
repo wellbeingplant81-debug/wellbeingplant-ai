@@ -133,7 +133,8 @@ def _candidate_paths(staging_path: str, count: int) -> list:
 
 
 def generate_candidates(image_prompt, staging_path, count, channel,
-                        is_hook_scene, image_style) -> list:
+                        is_hook_scene, image_style,
+                        elements=None) -> list:
     """
     후보를 뽑는다. 반환값은 실제로 만들어진 파일 경로들.
 
@@ -153,6 +154,7 @@ def generate_candidates(image_prompt, staging_path, count, channel,
                 channel=channel,
                 is_hook_scene=is_hook_scene,
                 image_style=image_style,
+                elements=elements,
             )
         ]
 
@@ -162,6 +164,7 @@ def generate_candidates(image_prompt, staging_path, count, channel,
         channel=channel,
         is_hook_scene=is_hook_scene,
         image_style=image_style,
+        elements=elements,
     )
 
     if not paths:

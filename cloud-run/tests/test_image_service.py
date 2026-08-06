@@ -12,9 +12,7 @@ sys.path.insert(
 
 from app.prompts.image_style import (
     MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT,
-    MEDICAL_ILLUSTRATION_STYLE,
     WELLBEING_NEGATIVE_PROMPT,
-    WELLBEING_STYLE,
 )
 from app.services import image_service
 from app.services.image_service import generate_image
@@ -55,7 +53,9 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
-        self.assertIn(MEDICAL_ILLUSTRATION_STYLE.strip(), kwargs["prompt"])
+        # Sprint75 - 통짜 블록 대신 Style 슬롯으로 들어간다.
+        self.assertIn("medical illustration", kwargs["prompt"])
+        self.assertIn("scientific visualization", kwargs["prompt"])
         self.assertEqual(
             kwargs["config"].negative_prompt, MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT,
         )
@@ -94,7 +94,10 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
-        self.assertIn(WELLBEING_STYLE.strip(), kwargs["prompt"])
+        # Sprint75 - 채널 스타일은 Style 슬롯에 들어간다. 인물 품질
+        # 표현은 여기 없다 - 사물 scene에 사람을 요구하던 자리다.
+        self.assertIn("editorial photography", kwargs["prompt"])
+        self.assertNotIn("Korean people", kwargs["prompt"])
         self.assertEqual(kwargs["config"].negative_prompt, WELLBEING_NEGATIVE_PROMPT)
 
     @patch("app.services.image_service.enhance_image")
@@ -109,7 +112,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         generate_image("a lifestyle scene", self.output_file)
 
         _, kwargs = mock_client.models.generate_images.call_args
-        self.assertIn(WELLBEING_STYLE.strip(), kwargs["prompt"])
+        self.assertIn("editorial photography", kwargs["prompt"])
         self.assertEqual(kwargs["config"].negative_prompt, WELLBEING_NEGATIVE_PROMPT)
 
     @patch("app.services.image_service.enhance_image")
@@ -126,7 +129,7 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
-        self.assertNotIn(MEDICAL_ILLUSTRATION_STYLE.strip(), kwargs["prompt"])
+        self.assertNotIn("medical illustration", kwargs["prompt"])
 
     @patch("app.services.image_service.enhance_image")
     @patch("app.services.image_service.client")
@@ -145,7 +148,8 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         )
 
         _, kwargs = mock_client.models.generate_images.call_args
-        self.assertIn(MEDICAL_ILLUSTRATION_STYLE.strip(), kwargs["prompt"])
+        self.assertIn("medical illustration", kwargs["prompt"])
+        self.assertNotIn("Korean people", kwargs["prompt"])
 
 
 if __name__ == "__main__":

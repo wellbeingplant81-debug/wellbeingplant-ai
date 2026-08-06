@@ -7,6 +7,7 @@ from app.models.quality_report import RetryAttempt, SceneRegenerationEntry
 from app.services import asset_integration_service
 from app.services import quality_service
 from app.services import regeneration_policy as policy
+from app.services import scene_prompt_service
 from app.services.image_service import generate_image
 from app.services.video_builder import build_video
 from app.services.final_video_service import merge_video_audio
@@ -246,6 +247,13 @@ def run(project_path: str):
                     channel=channel,
                     is_hook_scene=(scene_number == 1),
                     image_style=asset_integration_service.resolve_image_style(
+                        scenes_by_number[scene_number],
+                    ),
+                    # Sprint75 - 재생성도 구조화된 프롬프트로 그린다.
+                    # 실측에서 이 경로만 예전 방식으로 나갔다 - 같은
+                    # scene을 처음 그릴 때와 다시 그릴 때 다른 프롬프트를
+                    # 쓰면 무엇이 달라졌는지 알 수 없다.
+                    elements=scene_prompt_service.scene_elements(
                         scenes_by_number[scene_number],
                     ),
                 )

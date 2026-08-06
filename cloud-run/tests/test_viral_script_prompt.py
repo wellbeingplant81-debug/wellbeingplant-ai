@@ -46,7 +46,12 @@ class TestOutputSchemaUnchanged(unittest.TestCase):
             self.assertIn(key, RENDERED)
 
     def test_declares_required_scene_keys(self):
-        for key in ('"scene"', '"narration"', '"image_prompt"'):
+        # Sprint75 - image_prompt 한 칸이 요소 여섯 칸으로 갈라졌다.
+        # 두 템플릿이 같은 스키마를 내놓는지가 이 테스트의 요지이고,
+        # 그것은 그대로다.
+        for key in ('"scene"', '"narration"', '"subject"', '"action"',
+                    '"environment"', '"camera"', '"composition"',
+                    '"lighting"'):
             self.assertIn(key, RENDERED)
 
     def test_ends_with_json_only_instruction(self):

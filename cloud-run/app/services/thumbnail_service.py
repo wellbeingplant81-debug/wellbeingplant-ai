@@ -1,5 +1,6 @@
 import os
 
+from app.prompts import prompt_elements as slots
 from app.services import image_service
 from app.services.image_service import generate_image
 
@@ -11,10 +12,26 @@ def create_thumbnail(
     channel: str = "wellbeing",
     scene1_narration: str = "",
     scene1_image_prompt: str = "",
+    character_reference: str = "",
 ):
+    """
+    Sprint75 - 썸네일도 구조화된 프롬프트로 그린다.
 
-    prompt = f"""
-YouTube Shorts thumbnail based on this exact scene:
+    앵커를 대본 최상위 character로 옮기면서 썸네일이 인물을 잃었다.
+    예전에는 이 프롬프트가 scene 1의 image_prompt를 통째로 품었고 거기에
+    외형 묘사가 문장으로 들어 있었다. 이제 scene 1의 subject는
+    "the same man"처럼 짧고 외형은 다른 곳에 있는데, 여기서 그 필드를
+    읽지 않았다.
+
+    실측 - 영상 속 인물 일관성은 95인데 썸네일만
+    consistency_with_scene1 = 0이었다. "썸네일 속 인물이 영상의
+    주인공과 완전히 다른 사람입니다."
+
+    부정어("No text", "No watermark")도 긍정 프롬프트에서 뺐다. 같은
+    내용이 THUMBNAIL_NEGATIVE_PROMPT로 이미 간다.
+    """
+
+    subject = f"""YouTube Shorts thumbnail based on this exact scene:
 
 {scene1_image_prompt}
 
@@ -24,29 +41,19 @@ location, or background.
 
 Context, for emotional tone only (do not add new visual elements
 from this beyond expression or mood):
-{scene1_narration}
+{scene1_narration}"""
 
-For maximum click-through-rate, you may slightly exaggerate:
+    elements = {
+        slots.SUBJECT: subject,
+        slots.COMPOSITION: (
+            "tight close-up, strong focus on the subject, "
+            "high emotion, slightly exaggerated facial expression "
+            "for click-through"
+        ),
+    }
 
-- facial expression (more surprised, curious, or emotionally intense)
-- composition (tighter close-up, stronger focus on the subject)
-
-YouTube Shorts thumbnail
-
-Close-up
-
-High emotion
-
-Cinematic lighting
-
-Bright color grading
-
-Focus on subject
-
-No text
-
-No watermark
-"""
+    if character_reference and character_reference.strip():
+        elements[slots.REFERENCE] = character_reference.strip()
 
     output = os.path.join(
         project_path,
@@ -54,10 +61,11 @@ No watermark
     )
 
     generate_image(
-        prompt,
+        subject,
         output,
         channel,
         image_style=image_service.IMAGE_STYLE_THUMBNAIL,
+        elements=elements,
     )
 
     return output

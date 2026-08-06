@@ -6,6 +6,7 @@ from app import config
 from app.prompts.character_consistency_rules import with_character_rules
 from app.prompts.script_prompt import SCRIPT_PROMPT
 from app.prompts.viral_script_prompt import VIRAL_SCRIPT_PROMPT
+from app.services import scene_prompt_service
 
 
 client = genai.Client(
@@ -62,6 +63,15 @@ def generate_script(
     print("=" * 80)
 
     data = json.loads(text)
+
+    # Sprint75 - Writer는 이제 scene마다 요소(subject/action/environment/
+    # camera/composition/lighting)를 적는다. image_prompt는 거기서
+    # 파생된다 - 스톡 검색과 품질 평가가 계속 그 필드를 읽는다.
+    #
+    # 구버전 대본(문장 하나짜리 image_prompt)이 들어와도 그대로 통과한다.
+    data["scenes"] = scene_prompt_service.apply_prompt_elements(
+        data["scenes"],
+    )
 
     print("\n" + "=" * 80)
     print("SCENE 1 KEYS")

@@ -9,20 +9,9 @@ from PIL import (
 from google import genai
 from google.genai import types
 
-from app.prompts.image_style import (
-    WELLBEING_STYLE,
-    FOODBEAT_STYLE,
-    MINDTAIL_STYLE,
-    THUMBNAIL_STYLE,
-    HOOK_SCENE_STYLE_BOOST,
-    MEDICAL_ILLUSTRATION_STYLE,
-    WELLBEING_NEGATIVE_PROMPT,
-    FOODBEAT_NEGATIVE_PROMPT,
-    MINDTAIL_NEGATIVE_PROMPT,
-    THUMBNAIL_NEGATIVE_PROMPT,
-    HOOK_SCENE_NEGATIVE_PROMPT,
-    MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT,
-)
+from app.prompts import prompt_elements
+from app.prompts import style_profiles
+from app.services import prompt_composer
 
 # Sprint71 - 이미지 스타일. provider 라우팅(visual_type: "real"/"ai")과는
 # 완전히 다른 축이다.
@@ -49,19 +38,6 @@ client = genai.Client(
     project="wellbeingplant-ai",
     location="global",
 )
-
-
-STYLE_MAP = {
-    "wellbeing": WELLBEING_STYLE,
-    "foodbeat": FOODBEAT_STYLE,
-    "mindtail": MINDTAIL_STYLE,
-}
-
-NEGATIVE_PROMPT_MAP = {
-    "wellbeing": WELLBEING_NEGATIVE_PROMPT,
-    "foodbeat": FOODBEAT_NEGATIVE_PROMPT,
-    "mindtail": MINDTAIL_NEGATIVE_PROMPT,
-}
 
 
 def enhance_image(path: str):
@@ -98,70 +74,36 @@ def enhance_image(path: str):
     )
 
 
-def _resolve_style(image_style: str, channel: str, is_hook_scene: bool):
-    """
-    스타일 이름 하나로 (style_prompt, negative_prompt)를 정한다.
-    순수 함수입니다.
-
-    Sprint71 - 예전에는 이 분기가 visual_type("real"/"ai")을 읽었다.
-    그런데 visual_type은 원래 "어느 provider를 먼저 시도할지"를 정하는
-    라우팅 값이다. 두 의미가 한 필드에 얹혀 있어서, 인물 scene을
-    Imagen으로 보내려고 "ai"를 찍는 순간 스타일까지 의료 일러스트로
-    바뀌어 사람 대신 해부학 단면도가 나왔다(실측).
-
-    이제 스타일은 이름으로만 정해진다. 라우팅 어휘가 흘러 들어오면
-    조용히 기본값으로 처리하지 않고 즉시 거부한다 - 그래야 다음에
-    같은 혼선이 생겼을 때 바로 드러난다.
-    """
-
-    if image_style not in IMAGE_STYLES:
-        raise ValueError(
-            f"알 수 없는 image_style: {image_style!r}. "
-            f"사용 가능한 값: {sorted(IMAGE_STYLES)}. "
-            f"'real'/'ai'는 provider 라우팅 값이지 스타일이 아닙니다."
-        )
-
-    if image_style == IMAGE_STYLE_THUMBNAIL:
-        return THUMBNAIL_STYLE, THUMBNAIL_NEGATIVE_PROMPT
-
-    if image_style == IMAGE_STYLE_MEDICAL:
-        # Sprint60 Hotfix - 혈관/세포/장내세균 등은 사람 사진이 아니라
-        # 의료 일러스트로 생성한다. hook scene이어도 이 분기가 우선한다 -
-        # hook의 "강한 임팩트"는 사람 얼굴이 아니라 시각적 대비로 만든다.
-        return MEDICAL_ILLUSTRATION_STYLE, MEDICAL_ILLUSTRATION_NEGATIVE_PROMPT
-
-    # IMAGE_STYLE_DEFAULT와 IMAGE_STYLE_CHARACTER는 둘 다 채널 스타일을
-    # 쓴다. 인물 scene이라고 해서 다른 화풍을 쓸 이유는 없고, 필요한
-    # 것은 "의료 일러스트가 아니어야 한다"는 것뿐이다. 이름을 나눠 둔
-    # 이유는 호출자의 의도를 기록으로 남기기 위해서다.
-    base_style = STYLE_MAP.get(channel, WELLBEING_STYLE)
-
-    if is_hook_scene:
-        return (
-            base_style + "\n" + HOOK_SCENE_STYLE_BOOST,
-            HOOK_SCENE_NEGATIVE_PROMPT,
-        )
-
-    return (
-        base_style,
-        NEGATIVE_PROMPT_MAP.get(channel, WELLBEING_NEGATIVE_PROMPT),
-    )
-
-
 def _build_prompt(prompt: str, image_style: str, channel: str,
-                  is_hook_scene: bool):
-    style_prompt, negative_prompt = _resolve_style(
-        image_style, channel, is_hook_scene,
+                  is_hook_scene: bool, elements: dict = None):
+    """
+    Sprint75 - 최종 프롬프트를 슬롯에서 조립한다.
+
+    예전에는 채널 스타일 블록 하나를 scene 문장 앞에 통째로 이어붙였다.
+    그 블록 안에 스타일, 인물 품질, 조명, 카메라, 구도, 부정어가 전부
+    섞여 있었고 그것이 모든 scene에 붙었다 - 오트밀 그릇을 그리는
+    프롬프트가 "Korean people, Natural facial expression, Realistic
+    eyes"로 시작하고 "85mm portrait photography"가 뒤따랐다.
+
+    이제 프로필은 scene이 비워 둔 슬롯만 채운다. 카메라처럼 scene이
+    정한 슬롯은 프로필이 건드리지 않는다.
+
+    elements가 없는 scene(구버전 대본)은 문장 전체를 subject 슬롯에
+    넣는다. 구조는 없지만 최소한 프로필이 인물을 요구하지는 않는다.
+    """
+
+    profile = style_profiles.resolve(image_style, channel, is_hook_scene)
+
+    scene = dict(elements or {})
+
+    if not scene.get(prompt_elements.SUBJECT):
+        scene[prompt_elements.SUBJECT] = prompt
+
+    composed = prompt_composer.compose(
+        prompt_composer.merge(profile, scene),
     )
 
-    return (
-        f"""
-{style_prompt}
-
-{prompt}
-""",
-        negative_prompt,
-    )
+    return composed.positive, composed.negative
 
 
 def _write_generated(generated, output_file: str) -> str:
@@ -195,6 +137,7 @@ def generate_image_candidates(
     channel: str = "wellbeing",
     is_hook_scene: bool = False,
     image_style: str = IMAGE_STYLE_DEFAULT,
+    elements: dict = None,
 ):
     """
     Sprint74 - 같은 프롬프트로 후보를 여러 장 받는다.
@@ -208,7 +151,7 @@ def generate_image_candidates(
     """
 
     final_prompt, negative_prompt = _build_prompt(
-        prompt, image_style, channel, is_hook_scene,
+        prompt, image_style, channel, is_hook_scene, elements,
     )
 
     response = client.models.generate_images(
@@ -241,17 +184,12 @@ def generate_image(
     channel: str = "wellbeing",
     is_hook_scene: bool = False,
     image_style: str = IMAGE_STYLE_DEFAULT,
+    elements: dict = None,
 ):
 
-    style_prompt, negative_prompt = _resolve_style(
-        image_style, channel, is_hook_scene,
+    final_prompt, negative_prompt = _build_prompt(
+        prompt, image_style, channel, is_hook_scene, elements,
     )
-
-    final_prompt = f"""
-{style_prompt}
-
-{prompt}
-"""
 
     response = client.models.generate_images(
         model="imagen-4.0-generate-001",

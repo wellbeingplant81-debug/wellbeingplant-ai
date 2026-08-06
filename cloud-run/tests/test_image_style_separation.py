@@ -29,7 +29,6 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
-from app.prompts import image_style as style_prompts
 from app.services import asset_integration_service, image_service
 from app.services.character_consistency_engine import CHARACTER_SCENE_FIELD
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
@@ -144,32 +143,35 @@ class TestGenerateImagePicksStyleByName(unittest.TestCase):
             image_style=image_service.IMAGE_STYLE_CHARACTER,
         )
 
-        self.assertNotIn(
-            style_prompts.MEDICAL_ILLUSTRATION_STYLE, captured["prompt"],
-        )
+        # Sprint75 - 통짜 블록이 사라져서 예전 assertNotIn은 무조건
+        # 참이 된다. 실제로 확인할 것은 의료 어휘가 인물 scene에
+        # 새어 들어오지 않는다는 것이다.
+        self.assertNotIn("medical illustration", captured["prompt"])
+        self.assertNotIn("anatomy diagram", captured["prompt"])
 
     def test_medical_style_still_uses_the_medical_illustration_style(self):
         captured = self._captured_prompt(
             image_style=image_service.IMAGE_STYLE_MEDICAL,
         )
 
-        self.assertIn(
-            style_prompts.MEDICAL_ILLUSTRATION_STYLE, captured["prompt"],
-        )
+        # Sprint75 - 통짜 블록 대신 Style 슬롯.
+        self.assertIn("medical illustration", captured["prompt"])
+        self.assertNotIn("Korean people", captured["prompt"])
 
     def test_thumbnail_style_uses_the_thumbnail_style(self):
         captured = self._captured_prompt(
             image_style=image_service.IMAGE_STYLE_THUMBNAIL,
         )
 
-        self.assertIn(style_prompts.THUMBNAIL_STYLE, captured["prompt"])
+        self.assertIn("professional photography", captured["prompt"])
+        self.assertIn("bright color grading", captured["prompt"])
 
     def test_default_style_uses_the_channel_style(self):
         captured = self._captured_prompt(
             image_style=image_service.IMAGE_STYLE_DEFAULT, channel="wellbeing",
         )
 
-        self.assertIn(style_prompts.WELLBEING_STYLE, captured["prompt"])
+        self.assertIn("editorial photography", captured["prompt"])
 
     def test_a_character_hook_scene_still_gets_the_hook_boost(self):
         # scene 1은 썸네일 역할을 겸하므로 인물이어도 hook 강조가
@@ -179,7 +181,11 @@ class TestGenerateImagePicksStyleByName(unittest.TestCase):
             is_hook_scene=True,
         )
 
-        self.assertIn(style_prompts.HOOK_SCENE_STYLE_BOOST, captured["prompt"])
+        # Sprint75 - hook 강조는 Composition/Lighting 슬롯으로 간다.
+        # 카메라는 건드리지 않는다 - 그것은 scene이 정한다.
+        self.assertIn("large clear subject filling the frame",
+                      captured["prompt"])
+        self.assertIn("strong dramatic lighting", captured["prompt"])
 
     def test_routing_values_are_not_accepted_as_styles(self):
         # "ai"/"real"은 라우팅 어휘다. 스타일 인자로 새어 들어오면

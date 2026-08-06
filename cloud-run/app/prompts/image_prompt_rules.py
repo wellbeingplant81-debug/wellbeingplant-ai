@@ -1,152 +1,103 @@
+"""
+Sprint75 - Prompt Intelligence v2.
+
+Writer가 이미지 프롬프트를 문장 하나로 쓰지 않는다. 요소를 하나씩
+적으면 Prompt Composer가 조립한다.
+
+문장으로 받던 동안의 문제는 두 가지였다. 첫째, 어느 요소가 들어 있고
+어느 것이 빠졌는지 알 수 없었다. 둘째, 조립 단계에서 채널 스타일
+블록을 통째로 앞에 붙이는데 그 안에도 카메라와 조명과 인물 묘사가
+들어 있어서, 대본이 정한 것과 정면으로 싸웠다.
+
+이제 스타일/화질/부정어는 프로필이 담당한다. 이 규칙은 scene마다
+다른 것만 요구한다.
+"""
+
+
 IMAGE_PROMPT_RULES = """===========================
 Image Prompt 규칙
 ===========================
 
-반드시 영어만 사용.
+각 Scene의 이미지는 문장 하나가 아니라 아래 여섯 요소로 적는다.
+전부 영어로 쓴다.
 
-한 문장으로 작성.
+- subject      : 무엇이 화면에 있는가. 사람이면 인물 묘사, 사물이면
+                 그 사물.
+- action       : 그 피사체가 무엇을 하고 있는가. 정적인 장면이면
+                 상태를 적는다.
+- environment  : 어디인가. 배경과 장소.
+- camera       : 카메라 앵글과 거리. 아래 목록에서 고른다.
+- composition  : 화면 구성. 특별히 요구할 것이 없으면 비워 둔다.
+- lighting     : 조명.
 
-Scene 내용을 실제 사진처럼 묘사한다.
-
-각 image_prompt에는 다음 요소를 자연스럽게 녹여서 작성한다.
-
-- Subject (누가/무엇이 등장하는지)
-- Action (어떤 행동을 하고 있는지)
-- Environment (어디에 있는지, 배경)
-- Lighting (조명)
-- Camera angle (카메라 앵글)
-- Mood (전체적인 분위기)
-
-Emotion과 Composition은 장면을 더 살릴 때만 선택적으로 포함한다.
-
-인물이 중심인 장면(웰빙/건강 정보 등)에서는 자연스럽게 Korean people로 묘사한다.
-음식, 동물, 풍경처럼 사람이 중심이 아닌 장면에서는 인종을 임의로 지정하지 않고
-장면에 맞는 피사체를 그대로 묘사한다.
-
-문장은 간결하고 정보 밀도가 높게 작성한다.
-불필요한 수식어나 키워드 나열로 문장을 늘리지 않는다.
-
-Ultra realistic, Photorealistic, Magazine quality, Correct anatomy와 같은
-일반적인 화질/스타일 키워드는 이미지 생성 단계에서 채널 스타일로
-별도 적용되므로 image_prompt에 다시 반복하지 않는다.
-
-image_prompt는 오직 이 장면만의 구체적인 내용(피사체, 행동, 배경,
-카메라, 조명, 분위기)에 집중한다.
+각 요소는 짧은 영어 구(phrase)로 적는다. 문장 부호로 여러 요소를
+한 칸에 몰아넣지 않는다.
 
 ===========================
-Scene 1 (Hook Scene) 규칙
+적지 말아야 할 것
 ===========================
 
-Scene 1은 영상의 커버 프레임이자 첫인상 역할을 하므로,
-다른 Scene보다 시각적으로 더 강해야 한다.
+화질/스타일 키워드는 적지 않는다. 이미지 생성 단계에서 채널 스타일로
+따로 적용된다.
 
-Scene 1의 image_prompt는 다음을 우선한다.
+  예: ultra realistic, photorealistic, magazine quality,
+      8k, highly detailed, professional photography
 
-- 인물이 등장하면 강한 표정 (놀람, 호기심, 강한 감정)
-- 보는 사람의 호기심을 자극하는 구도
-- 강한 시각적 대비
-- 깔끔하고 단순한 구도
-- 크고 명확하게 보이는 피사체
-- 배경 잡동사니 최소화
-- 강하고 인상적인 조명
+부정 표현은 적지 않는다. "no text", "without people" 같은 것은 별도의
+negative prompt가 담당한다.
+
+세로 화면 비율(9:16)도 적지 않는다. 생성 단계에서 지정된다.
 
 ===========================
-Scene 구성 규칙
+camera 목록
 ===========================
 
-Scene 1은 위 Hook Scene 규칙을 최우선으로 따른다.
+close-up, framing tightly on the subject's face or a key detail
 
-Scene 2 ~ 마지막 Scene은 Scene 1 및 서로 간에 반드시
+medium shot, showing the subject from the waist up
 
-- 다른 카메라 앵글
-- 다른 거리
-- 다른 구도
-- 다른 표정
-- 다른 조명
-- 다른 배경
+wide shot, showing the subject within their full surrounding environment
 
-을 사용한다.
+over-the-shoulder shot, camera behind a person's shoulder
 
-예시
+low angle, camera below the subject looking upward
 
-Close-up, framing tightly on the subject's face or a key detail
+high angle, camera above the subject looking downward
 
-Medium shot, showing the subject from the waist up
+top-down view, camera directly above looking straight down
 
-Wide shot, showing the subject within their full surrounding environment
+eye-level shot, camera at the height of the subject's eyes
 
-Over-the-shoulder shot, camera positioned behind a person's shoulder with the main subject visible past the foreground shoulder or silhouette
-
-Low angle, camera positioned below the subject looking upward
-
-High angle, camera positioned above the subject looking downward
-
-Top-down view, camera directly above the subject looking straight down
-
-Eye-level shot, camera at the same height as the subject's eyes
-
-등을 적절히 섞는다.
+Scene마다 서로 다른 camera를 쓴다. 같은 앵글을 연속으로 쓰지 않는다.
+거리(close/medium/wide)도 번갈아 쓴다.
 
 ===========================
-상황별 규칙
+Scene 1 (Hook Scene)
 ===========================
 
-의료 장면
+Scene 1은 영상의 커버 프레임이다. 다른 Scene보다 시각적으로 강해야
+한다.
 
-실제 병원 다큐멘터리처럼.
-
-건강 장면
-
-실제 건강 프로그램 촬영처럼.
-
-음식 장면
-
-프리미엄 음식 광고처럼.
-
-운동 장면
-
-실제 스포츠 광고처럼.
-
-인물
-
-실제 한국인처럼.
+- 인물이 등장하면 강한 표정(놀람, 호기심, 강한 감정)을 subject에 적는다
+- 피사체가 크고 명확하게 보이는 camera를 고른다
+- 배경이 단순한 environment를 고른다
 
 ===========================
-절대 포함 금지
+인물이 있는 Scene과 없는 Scene
 ===========================
 
-text
+사람이 등장하는 Scene의 subject에는 인물을 구체적으로 적는다.
+웰빙/건강 주제에서는 Korean으로 적는다.
 
-subtitle
+사람이 등장하지 않는 Scene(인체 내부, 음식, 사물, 풍경)의 subject에는
+인물 묘사를 절대 넣지 않는다. 사람을 암시하는 표현("hands holding",
+"a person's view")도 넣지 않는다. 억지로 사람을 등장시키지 않는다.
 
-caption
+===========================
+상황별 참고
+===========================
 
-watermark
-
-logo
-
-illustration
-
-cartoon
-
-anime
-
-CGI
-
-3D render
-
-plastic skin
-
-low quality
-
-blurry
-
-extra fingers
-
-deformed hands
-
-duplicate person
-
-cropped face
-
-bad anatomy"""
+의료 장면은 실제 병원 다큐멘터리처럼.
+건강 장면은 실제 건강 프로그램 촬영처럼.
+음식 장면은 프리미엄 음식 광고처럼.
+운동 장면은 실제 스포츠 광고처럼."""

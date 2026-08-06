@@ -152,7 +152,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -249,7 +249,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -335,7 +335,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         }
         mock_get_candidates.return_value = [low_quality_candidate]
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -360,7 +360,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         # 선택("ai_priority")이 아니라 기존과 같은 "fallback"이어야 한다.
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -396,7 +396,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     ):
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -419,7 +419,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
         mock_download.side_effect = Exception("network error")
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -436,7 +436,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     def test_visual_type_ai_uses_imagen_first(
         self, mock_generate_image, mock_get_candidates,
     ):
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -505,7 +505,7 @@ class TestAssetIntegrationService(unittest.TestCase):
     def test_visual_type_ai_passes_the_medical_style_to_generate_image(
         self, mock_get_candidates, mock_generate_image,
     ):
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -532,7 +532,7 @@ class TestAssetIntegrationService(unittest.TestCase):
         # 아니라 기존 photorealistic 스타일을 써야 하므로).
         mock_get_candidates.return_value = []
 
-        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+        def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
             with open(output_file, "wb") as f:
                 f.write(b"ai bytes")
             return output_file
@@ -558,7 +558,7 @@ class TestAssetIntegrationService(unittest.TestCase):
             "app.services.image_service.generate_image",
         ) as mock_generate_image:
 
-            def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None):
+            def _generate_side_effect(image_prompt, output_file, channel="wellbeing", is_hook_scene=False, image_style=None, elements=None):
                 with open(output_file, "wb") as f:
                     f.write(b"ai bytes")
                 return output_file

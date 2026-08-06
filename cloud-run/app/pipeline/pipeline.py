@@ -6,6 +6,7 @@ from app import config
 from app.services import ai_director_service
 from app.services import character_consistency_engine
 from app.steps import step01_script
+from app.services import scene_prompt_service
 from app.steps import step02_assets
 from app.steps import step03_tts
 from app.steps import step04_subtitle
@@ -252,6 +253,16 @@ def run_pipeline(
         except Exception as exc:
             print(f"Character consistency step failed: {exc}")
 
+    # Sprint75 - 인물 앵커를 인물 scene에 싣는다. character_scene 표시가
+    # 붙은 뒤여야 하므로 라우팅 다음이다.
+    #
+    # 앵커는 대본 최상위 character 한 곳에서 온다. Scene마다 외형을
+    # 다시 쓰게 하면 Writer가 조금씩 다르게 쓰고, 그때부터 얼굴이
+    # 갈라진다 - 실측에서 character_consistency가 40까지 떨어졌다.
+    data["scenes"] = scene_prompt_service.attach_character_reference(
+        data["scenes"], data.get("character"),
+    )
+
     t0 = time.perf_counter()
     data["scenes"] = step02_assets.collect_assets(
         data["scenes"],
@@ -290,6 +301,11 @@ def run_pipeline(
         channel,
         scene1["narration"],
         scene1["image_prompt"],
+        # Sprint75 - 썸네일도 같은 인물이어야 한다. scene 1의 subject는
+        # 이제 짧아서("the same man") 외형 묘사가 들어 있지 않다.
+        character_reference=scene1.get(
+            scene_prompt_service.CHARACTER_REFERENCE_FIELD, "",
+        ),
     )
     timings["thumbnail_generation"] = time.perf_counter() - t0
 

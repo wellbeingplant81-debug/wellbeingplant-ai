@@ -3,6 +3,7 @@ import subprocess
 
 from app.services import asset_feedback_service
 from app.services import best_of_n_service
+from app.services import scene_prompt_service
 from app.services.asset_mode_config import get_pexels_quality_threshold
 from app.services.asset_priority_classifier import effective_pexels_threshold
 from app.services.asset_ranking_service import select_best_with_score
@@ -62,6 +63,9 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
         channel=channel,
         is_hook_scene=is_hook_scene,
         image_style=image_style,
+        # Sprint75 - scene이 정한 슬롯을 그대로 넘긴다. 프로필은
+        # 여기 비어 있는 것만 채운다.
+        elements=scene_prompt_service.scene_elements(scene or {}),
     )
 
     winner, selection = best_of_n_service.select_best(

@@ -56,11 +56,17 @@ Scene 개수
   "title": "",
   "hook": "",
   "script": "",
+  "character": "",
   "scenes": [
     {
       "scene": 1,
       "narration": "",
-      "image_prompt": ""
+      "subject": "",
+      "action": "",
+      "environment": "",
+      "camera": "",
+      "composition": "",
+      "lighting": ""
     }
   ]
 }
@@ -85,7 +91,12 @@ script는 narration 전체를 이어붙인 내용
 
 - scene
 - narration
-- image_prompt
+- subject
+- action
+- environment
+- camera
+- composition
+- lighting
 
 를 포함한다.
 
