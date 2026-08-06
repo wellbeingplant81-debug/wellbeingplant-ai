@@ -85,6 +85,12 @@ ENDPOINTS = [
     ("POST", "/studio/api/projects/{project_id}/regenerate", {"scenes": [2]},
      ["app.routers.studio.studio_jobs.start_regeneration"],
      f"/studio/api/projects/{PROJECT_ID}/regenerate"),
+
+    # Sprint82 - Replay Viewer. 순수 읽기라 패치할 서비스가 없다.
+    ("GET", "/studio/replay", None, []),
+    ("GET", "/studio/api/replay", None, []),
+    ("GET", "/studio/api/projects/{project_id}/replay", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/replay"),
 ]
 
 

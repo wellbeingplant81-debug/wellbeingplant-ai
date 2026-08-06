@@ -17,7 +17,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from app.services import (
-    project_service, studio_jobs, studio_regeneration, studio_service,
+    project_service, studio_jobs, studio_regeneration, studio_replay,
+    studio_service,
 )
 from app.tools import asset_dataset
 
@@ -25,10 +26,13 @@ from app.tools import asset_dataset
 router = APIRouter(prefix="/studio", tags=["studio"])
 
 
-_PAGE = os.path.join(
+_STATIC = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "static", "studio.html",
+    "static",
 )
+
+_PAGE = os.path.join(_STATIC, "studio.html")
+_REPLAY_PAGE = os.path.join(_STATIC, "replay.html")
 
 
 class GenerateRequest(BaseModel):
@@ -61,6 +65,37 @@ def studio_page():
             return HTMLResponse(f.read())
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="studio.html이 없습니다.")
+
+
+@router.get("/replay", response_class=HTMLResponse)
+def replay_page():
+    """Replay Viewer 화면."""
+
+    try:
+        with open(_REPLAY_PAGE, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=500, detail="replay.html이 없습니다.")
+
+
+@router.get("/api/replay")
+def replay(rule: str = "baseline"):
+    """축적된 데이터셋 전체를 규칙 하나로 되돌려 본다. 순수 읽기."""
+
+    try:
+        return studio_replay.replay_view(rule)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/api/projects/{project_id}/replay")
+def project_replay(project_id: str, rule: str = "baseline"):
+    try:
+        return studio_replay.project_replay_view(
+            _project_path(project_id), rule,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/api/projects")
