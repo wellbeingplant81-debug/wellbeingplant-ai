@@ -239,9 +239,12 @@ class TestRegistrationIsCheapAndExplicit(unittest.TestCase):
         first = bootstrap.register_current_providers(reg)
         second = bootstrap.register_current_providers(reg)
 
-        self.assertEqual(len(first), 4)
+        # Sprint104가 chat_import를 더해 5개가 됐다. 숫자를 박아 두면
+        # Provider가 늘 때마다 이 테스트가 깨진다 - 확인할 것은
+        # "두 번 불러도 안전한가"이지 개수가 아니다.
+        self.assertTrue(first)
         self.assertEqual(second, [])
-        self.assertEqual(len(reg), 4)
+        self.assertEqual(len(reg), len(first))
 
     def test_bootstrap_is_reported(self):
         reg = StageProviderRegistry()
@@ -316,18 +319,25 @@ class TestProductionModeSelection(unittest.TestCase):
                 stages.SCRIPT, source_modes.GENERATE, provider=CURRENT,
             ))
 
-    def test_assisted_cannot_pick_the_current_provider_for_import(self):
-        """Plan은 만들어지지만 그 단계를 맡을 Provider가 아직 없다 -
-        등록소가 그 사실을 그대로 답한다."""
+    def test_the_current_provider_only_offers_generation(self):
+        """Sprint103에는 "IMPORT를 맡을 Provider가 아직 없다"였다.
+        Sprint104가 chat_import를 더했으므로 그 문장은 더 이상 사실이
+        아니다.
+
+        지켜야 할 경계는 그대로다 - current는 여전히 GENERATE만
+        맡고, MANUAL은 아직 아무도 맡지 않는다."""
 
         reg = _registry()
 
-        self.assertEqual(reg.available(stages.SCRIPT, source_modes.IMPORT), [])
-        self.assertEqual(reg.available(stages.SCRIPT, source_modes.MANUAL), [])
         self.assertEqual(
             [p.name for p in reg.available(stages.SCRIPT, source_modes.GENERATE)],
             [CURRENT],
         )
+        self.assertNotIn(
+            CURRENT,
+            [p.name for p in reg.available(stages.SCRIPT, source_modes.IMPORT)],
+        )
+        self.assertEqual(reg.available(stages.SCRIPT, source_modes.MANUAL), [])
 
 
 class TestCost(unittest.TestCase):
