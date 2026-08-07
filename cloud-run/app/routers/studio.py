@@ -725,6 +725,192 @@ def job(job_id: str, console_from: int = 0):
     return result
 
 
+# Sprint121 - 승인 기반 제작.
+#
+# 한 단계씩 만들고, 사람이 보고 승인하면 다음으로 간다. 여기서 하는
+# 일은 studio_review를 부르는 것뿐이고, 그 아래는 전부 이미 있는
+# 엔진이다. 마지막 Render는 생성 버튼이 쓰는 그 경로를 그대로 쓴다.
+
+
+class ReviewScriptRequest(BaseModel):
+    # 사람이 고친 대본 그대로. 우리가 손대지 않는다.
+    data: dict
+
+
+@router.post("/api/review")
+def review_create(request: GenerateRequest):
+    """
+    검토하며 만들 빈 프로젝트를 만든다.
+
+    아무것도 생성하지 않는다 - 첫 단계는 사람이 누른 뒤에 돈다.
+    프로젝트를 만드는 일은 기존 create_project를 그대로 쓴다.
+    """
+
+    if not request.topic or not request.topic.strip():
+        raise HTTPException(status_code=400, detail="주제를 입력하십시오.")
+
+    project = project_service.create_project(
+        request.topic.strip(), request.channel,
+    )
+
+    return {"project_id": project["id"]}
+
+
+@router.get("/api/review/{project_id}")
+def review_state(project_id: str):
+    """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+    state = studio_review.state(path)
+
+    return {
+        "project_id": project_id,
+        **state,
+        "scenes": [
+            {
+                **scene,
+                "image_url": (
+                    f"/studio/api/projects/{project_id}"
+                    f"/media/scene?scene={scene['scene']}"
+                    if scene["has_image"] else None
+                ),
+                "voice_url": (
+                    f"/studio/api/projects/{project_id}"
+                    f"/media/voice_scene?scene={scene['scene']}"
+                    if scene["has_voice"] else None
+                ),
+            }
+            for scene in state["scenes"]
+        ],
+    }
+
+
+@router.post("/api/review/{project_id}/script")
+def review_generate_script(project_id: str):
+    """STEP1. 기존 Writer를 부른다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+    meta = studio_service._load(os.path.join(path, "project.json")) or {}
+
+    try:
+        studio_review.generate_script(meta.get("topic") or "", path)
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.put("/api/review/{project_id}/script")
+def review_save_script(project_id: str, request: ReviewScriptRequest):
+    """사람이 고친 대본을 확정한다. 다시 만들지 않는다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+
+    try:
+        studio_review.save_script(path, request.data)
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/images")
+def review_generate_images(project_id: str):
+    """STEP1 승인 -> STEP2. 확정된 대본으로 이미지를 만든다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+    meta = studio_service._load(os.path.join(path, "project.json")) or {}
+
+    try:
+        studio_review.generate_images(path, meta.get("channel") or "wellbeing")
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/images/{scene}")
+def review_regenerate_image(project_id: str, scene: int):
+    """Scene 하나만 다시 만든다. 나머지는 손대지 않는다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+    meta = studio_service._load(os.path.join(path, "project.json")) or {}
+
+    try:
+        studio_review.regenerate_image(
+            path, meta.get("channel") or "wellbeing", scene,
+        )
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/voices")
+def review_generate_voices(project_id: str):
+    """STEP2 승인 -> STEP3. 확정된 대본으로 나레이션을 만든다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+
+    try:
+        studio_review.generate_voices(path)
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/voices/{scene}")
+def review_regenerate_voice(project_id: str, scene: int):
+    """Scene 하나만 다시 만든다."""
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+
+    try:
+        studio_review.regenerate_voice(path, scene)
+    except studio_review.ReviewError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/render")
+def review_render(project_id: str):
+    """
+    STEP3 승인 -> STEP4.
+
+    새 Render를 만들지 않는다. 생성 버튼이 쓰는 그 작업을 그대로 걸면
+    Resolver들이 확정된 대본·이미지·음성을 보고 01·02·03을 건너뛴다.
+    """
+
+    from app.services import studio_review
+
+    path = _project_path(project_id)
+    meta = studio_service._load(os.path.join(path, "project.json")) or {}
+
+    job_id = studio_review.render(
+        meta.get("topic") or "",
+        project_id,
+        meta.get("channel") or "wellbeing",
+    )
+
+    return {"job_id": job_id}
+
+
 @router.get("/api/projects/{project_id}/regeneration")
 def regeneration(project_id: str):
     """엔진이 남긴 결정 로그와 scene별 재시도/되돌리기 상태."""

@@ -199,6 +199,21 @@ a{color:var(--accent)}
 .pcard .model{flex-basis:100%;color:var(--dim);font-size:10.5px;
   padding-left:23px}
 
+/* Sprint121 - 승인 기반 제작. */
+.review{margin-top:12px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:9px;padding:12px 13px}
+.review .rhead{font-size:13px;font-weight:650;margin-bottom:8px}
+.rsteps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.rstep{font-size:11px;padding:3px 9px;border-radius:99px;color:var(--dim);
+  border:1px solid var(--line)}
+.rstep.on{color:var(--ok);border-color:#1d4429}
+.rstep.now{color:var(--text);border-color:var(--accent);background:#12243d}
+.rscene{background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;padding:8px 10px;margin-bottom:6px}
+.rscene .h{font-size:11.5px;color:var(--dim);margin-bottom:4px}
+.rscene textarea{min-height:0}
+.review video{width:100%;border-radius:8px;background:#000}
+
 /* Sprint120 - 제작 준비도. 막지 않고 알려만 준다. */
 .ready{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
   padding:10px 11px;margin-top:10px}
@@ -332,6 +347,15 @@ a{color:var(--accent)}
     </div>
 
     <div id="scriptBox"></div>
+
+    <!-- Sprint121 - 승인 기반 제작. 한 단계씩 만들고 사람이 승인한다. -->
+    <div class="rowbtns">
+      <button class="sm ghost" onclick="startReview()">검토하며 만들기</button>
+    </div>
+    <div id="reviewPanel" class="review" style="display:none">
+      <div id="reviewBody"></div>
+      <p class="muted" id="reviewBusy" style="margin:8px 0 0"></p>
+    </div>
 
     <div id="imageImport" style="display:none;margin-top:10px">
         <div class="drop" id="imageDrop">
@@ -1038,6 +1062,197 @@ function toggleProviders(){
   providersOpen = !providersOpen;
   $("providersToggle").textContent = providersOpen ? "▲" : "▼";
   renderCurrentProviders();
+}
+
+// Sprint121 - 승인 기반 제작.
+//
+// 한 번에 만들지 않는다. 한 단계를 만들고, 사람이 보고 고치고 승인하면
+// 다음으로 간다. 어디까지 왔는지는 서버가 산출물을 보고 말해 준다 -
+// 화면이 따로 기억하지 않는다.
+let reviewProject = null;
+let reviewState = null;
+let reviewBusy = false;
+
+const REVIEW_NEXT = {
+  script: {label: "승인하고 이미지 생성", call: "images"},
+  image:  {label: "승인하고 음성 생성",  call: "voices"},
+  voice:  {label: "승인하고 영상 생성",  call: "render"},
+};
+
+function reviewBusyNote(text){
+  reviewBusy = !!text;
+  $("reviewBusy").textContent = text || "";
+  document.querySelectorAll("#reviewPanel button").forEach(b => {
+    b.disabled = reviewBusy;
+  });
+}
+
+async function reviewCall(method, suffix, body){
+  reviewBusyNote("만드는 중… 잠시 기다려 주십시오.");
+  try{
+    const r = await fetch(`/studio/api/review/${reviewProject}${suffix}`, {
+      method: method,
+      headers: body ? {"Content-Type": "application/json"} : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const d = await r.json();
+    if(!r.ok){ alert(d.detail || "실패했습니다."); return null; }
+    return d;
+  } finally {
+    reviewBusyNote("");
+  }
+}
+
+async function openReview(projectId){
+  reviewProject = projectId;
+  $("reviewPanel").style.display = "block";
+  const d = await reviewCall("GET", "");
+  if(d) renderReview(d);
+}
+
+// 검토하며 만들기를 시작한다. 프로젝트만 만들고 아무것도 생성하지
+// 않는다 - 첫 단계는 사람이 누른 뒤에 돈다.
+async function startReview(){
+  const topic = $("topic").value.trim();
+  if(!topic){ alert("주제를 입력하십시오."); return; }
+
+  // 프로젝트만 만든다. 아무것도 생성하지 않는다 - 첫 단계는 사람이
+  // 누른 뒤에 돈다.
+  const r = await fetch("/studio/api/review", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({topic: topic, channel: $("channel").value})});
+
+  if(!r.ok){ alert("프로젝트를 만들지 못했습니다."); return; }
+  const d = await r.json();
+  await openReview(d.project_id);
+}
+
+function reviewSteps(state){
+  return `<div class="rsteps">${
+    ["script", "image", "voice", "video"].map((name, i) => {
+      const on = state.done[name];
+      const now = state.step === name;
+      return `<span class="rstep ${on?"on":""} ${now?"now":""}">${
+        i + 1}. ${{script:"대본", image:"이미지", voice:"음성",
+                  video:"영상"}[name]}</span>`;
+    }).join("")}</div>`;
+}
+
+function reviewScriptStep(state){
+  if(!state.scenes.length){
+    return `<p class="muted">아직 대본이 없습니다.</p>
+      <div class="rowbtns">
+        <button class="sm" onclick="reviewGenerateScript()">대본 생성</button>
+      </div>`;
+  }
+
+  return state.scenes.map(s => `<div class="rscene">
+      <div class="h">Scene ${s.scene}</div>
+      <textarea id="rnar${s.scene}" rows="2">${s.narration}</textarea>
+    </div>`).join("")
+    + `<div class="rowbtns">
+        <button class="sm ghost" onclick="reviewSaveScript()">수정 저장</button>
+        <button class="sm ghost" onclick="reviewGenerateScript()">대본 다시 생성</button>
+      </div>`;
+}
+
+function reviewImageStep(state){
+  return `<div class="grid">${state.scenes.map(s => `
+    <figure>
+      ${s.image_url
+        ? `<img src="${s.image_url}&t=${Date.now()}">`
+        : '<div class="drop">아직 없음</div>'}
+      <figcaption>${s.scene}</figcaption>
+    </figure>`).join("")}</div>`
+    + `<div class="rowbtns">${state.scenes.map(s =>
+        `<button class="sm ghost"
+           onclick="reviewRegenerate('images', ${s.scene})">Scene ${
+             s.scene} 다시 생성</button>`).join("")}</div>`;
+}
+
+function reviewVoiceStep(state){
+  return state.scenes.map(s => `<div class="rscene">
+      <div class="h">Scene ${s.scene}</div>
+      <div class="row" style="display:flex;gap:8px;align-items:center">
+        ${s.voice_url
+          ? `<button class="sm ghost"
+               onclick="playVoice(this,'${s.voice_url}')">▶ 재생</button>`
+          : '<span class="muted">아직 없음</span>'}
+        <button class="sm ghost"
+          onclick="reviewRegenerate('voices', ${s.scene})">다시 생성</button>
+      </div>
+    </div>`).join("");
+}
+
+function reviewVideoStep(state){
+  if(!state.done.video){
+    return '<p class="muted">승인하면 자막·영상·썸네일·품질 단계가 돕니다.'
+      + ' 대본·이미지·음성은 확정된 것을 그대로 씁니다.</p>';
+  }
+  return `<video controls src="/studio/api/projects/${
+    reviewProject}/media/video?t=${Date.now()}"></video>`;
+}
+
+function renderReview(state){
+  reviewState = state;
+  const body = {
+    script: reviewScriptStep,
+    image: reviewImageStep,
+    voice: reviewVoiceStep,
+    video: reviewVideoStep,
+    done: reviewVideoStep,
+  }[state.step](state);
+
+  const next = REVIEW_NEXT[state.step];
+  const ready = state.done[state.step];
+
+  $("reviewBody").innerHTML = `
+    <div class="rhead">STEP ${state.index} / ${state.total} · ${state.label}</div>
+    ${reviewSteps(state)}
+    ${body}
+    ${next ? `<div class="rowbtns">
+      <button onclick="reviewApprove('${next.call}')" ${ready?"":"disabled"}>${
+        next.label}</button></div>` : ""}
+    ${state.step === "done"
+      ? '<p class="muted" style="margin-top:8px">완성되었습니다.</p>' : ""}`;
+}
+
+async function reviewGenerateScript(){
+  const d = await reviewCall("POST", "/script");
+  if(d) renderReview(d);
+}
+
+async function reviewSaveScript(){
+  // 사람이 고친 문장만 바꾼다. 나머지는 서버가 들고 있던 그대로다.
+  const scenes = reviewState.scenes.map(s => ({
+    scene: s.scene,
+    narration: ($(`rnar${s.scene}`) || {value: s.narration}).value,
+    image_prompt: s.image_prompt,
+  }));
+
+  const d = await reviewCall("PUT", "/script", {
+    data: {title: reviewState.title || "제목", scenes: scenes},
+  });
+  if(d) renderReview(d);
+}
+
+async function reviewRegenerate(kind, scene){
+  const d = await reviewCall("POST", `/${kind}/${scene}`);
+  if(d) renderReview(d);
+}
+
+async function reviewApprove(call){
+  if(call === "render"){
+    const d = await reviewCall("POST", "/render");
+    if(!d) return;
+    jobId = d.job_id;
+    $("jobState").textContent = "영상 생성 중…";
+    pollJob();
+    return;
+  }
+
+  const d = await reviewCall("POST", "/" + call);
+  if(d) renderReview(d);
 }
 
 // [다음]은 자세히 고르는 자리를 연다. 요약은 그 전에도 이미 무엇을

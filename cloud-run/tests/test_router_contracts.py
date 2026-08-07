@@ -116,6 +116,36 @@ ENDPOINTS = [
     ("POST", "/studio/api/production/images", None, []),
     # Sprint112 - 음성 업로드.
     ("POST", "/studio/api/production/voice", None, []),
+
+    # Sprint121 - 승인 기반 제작. 한 단계씩 만들고 사람이 승인한다.
+    # 엔진을 부르는 것들은 studio_review 쪽을 패치해 실제 호출을 막는다.
+    ("POST", "/studio/api/review", {"topic": "주제"},
+     ["app.routers.studio.project_service.create_project"]),
+    ("GET", "/studio/api/review/{project_id}", None, [],
+     f"/studio/api/review/{PROJECT_ID}"),
+    ("POST", "/studio/api/review/{project_id}/script", None,
+     ["app.services.studio_review.generate_script"],
+     f"/studio/api/review/{PROJECT_ID}/script"),
+    ("PUT", "/studio/api/review/{project_id}/script",
+     {"data": {"title": "t", "scenes": [
+         {"scene": 1, "narration": "n", "image_prompt": "p"}]}},
+     ["app.services.studio_review.save_script"],
+     f"/studio/api/review/{PROJECT_ID}/script"),
+    ("POST", "/studio/api/review/{project_id}/images", None,
+     ["app.services.studio_review.generate_images"],
+     f"/studio/api/review/{PROJECT_ID}/images"),
+    ("POST", "/studio/api/review/{project_id}/images/{scene}", None,
+     ["app.services.studio_review.regenerate_image"],
+     f"/studio/api/review/{PROJECT_ID}/images/1"),
+    ("POST", "/studio/api/review/{project_id}/voices", None,
+     ["app.services.studio_review.generate_voices"],
+     f"/studio/api/review/{PROJECT_ID}/voices"),
+    ("POST", "/studio/api/review/{project_id}/voices/{scene}", None,
+     ["app.services.studio_review.regenerate_voice"],
+     f"/studio/api/review/{PROJECT_ID}/voices/1"),
+    ("POST", "/studio/api/review/{project_id}/render", None,
+     ["app.services.studio_review.render"],
+     f"/studio/api/review/{PROJECT_ID}/render"),
     ("POST", "/studio/api/production/plan",
      {"selections": {"script": "generate"}}, []),
     ("POST", "/studio/api/production/project",
@@ -174,8 +204,12 @@ class RouterContractTestCase(unittest.TestCase):
         for p in patchers:
             self.addCleanup(p.stop)
 
+        # Sprint121 - PUT이 생겼다. 메서드를 그대로 보내지 않으면 405가
+        # 나고, 서비스가 안 불린 것을 계약 위반으로 잘못 읽는다.
         if method == "GET":
             response = self.client.get(path)
+        elif method == "PUT":
+            response = self.client.put(path, json=payload)
         else:
             response = self.client.post(path, json=payload)
 
