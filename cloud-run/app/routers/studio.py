@@ -925,7 +925,6 @@ def review_save_providers(project_id: str, request: ReviewProviderRequest):
     아는 자리가 읽는다.
     """
 
-    from app.providers import tts_provider
     from app.services import provider_selection
 
     path = _project_path(project_id)
@@ -942,26 +941,34 @@ def review_save_providers(project_id: str, request: ReviewProviderRequest):
 
         # 모르는 이름을 적어 두면 만들 때가 되어서야 깨진다.
         #
-        # 음성은 두 층이 있다. 실제로 만드는 것은 tts_provider이고 그것이
-        # 아는 이름은 google·elevenlabs다. app.production 등록소의
-        # "google_tts"는 모델을 직접 부르는 다른 자리(아직 비어 있음)라
-        # 여기에 적으면 안 된다.
-        if stage == "voice":
-            if name not in tts_provider.PROVIDERS:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"음성 단계가 모르는 Provider입니다: {name}. "
-                        f"사용 가능한 값: current, "
-                        f"{', '.join(tts_provider.PROVIDERS)}"
-                    ),
-                )
+        # 받아 줄 이름은 두 층에서 온다.
+        #
+        #   엔진이 아는 이름   provider_selection.WIRED - 지금 실제로
+        #                      도는 것들(음성 google·elevenlabs,
+        #                      메타데이터 manual)
+        #   등록소의 이름      app.production - 아직 안 붙은 자리들
+        #                      (Sprint124). 골라 두면 만들 때 정직하게
+        #                      거절한다
+        #
+        # 둘은 겹치지 않는다. 등록소의 "google_tts"는 모델을 직접 부르는
+        # 다른 자리이고, 엔진의 "google"은 지금 도는 경로다.
+        if name in provider_selection.WIRED[stage]:
             continue
 
         try:
             registry.get(stage, name)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+        except ValueError:
+            known = list(provider_selection.WIRED[stage]) + [
+                p.name for p in registry.for_stage(stage)
+            ]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{stage} 단계가 모르는 Provider입니다: {name}. "
+                    f"사용 가능한 값: {provider_selection.CURRENT}, "
+                    f"{', '.join(sorted(set(known)))}"
+                ),
+            )
 
     try:
         provider_selection.save(path, request.providers)

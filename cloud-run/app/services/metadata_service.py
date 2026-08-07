@@ -34,6 +34,7 @@ from app import config
 from app.models.metadata import Metadata
 from app.services import (
     description_generator,
+    provider_selection,
     hashtag_generator,
     metadata_strategy_service,
     playlist_recommendation_service,
@@ -111,13 +112,23 @@ def _measured_duration(project_path: str) -> Optional[float]:
     return (checks.get("video_duration") or {}).get("duration_seconds")
 
 
-def generate_publish_package(project_path: str) -> Optional[dict]:
+def _package_for(project_path: str, provider: str = None) -> Optional[dict]:
     """
-    프로젝트의 산출물을 읽어 publish_package.json을 남긴다.
+    Sprint129 - 메타데이터를 만드는 유일한 지점. 고른 Provider가 여기
+    도착한다.
 
-    script.json이 없으면 아무것도 하지 않는다 - 만들 재료가 없는데
-    빈 껍데기를 남기면 업로드가 그것을 진짜 메타데이터로 읽는다.
+    current(=고르지 않음)는 None으로 오고 기존 엔진이 그대로 돈다.
+
+    manual은 사람이 직접 쓴다는 뜻이므로 만들지 않는다. 이미 놓여
+    있으면 그것을 그대로 쓰고, 없으면 없는 대로 둔다 - 업로드는
+    publish_package.json이 없으면 script.json의 제목으로 돌아가므로
+    (Sprint91~93) 빈 껍데기를 남기는 것보다 낫다.
     """
+
+    provider_selection.require_wired("metadata", provider)
+
+    if provider == provider_selection.MANUAL:
+        return _load(os.path.join(project_path, PACKAGE_FILENAME)) or None
 
     script_data = _load(os.path.join(project_path, "script.json"))
 
@@ -137,3 +148,23 @@ def generate_publish_package(project_path: str) -> Optional[dict]:
     atomic_write_json(os.path.join(project_path, PACKAGE_FILENAME), package)
 
     return package
+
+
+def generate_publish_package(project_path: str,
+                             provider: str = None) -> Optional[dict]:
+    """
+    프로젝트의 산출물을 읽어 publish_package.json을 남긴다.
+
+    script.json이 없으면 아무것도 하지 않는다 - 만들 재료가 없는데
+    빈 껍데기를 남기면 업로드가 그것을 진짜 메타데이터로 읽는다.
+
+    Sprint129 - 누가 만들지는 프로젝트가 정한다. project.json은 이미
+    여기서 읽고 있던 파일이라(topic을 가져온다) 읽는 자리를 새로
+    만들지 않았다. 환경변수를 쓰지 않으므로 스레드가 겹쳐도 서로
+    섞이지 않는다.
+    """
+
+    if provider is None:
+        provider = provider_selection.selected(project_path, "metadata")
+
+    return _package_for(project_path, provider)

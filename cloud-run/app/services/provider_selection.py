@@ -45,6 +45,9 @@ FIELDS = {
 # 고르지 않은 것과 같은 값. 현재 엔진이 정한 대로 간다는 뜻이다.
 CURRENT = "current"
 
+# 사람이 직접 쓴다. 엔진이 만들지 않는다는 뜻이다.
+MANUAL = "manual"
+
 
 class ProviderNotWired(RuntimeError):
     """고른 Provider가 아직 연결되지 않았다.
@@ -67,6 +70,13 @@ def _wired_for(stage):
         from app.providers import tts_provider
 
         return tuple(tts_provider.PROVIDERS)
+
+    # Sprint129 - 메타데이터의 manual은 앞의 것들과 다르다. "아직 안
+    # 붙은 자리"가 아니라 이미 뜻이 정해져 있다 - 사람이 직접 쓴다는
+    # 것이고, 그러면 엔진이 만들지 않는 것이 맞다. 없는 엔진을 새로
+    # 만들 필요가 없으므로 처음부터 연결된 것으로 둔다.
+    if stage == "metadata":
+        return (MANUAL,)
 
     return ()
 
