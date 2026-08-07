@@ -919,28 +919,49 @@ def _review_length(path, state):
 
     새 계산은 만들지 않는다 - 예상은 Duration Gate가 쓰는 그 estimator,
     실측은 Duration Optimizer가 쓰는 그 ffprobe 호출이다.
+
+    Sprint143 - scene마다의 값도 함께 돌려준다. 예전에도 여기서 구하고
+    있었는데 합만 남기고 버렸다.
+
+        estimate_script_duration은 문자 그대로 scene별
+        estimate_duration의 합이다. 그러니 scene별 값을 내보내는 것은
+        새 계산이 아니라 버리던 것을 살리는 일이다.
+
+    실측 목록은 render가 쓰는 그 값이기도 하다 - scene_timeline.
+    build_timeline이 같은 get_audio_duration을 부르고 그 경계로 영상이
+    만들어진다. 그래서 앞에서부터 더한 것이 영상 속 시작 시각이다.
+
+    돌려주는 목록은 그때의 총합과 같은 종류다 - 실측이 있으면 실측,
+    없으면 예상. 화면은 measured_seconds가 있는지로 둘을 가른다.
     """
 
-    from app.services import audio_policy, duration_estimator
+    from app.services import audio_policy
+    from app.services.duration_estimator import estimate_duration
     from app.services.duration_optimizer import get_audio_duration
 
     scenes = state.get("scenes") or []
 
-    estimated = duration_estimator.estimate_script_duration(
-        [{"narration": s.get("narration") or ""} for s in scenes],
-    )
+    per_scene = [
+        estimate_duration(scene.get("narration") or "") for scene in scenes
+    ]
+    estimated = sum(per_scene)
 
     measured = None
     if scenes and all(s.get("has_voice") for s in scenes):
-        total = 0.0
-        for scene in scenes:
-            total += get_audio_duration(os.path.join(
+        per_scene = [
+            get_audio_duration(os.path.join(
                 path, "audio", "scenes",
                 audio_policy.scene_audio_filename(scene["scene"]),
             ))
-        measured = round(total, 2)
+            for scene in scenes
+        ]
+        measured = round(sum(per_scene), 2)
 
-    return round(estimated, 2), measured
+    return (
+        round(estimated, 2),
+        measured,
+        [round(value, 2) for value in per_scene],
+    )
 
 
 def _review_metadata(path):
@@ -970,7 +991,7 @@ def review_state(project_id: str):
 
     path = _project_path(project_id)
     state = studio_review.state(path)
-    estimated, measured = _review_length(path, state)
+    estimated, measured, scene_seconds = _review_length(path, state)
 
     return {
         "project_id": project_id,
@@ -982,6 +1003,9 @@ def review_state(project_id: str):
         "providers": provider_selection.all_selected(path),
         "estimated_seconds": estimated,
         "measured_seconds": measured,
+        # Sprint143 - scene마다의 길이. 합이 위 총합과 같다 - 실측이
+        # 있으면 실측, 없으면 예상이다.
+        "scene_seconds": scene_seconds,
         "metadata": _review_metadata(path),
         "scenes": [
             {

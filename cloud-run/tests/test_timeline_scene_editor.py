@@ -281,12 +281,17 @@ class TestItInventsNoNumbers(unittest.TestCase):
         self.assertIn("measured_seconds", block)
         self.assertIn("estimated_seconds", block)
 
-    def test_playback_position_is_not_mapped_to_a_scene(self):
-        """scene별 길이를 모르면 지금 몇 번인지 알 수 없다."""
+    def test_playback_position_is_only_mapped_when_the_lengths_are_known(self):
+        """
+        Sprint142에는 scene별 길이가 없어 재생 위치를 이을 수 없었다.
+        Sprint143이 그 값을 열었으므로 이제 잇는다 - 다만 값이 없으면
+        여전히 답하지 않는다. 균등하게 나누면 틀린 자리를 가리킨다.
+        """
 
-        script = _without_comments(_script())
+        block = _function("sceneAtTime")
 
-        self.assertNotIn("currentTime", script)
+        self.assertIn("scene_seconds", block)
+        self.assertIn("return null", block)
 
 
 class TestNothingBelowTheScreenMoved(unittest.TestCase):
@@ -337,7 +342,7 @@ class TestNothingBelowTheScreenMoved(unittest.TestCase):
             set(state),
             {"project_id", "step", "label", "title", "index", "total",
              "done", "scenes", "providers", "estimated_seconds",
-             "measured_seconds", "metadata"})
+             "measured_seconds", "scene_seconds", "metadata"})
 
     def test_the_pipeline_and_steps_did_not_change(self):
         import app.pipeline.pipeline as pipeline
