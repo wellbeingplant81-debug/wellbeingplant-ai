@@ -14,6 +14,8 @@ script.json이 있으면 대본이 끝난 것이고 video/final_short.mp4가 있
 import json
 import os
 
+from app.services import audio_policy
+
 
 # 화면 가운데 파이프라인 진행 막대. (키, 이름, 판정할 산출물).
 #
@@ -35,6 +37,9 @@ _STAGES = (
 MEDIA_KINDS = {
     "video": "video/final_short.mp4",
     "thumbnail": "thumbnail.png",
+    # Sprint112 - 올린 음성을 들어 볼 수 있어야 한다. 파일명은
+    # audio_policy가 정한 것을 그대로 쓴다.
+    "voice": os.path.join("audio", audio_policy.VOICE_FILENAME),
 }
 
 
@@ -207,7 +212,7 @@ def media_path(project_path: str, kind: str, scene_number=None) -> str:
     정수로만 받는다(Sprint65의 resolve_project_path와 같은 원칙).
     """
 
-    if kind in ("scene", "before"):
+    if kind in ("scene", "before", "voice_scene"):
         try:
             number = int(scene_number)
         except (TypeError, ValueError):
@@ -218,10 +223,18 @@ def media_path(project_path: str, kind: str, scene_number=None) -> str:
 
         # Sprint81 - Before/After 비교. before는 재생성 직전 스냅샷이고
         # studio_regeneration이 떠 둔다.
-        relative = (
-            f"images/scene{number}.png" if kind == "scene"
-            else f"studio_before/scene{number}.png"
-        )
+        #
+        # Sprint112 - voice_scene은 scene별 나레이션이다. 파일명은
+        # audio_policy가 정한다 - 여기서 확장자를 적으면 정책이 두
+        # 곳에 생긴다.
+        if kind == "scene":
+            relative = f"images/scene{number}.png"
+        elif kind == "before":
+            relative = f"studio_before/scene{number}.png"
+        else:
+            relative = os.path.join(
+                "audio", "scenes", audio_policy.scene_audio_filename(number),
+            )
 
     elif kind in MEDIA_KINDS:
         relative = MEDIA_KINDS[kind]

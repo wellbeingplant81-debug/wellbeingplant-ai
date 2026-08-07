@@ -382,6 +382,89 @@ async def production_images(
     }
 
 
+@router.post("/api/production/voice")
+async def production_voice(
+    project_id: str = Form(...),
+    files: list[UploadFile] = File(...),
+):
+    """
+    직접 만든 음성을 프로젝트에 놓는다.
+
+    받은 파일을 임시로 내려놓고 Provider에게 넘긴다 - 놓는 규칙과
+    길이 검증은 Provider가 한다. 화면 전용 경로를 따로 만들지 않는다
+    (Sprint110 이미지와 같은 모양이다).
+    """
+
+    import shutil
+    import tempfile
+
+    from app.production.providers.voice_import import VoiceImportError
+    from app.production.stage_request import StageRequest
+    from app.steps.step01_script_resolve import (
+        ScriptResolveError, load_prepared,
+    )
+
+    path = _project_path(project_id)
+
+    # 대본은 Resolver가 읽고 검증한다(Sprint106) - 새 읽기 경로를
+    # 만들지 않는다. scene 수와 나레이션을 알아야 몇 개가 필요한지,
+    # 몇 초짜리가 될지 판정할 수 있다.
+    try:
+        scenes = load_prepared(path)["scenes"]
+    except ScriptResolveError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    staging = tempfile.mkdtemp()
+
+    try:
+        given = []
+        for upload in files:
+            target = os.path.join(staging, os.path.basename(upload.filename))
+            with open(target, "wb") as f:
+                shutil.copyfileobj(upload.file, f)
+            given.append(target)
+
+        provider = _registry().get("voice", "voice_import")
+
+        try:
+            result = provider.accept_manual(
+                given, StageRequest(project_path=path, scenes=scenes),
+            )
+        except VoiceImportError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+    return {
+        "scene_count": result["scene_count"],
+        "voice_count": result["voice_count"],
+        "measured_seconds": result["measured_seconds"],
+        "expected_seconds": result["expected_seconds"],
+        "warnings": result["warnings"],
+        # 전체 나레이션 하나로 들어온 경우다 - scene별 파일이 없다.
+        "whole": (
+            {
+                "name": os.path.basename(result["voice_path"]),
+                "seconds": result["measured_seconds"],
+                "url": f"/studio/api/projects/{project_id}/media/voice",
+            }
+            if result["voice_path"] else None
+        ),
+        "voices": [
+            {
+                "scene": voice["scene"],
+                "name": voice["name"],
+                "seconds": voice["seconds"],
+                "url": (
+                    f"/studio/api/projects/{project_id}"
+                    f"/media/voice_scene?scene={voice['scene']}"
+                ),
+            }
+            for voice in result["voices"]
+        ],
+    }
+
+
 @router.post("/api/production/import")
 def production_import(request: ChatImportRequest):
     """

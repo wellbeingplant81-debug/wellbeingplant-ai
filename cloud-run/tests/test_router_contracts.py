@@ -114,6 +114,8 @@ ENDPOINTS = [
     ("GET", "/studio/api/production/stages", None, []),
     # Sprint110 - 이미지 업로드.
     ("POST", "/studio/api/production/images", None, []),
+    # Sprint112 - 음성 업로드.
+    ("POST", "/studio/api/production/voice", None, []),
     ("POST", "/studio/api/production/plan",
      {"selections": {"script": "generate"}}, []),
     ("POST", "/studio/api/production/project",
@@ -210,6 +212,7 @@ class TestEveryEndpointIsCovered(RouterContractTestCase):
 # smoke 검증이 한다.
 MULTIPART_ENDPOINTS = {
     ("POST", "/studio/api/production/images"),
+    ("POST", "/studio/api/production/voice"),
 }
 
 

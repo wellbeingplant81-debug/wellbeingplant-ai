@@ -183,6 +183,21 @@ a{color:var(--accent)}
         </div>
         <div id="imageResult"></div>
       </div>
+
+      <div id="voiceImport" style="display:none;margin-top:10px">
+        <div class="drop" id="voiceDrop">
+          음성을 여기에 끌어다 놓으세요<br>
+          <span class="muted">폴더 · 여러 개 · ZIP · wav/mp3/m4a/aac/flac/ogg</span>
+        </div>
+        <input type="file" id="voiceFiles" multiple
+               accept=".wav,.mp3,.m4a,.aac,.flac,.ogg,.zip"
+               webkitdirectory="" style="display:none">
+        <div class="rowbtns">
+          <button class="sm ghost" onclick="pickVoiceFiles(false)">파일 선택</button>
+          <button class="sm ghost" onclick="pickVoiceFiles(true)">폴더 선택</button>
+        </div>
+        <div id="voiceResult"></div>
+      </div>
     </div>
 
     <div class="panel">
@@ -808,9 +823,9 @@ async function loadStages(){
 }
 
 function showImageImport(){
-  const mode = stagePick["image"];
-  const on = (mode === "manual" || mode === "import");
-  $("imageImport").style.display = on ? "block" : "none";
+  const prepared = m => (m === "manual" || m === "import");
+  $("imageImport").style.display = prepared(stagePick["image"]) ? "block" : "none";
+  $("voiceImport").style.display = prepared(stagePick["voice"]) ? "block" : "none";
 }
 
 function pickImageFiles(folder){
@@ -850,6 +865,65 @@ async function uploadImages(fileList){
         <img src="${s.url}&t=${Date.now()}">
         <figcaption>${s.scene}</figcaption></figure>`).join("")}
     </div>
+  </div>`;
+}
+
+function pickVoiceFiles(folder){
+  const input = $("voiceFiles");
+  if(folder){ input.setAttribute("webkitdirectory",""); }
+  else { input.removeAttribute("webkitdirectory"); }
+  input.click();
+}
+
+function voiceRow(v){
+  return `<div class="row" style="align-items:center;gap:8px;margin-top:6px">
+    <button class="sm ghost" onclick="playVoice(this,'${v.url}')">▶</button>
+    <span>${v.name}</span>
+    <span class="muted">${v.seconds.toFixed(1)}초</span>
+  </div>`;
+}
+
+// 한 번에 하나만 난다 - 여러 개가 겹치면 무엇을 듣고 있는지 알 수 없다.
+let playing = null;
+
+function playVoice(button, url){
+  if(playing){ playing.audio.pause(); playing.button.textContent = "▶"; }
+  if(playing && playing.url === url){ playing = null; return; }
+
+  const audio = new Audio(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
+  audio.onended = () => { button.textContent = "▶"; playing = null; };
+  audio.play();
+  button.textContent = "❚❚";
+  playing = {audio, button, url};
+}
+
+async function uploadVoice(fileList){
+  if(!currentProject){
+    $("voiceResult").innerHTML =
+      '<div class="preview err">먼저 프로젝트를 고르거나 만들어 주십시오.</div>';
+    return;
+  }
+
+  const form = new FormData();
+  form.append("project_id", currentProject);
+  [...fileList].forEach(f => form.append("files", f));
+
+  $("voiceResult").innerHTML = '<div class="preview muted">올리는 중…</div>';
+
+  const r = await fetch("/studio/api/production/voice", {
+    method:"POST", body: form});
+  const d = await r.json();
+
+  if(!r.ok){
+    $("voiceResult").innerHTML = `<div class="preview err">${d.detail}</div>`;
+    return;
+  }
+
+  $("voiceResult").innerHTML = `<div class="preview">
+    <div class="muted">Scene ${d.scene_count}개 · 음성 ${d.voice_count}개 ·
+      예상 ${d.expected_seconds.toFixed(1)}초 / 실제 ${d.measured_seconds.toFixed(1)}초</div>
+    ${d.warnings.map(w=>`<div class="note" style="margin-top:6px">${w}</div>`).join("")}
+    ${d.whole ? voiceRow(d.whole) : d.voices.map(voiceRow).join("")}
   </div>`;
 }
 
@@ -924,18 +998,21 @@ loadStages();
 // Sprint84 - Queue에서 프로젝트를 직접 열 수 있어야 한다.
 // 목록이 먼저 그려진 뒤에 열어야 선택 표시가 맞는다.
 // 드래그 & 드롭 - 브라우저가 주는 것은 결국 파일 목록이다.
-(() => {
-  const drop = $("imageDrop"), input = $("imageFiles");
+function wireDrop(dropId, inputId, pick, upload){
+  const drop = $(dropId), input = $(inputId);
   if(!drop) return;
-  drop.onclick = () => pickImageFiles(false);
-  input.onchange = () => { if(input.files.length) uploadImages(input.files); };
+  drop.onclick = () => pick(false);
+  input.onchange = () => { if(input.files.length) upload(input.files); };
   ["dragenter","dragover"].forEach(e => drop.addEventListener(e, ev => {
     ev.preventDefault(); drop.classList.add("over"); }));
   ["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => {
     ev.preventDefault(); drop.classList.remove("over"); }));
   drop.addEventListener("drop", ev => {
-    if(ev.dataTransfer.files.length) uploadImages(ev.dataTransfer.files); });
-})();
+    if(ev.dataTransfer.files.length) upload(ev.dataTransfer.files); });
+}
+
+wireDrop("imageDrop", "imageFiles", pickImageFiles, uploadImages);
+wireDrop("voiceDrop", "voiceFiles", pickVoiceFiles, uploadVoice);
 
 (async () => {
   await loadProjects();

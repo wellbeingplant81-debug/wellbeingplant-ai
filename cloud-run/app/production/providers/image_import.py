@@ -28,9 +28,9 @@ scene 수와 이미지 수가 맞지 않으면 경고한다. 고쳐 주지 않�
 
 import os
 import shutil
-import zipfile
 
 from app.production import source_modes, stages
+from app.production.providers import incoming_files
 from app.production.stage_provider import (
     STANDARD,
     ProviderCapabilities,
@@ -59,85 +59,15 @@ class ImageImportError(ValueError):
     한다."""
 
 
-def _is_supported(name: str) -> bool:
-    return os.path.splitext(name)[1].lower() in SUPPORTED_SUFFIXES
-
-
-def _sort_key(path: str):
-    """번호 순서로 세운다.
-
-    파일 이름이 순서다 - 사람이 0001, 0002로 적었으면 그 순서고,
-    2와 10이 섞여 있으면 2가 먼저다(문자열로 세면 10이 앞선다)."""
-
-    stem = os.path.splitext(os.path.basename(path))[0]
-    digits = "".join(ch for ch in stem if ch.isdigit())
-
-    return (0, int(digits)) if digits else (1, stem.lower())
-
-
-def _from_directory(path: str) -> list:
-    found = [
-        os.path.join(path, name)
-        for name in os.listdir(path)
-        if _is_supported(name)
-    ]
-
-    return sorted(found, key=_sort_key)
-
-
-def _from_zip(path: str, workspace: str) -> list:
-    extracted = []
-
-    with zipfile.ZipFile(path) as archive:
-        for info in archive.infolist():
-            if info.is_dir() or not _is_supported(info.filename):
-                continue
-            # 압축 안의 경로는 버리고 이름만 쓴다 - 압축 파일이
-            # 바깥 경로를 가리키는 것을 막는다.
-            name = os.path.basename(info.filename)
-            target = os.path.join(workspace, name)
-            with archive.open(info) as source, open(target, "wb") as out:
-                shutil.copyfileobj(source, out)
-            extracted.append(target)
-
-    return sorted(extracted, key=_sort_key)
-
-
 def _collect(payload, workspace: str) -> list:
-    """준 것을 파일 목록으로 편다. 목록의 순서는 지킨다."""
+    """준 것을 파일 목록으로 편다. 목록의 순서는 지킨다.
 
-    if payload is None:
-        raise ImageImportError("이미지를 받지 못했습니다.")
+    Sprint112 - 펴는 규칙은 음성과 똑같아서 incoming_files로 옮겼다.
+    다른 것은 확장자와 예외뿐이다."""
 
-    entries = payload if isinstance(payload, (list, tuple)) else [payload]
-    collected = []
-
-    for entry in entries:
-        path = str(entry)
-
-        if not os.path.exists(path):
-            raise ImageImportError(f"찾을 수 없는 경로입니다: {path}")
-
-        if os.path.isdir(path):
-            collected.extend(_from_directory(path))
-        elif zipfile.is_zipfile(path):
-            collected.extend(_from_zip(path, workspace))
-        elif _is_supported(path):
-            collected.append(path)
-        else:
-            suffix = os.path.splitext(path)[1] or "(확장자 없음)"
-            raise ImageImportError(
-                f"지원하지 않는 형식입니다: {suffix}. "
-                f"{', '.join(SUPPORTED_SUFFIXES)}만 받습니다."
-            )
-
-    if not collected:
-        raise ImageImportError(
-            "이미지를 하나도 찾지 못했습니다. "
-            f"{', '.join(SUPPORTED_SUFFIXES)} 파일이 있어야 합니다."
-        )
-
-    return collected
+    return incoming_files.collect(
+        payload, workspace, SUPPORTED_SUFFIXES, ImageImportError, "이미지",
+    )
 
 
 def _warnings(scene_count: int, image_count: int) -> list:

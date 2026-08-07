@@ -17,6 +17,7 @@ from typing import List
 
 from app.production.providers.chat_import import ChatImportScriptProvider
 from app.production.providers.image_import import ImageImportProvider
+from app.production.providers.voice_import import VoiceImportProvider
 from app.production.providers.current_engine import CURRENT_PROVIDER_CLASSES
 from app.production.registry import StageProviderRegistry, default_registry
 from app.production.stage_provider import StageProvider
@@ -35,11 +36,11 @@ def register_current_providers(
     registry = default_registry() if registry is None else registry
     registered = []
 
-    # Sprint104/110 - 붙여넣기와 직접 업로드 경로도 함께 올린다.
-    # 둘 다 GENERATE를 지원하지 않으므로 Auto 모드가 이것들을 고르는
+    # Sprint104/110/112 - 붙여넣기와 직접 업로드 경로도 함께 올린다.
+    # 전부 GENERATE를 지원하지 않으므로 Auto 모드가 이것들을 고르는
     # 일은 없다 - registry.select()가 source_mode로 먼저 거른다.
     for provider_class in CURRENT_PROVIDER_CLASSES + (
-        ChatImportScriptProvider, ImageImportProvider,
+        ChatImportScriptProvider, ImageImportProvider, VoiceImportProvider,
     ):
         provider = provider_class()
 

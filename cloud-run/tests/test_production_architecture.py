@@ -532,7 +532,8 @@ class TestNothingWasWiredIn(unittest.TestCase):
              "/studio/api/production/modes",
              "/studio/api/production/plan",
              "/studio/api/production/project",
-             "/studio/api/production/stages"],
+             "/studio/api/production/stages",
+             "/studio/api/production/voice"],
         )
 
 
