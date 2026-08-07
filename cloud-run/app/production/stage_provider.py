@@ -55,6 +55,12 @@ class ProviderCapabilities:
     # 켜려면 무엇이 있어야 하는가(환경변수/자격증명 이름). 화면이
     # "왜 이 Provider를 못 쓰는지" 말할 수 있게 한다.
     required_settings: Tuple[str, ...] = field(default_factory=tuple)
+    # Sprint138 - 환경변수 이름으로 담을 수 없는 인증 방식. ADC는
+    # 이름 하나가 아니라 자격을 얻는 방식이라, required_settings에
+    # 밀어 넣으면 "그 이름을 넣으면 된다"는 뜻이 되어 틀린 말이 된다.
+    #
+    # 둘 다 비어 있으면 정말로 인증이 필요 없는 것이다.
+    authentication: str = ""
     description: str = ""
 
     # Sprint124 - 화면이 Provider를 고르게 하려면 이름만으로는 부족하다.

@@ -318,6 +318,9 @@ def production_stages_view():
                     "unavailable_reason": _provider_availability(p)[1],
                     "required_settings": list(
                         p.capabilities.required_settings),
+                    # Sprint138 - 환경변수로 담을 수 없는 인증 방식.
+                    # 화면이 "필요 없음"이라고 잘못 말하지 않게 한다.
+                    "authentication": p.capabilities.authentication,
                     "note": p.capabilities.description,
                 }
                 for p in registry.for_stage(stage)

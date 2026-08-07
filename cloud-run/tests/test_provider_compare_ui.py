@@ -60,7 +60,9 @@ RULES = (
     "AI를 호출하지 않습니다.",
 )
 
-COLUMNS = ("Provider", "만든 곳", "엔진", "상태", "API Key",
+# Sprint138 - "API Key"는 환경변수만 담는 말이라 ADC를 쓰는 current를
+# 설명하지 못했다. 인증으로 넓혔다.
+COLUMNS = ("Provider", "만든 곳", "엔진", "상태", "인증",
            "입력", "그 단계 엔진", "실측")
 
 
@@ -203,8 +205,15 @@ class TestItTellsCurrentFromDirect(unittest.TestCase):
         self.assertIn("providerKind", block)
 
 
-class TestTheServerDidNotChange(unittest.TestCase):
-    """아는 것만 보여 준다 - 새로 알아낸 것이 없으므로 서버도 그대로다."""
+class TestTheServerSendsWhatTheTableNeeds(unittest.TestCase):
+    """
+    Sprint136에는 서버가 0줄이었다 - 표를 채울 값이 이미 전부 오고
+    있었기 때문이다.
+
+    Sprint138에서 하나가 늘었다. current가 무엇으로 인증하는지는
+    아무도 보내지 않고 있었고, 그래서 화면이 "필요 없음"이라고 잘못
+    말했다. 없던 사실을 지어낸 것이 아니라 있던 사실을 나른다.
+    """
 
     def _payload(self):
         from fastapi.testclient import TestClient
@@ -212,6 +221,16 @@ class TestTheServerDidNotChange(unittest.TestCase):
         from app.main import app
 
         return TestClient(app).get("/studio/api/production/stages").json()
+
+    def test_the_wording_still_lives_in_the_page(self):
+        """서버는 사실만 보낸다 - 문장은 화면이 만든다."""
+
+        from app.routers import studio
+
+        with open(studio.__file__, encoding="utf-8") as f:
+            source = f.read()
+
+        self.assertNotIn("인증 없음", source)
 
     def test_the_compare_lives_in_the_page_not_the_router(self):
         from app.routers import studio
@@ -230,7 +249,8 @@ class TestTheServerDidNotChange(unittest.TestCase):
             set(row["provider_list"][0]),
             {"name", "display_name", "vendor", "quality_tier",
              "estimated_cost", "source_modes", "coming_soon", "available",
-             "unavailable_reason", "required_settings", "note"})
+             "unavailable_reason", "required_settings", "authentication",
+             "note"})
 
     def test_everything_the_table_needs_is_already_sent(self):
         row = next(s for s in self._payload()["stages"]

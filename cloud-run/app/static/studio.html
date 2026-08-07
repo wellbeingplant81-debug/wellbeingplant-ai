@@ -169,6 +169,7 @@ a{color:var(--accent)}
 .pick .pcard .soon{font-size:10px;color:var(--dim);border:1px solid var(--line);
   border-radius:99px;padding:0 6px}
 .pick .pcard .q{margin-left:auto;color:var(--dim);font-size:10.5px}
+.pick .pcard .a{flex-basis:100%;color:var(--dim);font-size:10.5px}
 .pick .pcard .c{color:var(--dim);font-size:11px;min-width:56px;
   text-align:right}
 .pick .pcard .q + .c{margin-left:0}
@@ -950,6 +951,11 @@ let uiProvider = {};
 const MEASURED = "측정 완료";
 const UNMEASURED = "미측정";
 
+// Sprint138 - 인증이 정말로 없는 경우. "API Key 필요 없음"은 키가
+// 없다는 말이지 인증이 없다는 말이 아니다 - current는 키를 쓰지
+// 않지만 Vertex ADC 자격이 필요하다.
+const NO_AUTH = "인증 없음";
+
 // 기본 화면에 두는 단계. 메타데이터는 고를 일이 드물어 고급 설정으로
 // 내렸다 - 계획에는 그대로 들어간다.
 const BASIC_STAGES = ["script", "image", "voice"];
@@ -1626,6 +1632,12 @@ function providerCard(stage, option, spec){
     ? (engine.calls_api ? "단가 미상" : "무료")
     : (soon ? "—" : "무료");
   const measured = option.engine && providers.length;
+  // 고른 것이 실제로 무엇을 요구하는지. 카드가 목록과 다른 말을
+  // 하면 안 된다.
+  const auth = measured
+    ? providerAuth((spec.provider_list || []).find(
+        x => x.name === providers[0]) || {})
+    : "";
 
   return `<label class="pcard ${cardKind(option)} ${on?"on":""} ${off?"off":""}"
       ${soon?'title="향후 지원 예정"':""}>
@@ -1636,6 +1648,7 @@ function providerCard(stage, option, spec){
     ${soon?'<span class="soon">Coming Soon</span>':""}
     ${missing?'<span class="soon">Provider 없음</span>':""}
     ${measured?`<span class="q">${UNMEASURED}</span>`:""}
+    ${auth?`<span class="a">${auth}</span>`:""}
     <span class="c">${cost}</span>
     ${on && option.engine && !soon
       ? `<span class="model">현재 엔진 · ${engine.name}${
@@ -1654,6 +1667,18 @@ function providerCard(stage, option, spec){
 // 한다 - 그래서 서버는 0줄이다.
 
 // 이 Provider가 무엇인가. 이름과 입력 방식만 보고 정한다.
+// 이 Provider가 무엇으로 인증하는가. 세 곳이 각자 문장을 만들면
+// 조금씩 갈라지므로 여기서만 만든다.
+//
+//   authentication      환경변수로 담을 수 없는 방식(ADC 같은 것)
+//   required_settings   환경변수 이름
+//   둘 다 없음          정말로 인증이 없다
+function providerAuth(p){
+  if(p.authentication) return p.authentication;
+  if(p.required_settings.length) return p.required_settings.join(" · ");
+  return NO_AUTH;
+}
+
 function providerKind(p){
   if(p.name === "current") return "Current";
   if(p.source_modes.includes("import")) return "Import";
@@ -1712,7 +1737,7 @@ function providerCompare(spec){
     <div class="wrap"><table>
       <thead><tr>
         <th>Provider</th><th>만든 곳</th><th>엔진</th><th>상태</th>
-        <th>API Key</th><th>입력</th><th>그 단계 엔진</th><th>실측</th>
+        <th>인증</th><th>입력</th><th>그 단계 엔진</th><th>실측</th>
       </tr></thead>
       <tbody>${rows.map(p => `<tr class="${p.available ? "" : "off"}">
         <td><span class="n">${p.display_name}</span>
@@ -1720,8 +1745,7 @@ function providerCompare(spec){
         <td>${p.vendor || "—"}</td>
         <td>${providerKind(p)}</td>
         <td title="${p.unavailable_reason || ""}">${providerStatus(p)}</td>
-        <td>${p.required_settings.length
-          ? p.required_settings.join(" · ") : "필요 없음"}</td>
+        <td>${providerAuth(p)}</td>
         <td>${p.source_modes.map(m => labels[m] || m).join(" · ")}</td>
         <td>${providerEngineUse(p)}</td>
         <td>${providerMeasured(p, spec)}</td>
@@ -1936,11 +1960,37 @@ function expectedResult(d){
   </div>`;
 }
 
+// 이 계획이 요구하는 인증. 같은 것이 여러 단계에 걸리면 한 번만
+// 적는다 - 넣어야 할 것의 목록이지 단계 수가 아니다.
+function planAuth(d){
+  const found = [];
+
+  Object.keys(STAGE_UI).forEach(stage => {
+    const row = d.stages[stage];
+    if(!row || row.source_mode !== "generate" || !row.provider) return;
+
+    const spec = stageSpec.stages.find(s => s.stage === stage);
+    const p = spec && (spec.provider_list || []).find(
+      x => x.name === row.provider);
+    if(!p) return;
+
+    const auth = providerAuth(p);
+    if(auth !== NO_AUTH && !found.includes(auth)) found.push(auth);
+  });
+
+  return found;
+}
+
 function summaryCards(d){
   const unpriced = unpricedStages(d);
   const paying = payingStages(d);
 
+  const auth = planAuth(d);
+
   return expectedResult(d) + `<div class="cards">
+    <div class="card"><span class="k">필요한 인증</span>
+      <b>${auth.length ? auth.length + "개" : NO_AUTH}</b>
+      <span class="s">${auth.length ? auth.join(" · ") : "부르는 API가 없습니다"}</span></div>
     <div class="card"><span class="k">예상 시간</span><b>${d.estimated_seconds}초</b>
       <span class="s">실측 ${stageSpec.sample_size}편 중앙값</span></div>
     <div class="card"><span class="k">예상 비용</span><b>${costWording(d)}</b>

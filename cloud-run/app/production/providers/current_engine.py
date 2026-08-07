@@ -42,6 +42,12 @@ from app.production.stage_provider import (
 CURRENT = "current"
 
 
+# Sprint138 - 환경변수 이름이 아니라 자격을 얻는 방식이다. 코드에서
+# 확인한 그대로 적는다.
+VERTEX_ADC = "Vertex AI ADC"
+GOOGLE_CLOUD_ADC = "Google Cloud ADC"
+
+
 class _CurrentEngineProvider(StageProvider):
     """지금 엔진을 감싸는 것들의 공통 부분.
 
@@ -51,12 +57,17 @@ class _CurrentEngineProvider(StageProvider):
     stage_name = ""
     description = ""
 
+    # Sprint138 - 이 엔진이 실제로 무엇으로 인증하는가. 비워 두면
+    # 화면이 "인증 없음"이라 말하게 되는데, 셋은 그렇지 않다.
+    authentication = ""
+
     def __init__(self):
         self.capabilities = ProviderCapabilities(
             name=CURRENT,
             stage=self.stage_name,
             quality_tier=STANDARD,
             supported_source_modes=(source_modes.GENERATE,),
+            authentication=self.authentication,
             description=self.description,
         )
 
@@ -64,6 +75,8 @@ class _CurrentEngineProvider(StageProvider):
 class CurrentScriptProvider(_CurrentEngineProvider):
 
     stage_name = stages.SCRIPT
+    # script_service가 genai.Client(vertexai=True, project=...)로 부른다.
+    authentication = VERTEX_ADC
     description = (
         "지금 쓰는 대본 엔진. Duration Gate와 Topic Fidelity를 거쳐 "
         "script.json까지 남긴다."
@@ -81,6 +94,8 @@ class CurrentScriptProvider(_CurrentEngineProvider):
 class CurrentImageProvider(_CurrentEngineProvider):
 
     stage_name = stages.IMAGE
+    # image_service도 같은 클라이언트를 쓴다.
+    authentication = VERTEX_ADC
     description = (
         "지금 쓰는 이미지 엔진. scene마다 스톡 검색과 Imagen 생성을 "
         "골라 붙인다."
@@ -100,6 +115,9 @@ class CurrentImageProvider(_CurrentEngineProvider):
 class CurrentVoiceProvider(_CurrentEngineProvider):
 
     stage_name = stages.VOICE
+    # google_tts_provider는 texttospeech.TextToSpeechClient()를 쓴다 -
+    # Vertex가 아니라 Cloud TTS API다.
+    authentication = GOOGLE_CLOUD_ADC
     description = (
         "지금 쓰는 음성 엔진. TTS_PROVIDER 환경변수가 Google과 "
         "ElevenLabs 중 하나를 고른다."
