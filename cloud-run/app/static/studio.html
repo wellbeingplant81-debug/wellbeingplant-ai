@@ -242,6 +242,19 @@ a{color:var(--accent)}
 .tl .card.edit{border-left-color:#a371f7}
 .tl .card.none{border-left-color:var(--line)}
 .tl .card.todo{border-left-color:#58a6ff;border-style:dashed}
+.tl .card.hidden{opacity:.4}
+.tl .card.hidden img{filter:grayscale(1)}
+.tlbar{display:flex;align-items:center;gap:8px;font-size:10.5px;
+  color:var(--dim);margin-bottom:6px}
+.tlbar .ord{font-weight:600;color:var(--text)}
+.tlbar .save{margin-left:auto;border:1px solid var(--line);
+  border-radius:99px;padding:1px 8px}
+.tlbar .save.dirty{color:#d29922;border-color:#d29922}
+.tlbar .save.just{color:#3fb950;border-color:#3fb950}
+.rprob{margin-top:6px;padding:7px 9px;border:1px solid #f85149;
+  border-radius:6px;font-size:11px;color:var(--text)}
+.rprob b{display:block;color:#f85149;margin-bottom:3px}
+.rprob span{display:block;color:var(--dim)}
 .tl .panel .sub{font-size:10.5px;color:var(--dim);margin:6px 0 3px}
 .tl .card .no{display:flex;align-items:center;gap:4px;font-size:10px;
   color:var(--dim);font-weight:600}
@@ -1232,7 +1245,7 @@ function reviewNote(text){
   });
 }
 
-async function reviewCall(method, suffix, body){
+async function reviewCall(method, suffix, body, onRefused){
   try{
     const r = await fetch(`/studio/api/review/${reviewProject}${suffix}`, {
       method: method,
@@ -1240,7 +1253,15 @@ async function reviewCall(method, suffix, body){
       body: body ? JSON.stringify(body) : undefined,
     });
     const d = await r.json();
-    if(!r.ok){ alert(d.detail || "실패했습니다."); return null; }
+
+    if(!r.ok){
+      // Sprint146 - 거절당한 이유를 부르는 쪽이 화면에 세울 수 있게
+      // 넘겨 준다. 넘겨받는 곳이 없으면 예전처럼 알린다.
+      if(onRefused){ onRefused(String(d.detail || "").split(" · ")); }
+      else alert(d.detail || "실패했습니다.");
+      return null;
+    }
+
     return d;
   } finally {
     reviewNote("");
@@ -1345,8 +1366,19 @@ let sceneOrigin = {};
 // 해 두고 렌더에서 뺀다. 되돌릴 수 있어야 한다.
 let sceneDeleted = [];
 
+// Sprint146 - 서버가 숨김으로 적어 둔 것 중 되돌리기로 한 번호.
+let sceneRestored = [];
+
 // 끌고 있는 scene. 놓는 순간에만 쓴다.
 let sceneDragging = null;
+
+// Sprint146 - 방금 저장했는가. 저장한 뒤 한 번만 "저장 완료"라고
+// 말하고, 다시 고치면 "저장하지 않은 변경"으로 돌아간다.
+let timelineJustSaved = false;
+
+// 렌더 앞 검사가 말한 것. 눌러 본 뒤에만 채워진다 - 화면이 미리
+// 짐작하지 않는다.
+let renderProblems = [];
 
 // 지금 고른 scene. 없으면 첫 scene을 본다.
 let scenePick = null;
@@ -1503,16 +1535,37 @@ function sceneTimeline(state){
     <div class="strip">${scenes.map(
       s => sceneCard(s, picked, state)).join(
         `<span class="rail"></span>`)}</div>
+    <div class="tlbar">
+      <span class="ord">순서 ${visibleScenes(state).map(
+        x => x.scene).join(" → ") || "없음"}</span>
+      <span class="save ${timelineSaveState().key}">${
+        timelineSaveState().label}</span>
+    </div>
     <div class="rowbtns">
       <button class="sm ghost" onclick="addScene()">+ Scene 추가</button>
       ${timelineDirty()
         ? `<button class="sm ghost" onclick="revertTimeline()"
-             title="저장 전이므로 프로젝트 파일은 그대로다">되돌리기</button>
-           <span class="muted">저장 전입니다</span>`
+             title="저장 전이므로 프로젝트 파일은 그대로다">되돌리기</button>`
         : ""}
     </div>
+    ${renderProblems.length
+      ? `<div class="rprob"><b>렌더할 수 없습니다</b>${
+          renderProblems.map(x => `<span>${x}</span>`).join("")}</div>`
+      : ""}
     ${scenePanel(state, picked)}
   </div>`;
+}
+
+// 영상에 들어가는 것만. 숨긴 것은 빠진다.
+function visibleScenes(state){
+  return timelineScenes(state).filter(s => !isHidden(state, s.scene));
+}
+
+// Sprint146 - 지금 무엇을 말해야 하는가. 세 가지뿐이다.
+function timelineSaveState(){
+  if(timelineDirty()) return {key: "dirty", label: "저장하지 않은 변경"};
+  if(timelineJustSaved) return {key: "just", label: "저장 완료"};
+  return {key: "clean", label: "저장됨"};
 }
 
 // 고른 것이 없거나 사라졌으면 첫 scene을 본다.
@@ -1524,6 +1577,23 @@ function sceneCurrent(state){
 
 // Sprint144 - 지금 화면이 다루는 scene 목록. 손대지 않았으면 서버가
 // 준 것 그대로다. 목록이 두 곳에서 만들어지면 화면이 갈린다.
+// Sprint146 - 숨긴 scene 번호. 화면이 들고 있는 것과 서버가 적어
+// 둔 것을 합쳐서 본다.
+function hiddenScenes(state){
+  const saved = ((state || {}).timeline || {}).deleted || [];
+
+  // 되돌리기로 한 것은 빼야 한다. 빼지 않으면 서버가 숨김으로 적어
+  // 둔 scene은 복구를 눌러도 화면에서 그대로 숨겨져 있다.
+  return new Set(
+    saved.concat(sceneDeleted).filter(n => !sceneRestored.includes(n)));
+}
+
+function isHidden(state, number){
+  return hiddenScenes(state).has(number);
+}
+
+// 화면에 늘어놓을 scene 전부. 숨긴 것도 들어간다 - 목록에서 빼
+// 버리면 복구할 자리가 없다.
 function timelineScenes(state){
   if(timelineDraft) return timelineDraft;
 
@@ -1534,22 +1604,23 @@ function timelineScenes(state){
     return state.scenes;
   }
 
-  const gone = new Set(plan.deleted || []);
-  const alive = state.scenes.filter(s => !gone.has(s.scene));
-  const left = new Map(alive.map(s => [s.scene, s]));
+  // 숨긴 것은 빼지 않는다. 차례에 적힌 것을 먼저 놓고, 나머지를
+  // 원래 있던 차례대로 뒤에 붙인다.
+  const left = new Map(state.scenes.map(s => [s.scene, s]));
   const ordered = [];
 
   (plan.order || []).forEach(n => {
     if(left.has(n)){ ordered.push(left.get(n)); left.delete(n); }
   });
 
-  return ordered.concat(alive.filter(s => left.has(s.scene)));
+  return ordered.concat(state.scenes.filter(s => left.has(s.scene)));
 }
 
 // 되돌릴 것이 있는가.
 function timelineDirty(){
   return timelineDraft !== null
     || sceneDeleted.length > 0
+    || sceneRestored.length > 0
     || Object.keys(sceneDraft).length > 0
     || Object.keys(promptDraft).length > 0;
 }
@@ -1577,6 +1648,7 @@ function moveScene(number, delta){
 
   timelineDraft = scenes;
   scenePick = number;
+  timelineJustSaved = false;
   renderReview(reviewState);
 }
 
@@ -1595,18 +1667,31 @@ function dropScene(number){
   sceneDragging = null;
 }
 
-// 지운다고 표시만 한다. 파일도 대본도 그대로 두고 렌더에서 뺀다.
-function deleteScene(number){
+// Sprint146 - "삭제"가 아니라 "숨김"이다. 파일도 대본도 그대로
+// 두고 렌더에서만 뺀다 - 그래서 되돌릴 수 있다.
+function hideScene(number){
   if(!reviewState) return;
-  if(!confirm(`Scene ${number}을 삭제하시겠습니까?`)) return;
-
-  const scenes = timelineScenes(reviewState).filter(
-    s => s.scene !== number);
+  if(!confirm(`Scene ${number}을 영상에서 숨기시겠습니까? `
+              + `대본과 파일은 그대로 남습니다.`)) return;
 
   if(!sceneDeleted.includes(number)) sceneDeleted.push(number);
 
-  timelineDraft = scenes;
-  if(scenePick === number) scenePick = scenes.length ? scenes[0].scene : null;
+  timelineDraft = timelineScenes(reviewState).slice();
+  timelineJustSaved = false;
+  renderReview(reviewState);
+}
+
+// 숨긴 것을 되돌린다. 서버가 적어 둔 것도 여기서 풀린다.
+function restoreScene(number){
+  if(!reviewState) return;
+
+  sceneDeleted = sceneDeleted.filter(n => n !== number);
+
+  // 서버가 이미 숨김으로 적어 둔 것이면 저장할 때 빠져야 한다.
+  sceneRestored = sceneRestored.filter(n => n !== number).concat([number]);
+
+  timelineDraft = timelineScenes(reviewState).slice();
+  timelineJustSaved = false;
   renderReview(reviewState);
 }
 
@@ -1624,6 +1709,7 @@ function addScene(){
   sceneOrigin[number] = "new";
   timelineDraft = scenes;
   scenePick = number;
+  timelineJustSaved = false;
   renderReview(reviewState);
 }
 
@@ -1652,6 +1738,7 @@ function duplicateScene(number){
   sceneOrigin[copy] = "copy";
   timelineDraft = scenes;
   scenePick = copy;
+  timelineJustSaved = false;
   renderReview(reviewState);
 }
 
@@ -1663,6 +1750,9 @@ function revertTimeline(){
   promptDraft = {};
   sceneOrigin = {};
   sceneDeleted = [];
+  sceneRestored = [];
+  timelineJustSaved = false;
+  renderProblems = [];
 
   if(reviewState) renderReview(reviewState);
 }
@@ -1746,8 +1836,9 @@ function sceneCard(s, picked, state){
   const st = sceneStatus(s);
   const on = s.scene === picked;
   const secs = sceneSeconds(state, s.scene);
+  const hidden = isHidden(state, s.scene);
 
-  return `<div class="card ${st.key} ${on?"on":""}"
+  return `<div class="card ${st.key} ${on?"on":""} ${hidden?"hidden":""}"
       data-scene="${s.scene}" draggable="true"
       ondragstart="sceneDragging=${s.scene}"
       ondragover="event.preventDefault()"
@@ -1761,19 +1852,24 @@ function sceneCard(s, picked, state){
       ? `<img src="${s.image_url}&t=${Date.now()}">`
       : `<div class="noimg"></div>`}
     <div class="line">${sceneFirstLine(s.narration)}</div>
-    <div class="foot"><span class="st">${st.label}</span>
+    <div class="foot"><span class="st">${
+      hidden ? "숨김" : st.label}</span>
       <button class="sm ghost" title="이 scene 고치기"
         onclick="pickScene(${s.scene})">수정</button>
       <button class="sm ghost" title="대본을 복사해 새 scene을 만든다"
         onclick="event.stopPropagation();duplicateScene(${s.scene})">복제</button>
     </div>
     <div class="move">
-      <button class="sm ghost" title="앞으로"
+      <button class="sm ghost" title="앞으로" ${hidden?"disabled":""}
         onclick="event.stopPropagation();moveScene(${s.scene},-1)">◀</button>
-      <button class="sm ghost" title="뒤로"
+      <button class="sm ghost" title="뒤로" ${hidden?"disabled":""}
         onclick="event.stopPropagation();moveScene(${s.scene},1)">▶</button>
-      <button class="sm ghost" title="이 scene을 렌더에서 뺀다"
-        onclick="event.stopPropagation();deleteScene(${s.scene})">삭제</button>
+      ${hidden
+        ? `<button class="sm ghost" title="다시 영상에 넣는다"
+             onclick="event.stopPropagation();restoreScene(${s.scene})">복구</button>`
+        : `<button class="sm ghost"
+             title="영상에서만 뺀다. 대본과 파일은 남는다"
+             onclick="event.stopPropagation();hideScene(${s.scene})">숨김</button>`}
     </div>
   </div>`;
 }
@@ -1870,6 +1966,7 @@ function paintTimeline(){
 // 사라진다. 고친 글만 들고 있다가 카드의 상태 글자와 색을 바꾼다.
 function noteEdit(number, value){
   sceneDraft[number] = value;
+  timelineJustSaved = false;
   paintTimeline();
 }
 
@@ -1877,6 +1974,7 @@ function noteEdit(number, value){
 // 거절한다 - 그래서 화면이 들고 있는다.
 function notePrompt(number, value){
   promptDraft[number] = value;
+  timelineJustSaved = false;
   paintTimeline();
 }
 
@@ -2060,9 +2158,15 @@ async function reviewSaveScript(){
   // Sprint145 - 대본과 차례를 한 번에 보낸다. 서버에서 갈라져
   // script.json과 timeline.json으로 따로 적힌다 - 한 파일에 섞이지
   // 않는다.
+  // Sprint146 - 대본은 숨긴 것까지 전부 보낸다(숨김은 지움이 아니다).
+  // 차례에는 보이는 것만 적고, 숨긴 번호는 따로 적는다.
+  const shown = scenes.filter(s => !isHidden(reviewState, s.scene));
+  const hidden = [...hiddenScenes(reviewState)].filter(
+    n => !sceneRestored.includes(n));
+
   const d = await reviewCall("PUT", "/script", {
     data: {title: reviewState.title || "제목", scenes: scenes},
-    timeline: {order: scenes.map(s => s.scene), deleted: sceneDeleted},
+    timeline: {order: shown.map(s => s.scene), deleted: hidden},
   });
 
   if(d){
@@ -2072,6 +2176,9 @@ async function reviewSaveScript(){
     timelineDraft = null;
     sceneOrigin = {};
     sceneDeleted = [];
+    sceneRestored = [];
+    timelineJustSaved = true;
+    renderProblems = [];
     renderReview(d);
   }
 }
@@ -2109,7 +2216,15 @@ async function reviewApprove(call, label){
 
   if(call === "render"){
     reviewNote(`✓ ${label} 승인 완료 · 영상을 만드는 중…`);
-    const d = await reviewCall("POST", "/render");
+
+    // Sprint146 - 걸리는 것이 있으면 서버가 400과 함께 무엇이 없는지
+    // 말한다. 그것을 화면에 그대로 세워 두고 진행하지 않는다.
+    renderProblems = [];
+    const d = await reviewCall("POST", "/render", null, problems => {
+      renderProblems = problems;
+      if(reviewState) renderReview(reviewState);
+    });
+
     if(!d) return;
     jobId = d.job_id;
     $("jobState").textContent = "영상 생성 중…";

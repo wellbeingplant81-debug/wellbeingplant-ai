@@ -309,8 +309,17 @@ class TestMovingAndDeletingArrivedInSprint145(unittest.TestCase):
         self.assertIn("function moveScene(", script)
         self.assertIn("function dropScene(", script)
 
-    def test_deleting_is_here_now(self):
-        self.assertIn("function deleteScene(", _script())
+    def test_hiding_is_here_now(self):
+        """
+        Sprint146에서 이름이 바뀌었다 - "삭제"는 지운다는 뜻인데
+        실제로는 영상에서만 빼고 대본과 파일은 남는다. 화면이 하는
+        일을 그대로 부른다.
+        """
+
+        script = _script()
+
+        self.assertIn("function hideScene(", script)
+        self.assertIn("function restoreScene(", script)
 
     def test_the_render_no_longer_reorders_behind_our_back(self):
         """이동이 막혀 있던 이유가 풀렸다."""
@@ -333,15 +342,15 @@ class TestMovingAndDeletingArrivedInSprint145(unittest.TestCase):
 
         self.assertNotIn("len(scene_audios) != len(scenes)", source)
 
-    def test_deleting_asks_first(self):
-        block = _function("deleteScene")
+    def test_hiding_asks_first(self):
+        block = _function("hideScene")
 
         self.assertIn("confirm(", block)
 
-    def test_deleting_removes_no_file(self):
-        """지우는 것은 표시만 한다 - 되돌릴 수 있어야 한다."""
+    def test_hiding_removes_no_file(self):
+        """숨기는 것은 표시만 한다 - 되돌릴 수 있어야 한다."""
 
-        block = _without_comments(_function("deleteScene"))
+        block = _without_comments(_function("hideScene"))
 
         self.assertIn("sceneDeleted", block)
         self.assertNotIn("fetch(", block)

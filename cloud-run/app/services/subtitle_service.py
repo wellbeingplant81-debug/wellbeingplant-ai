@@ -562,10 +562,15 @@ def create_subtitle(project_path: str):
     last_scene_pause_seconds = _load_last_scene_pause_seconds(project_path)
     last_scene_index = len(scenes) - 1
 
-    for index, (scene, slot) in enumerate(zip(
-        sorted(scenes, key=lambda item: item["scene"]),
-        timeline,
-    )):
+    # Sprint146 - 여기서 다시 정렬하면 안 된다.
+    #
+    # timeline은 위에서 scenes를 그대로 받아 만든 것이라 이미 렌더
+    # 차례다. 그런데 번호순으로 정렬한 목록과 index로 zip하면 글은
+    # 번호순, 시각은 렌더순이 되어 엉뚱한 문장이 붙는다 - 실제 MP4로
+    # 확인했다(파랑 구간에 1번 문장이 나왔다).
+    #
+    # 예전에는 두 순서가 늘 같아서 드러나지 않았을 뿐이다.
+    for index, (scene, slot) in enumerate(zip(scenes, timeline)):
 
         narration = scene["narration"].strip()
 
