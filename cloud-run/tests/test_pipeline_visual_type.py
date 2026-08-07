@@ -68,7 +68,7 @@ def patched_pipeline():
     ), \
          patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
          patch("app.pipeline.pipeline.step02_asset_resolve") as step02, \
-         patch("app.pipeline.pipeline.step03_tts") as step03, \
+         patch("app.pipeline.pipeline.step03_voice_resolve") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
          patch("app.pipeline.pipeline.step05_video") as step05, \
          patch("app.pipeline.pipeline.step06_thumbnail") as step06, \

@@ -612,7 +612,7 @@ class TestNothingWasWiredIn(unittest.TestCase):
             with self.subTest(imported=name):
                 self.assertNotIn("app.production", name)
 
-        self.assertIn("step03_tts.run(", open(
+        self.assertIn("step03_voice_resolve.run(", open(
             pipeline.__file__, encoding="utf-8").read())
 
 

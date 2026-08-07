@@ -366,7 +366,7 @@ class TestThePipelineChangedInExactlyOnePlace(unittest.TestCase):
 
         source = open(pipeline.__file__, encoding="utf-8").read()
 
-        for call in ("step02_asset_resolve.run(", "step03_tts.run(",
+        for call in ("step02_asset_resolve.run(", "step03_voice_resolve.run(",
                      "step04_subtitle.run(", "step05_video.run(",
                      "step06_thumbnail.run(", "step07_quality.run("):
             with self.subTest(call=call):

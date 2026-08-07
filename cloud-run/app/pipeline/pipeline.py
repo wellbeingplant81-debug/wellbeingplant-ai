@@ -11,7 +11,7 @@ from app.tools import asset_dataset
 from app.services import scene_prompt_service
 from app.services import search_cache
 from app.steps import step02_asset_resolve
-from app.steps import step03_tts
+from app.steps import step03_voice_resolve
 from app.steps import step04_subtitle
 from app.steps import step05_video
 from app.steps import step06_thumbnail
@@ -312,7 +312,7 @@ def run_pipeline(
     asset_observatory.write(project_path)
 
     t0 = time.perf_counter()
-    step03_tts.run(
+    step03_voice_resolve.run(
         data["scenes"],
         project_path,
     )

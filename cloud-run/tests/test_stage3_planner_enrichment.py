@@ -104,7 +104,7 @@ class PipelineHarness(unittest.TestCase):
              patch.object(
                  pipeline.step02_asset_resolve, "run", fake_collect_assets,
              ), \
-             patch.object(pipeline.step03_tts, "run", fake_tts), \
+             patch.object(pipeline.step03_voice_resolve, "run", fake_tts), \
              patch.object(pipeline.step04_subtitle, "run", lambda p: None), \
              patch.object(pipeline.step05_video, "run", lambda p: None), \
              patch.object(
