@@ -276,13 +276,20 @@ class TestNothingBehindTheScreenMoved(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(hasattr(studio_review, name))
 
-    def test_no_new_review_endpoint_was_needed(self):
-        """Sprint126이 Provider 선택을 적는 자리 하나를 더했다.
-        화면 흐름은 그대로다."""
+    def test_the_screen_flow_still_uses_the_same_places(self):
+        """
+        Sprint147이 공개 정보를 고칠 자리를 하나 더했다. 화면 흐름
+        자체는 그대로다 - 대본·이미지·음성·승인은 예전 자리로 간다.
+        """
 
         paths = {p for p in app.openapi()["paths"] if "review" in p}
 
-        self.assertEqual(len(paths), 9)
+        for path in ("/studio/api/review/{project_id}/script",
+                     "/studio/api/review/{project_id}/images",
+                     "/studio/api/review/{project_id}/voices",
+                     "/studio/api/review/{project_id}/render"):
+            with self.subTest(path=path):
+                self.assertIn(path, paths)
 
     def test_the_handlers_the_markup_calls_are_declared(self):
         page = _page()

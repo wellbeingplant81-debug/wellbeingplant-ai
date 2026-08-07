@@ -135,6 +135,11 @@ ENDPOINTS = [
          {"scene": 1, "narration": "n", "image_prompt": "p"}]}},
      ["app.services.studio_review.save_script"],
      f"/studio/api/review/{PROJECT_ID}/script"),
+    # Sprint147 - 사람이 고친 제목·설명·태그를 확정한다.
+    ("PUT", "/studio/api/review/{project_id}/metadata",
+     {"metadata": {"title": "t"}},
+     ["app.services.publish_gate.save_edits"],
+     f"/studio/api/review/{PROJECT_ID}/metadata"),
     ("POST", "/studio/api/review/{project_id}/images", None,
      ["app.services.studio_review.generate_images"],
      f"/studio/api/review/{PROJECT_ID}/images"),

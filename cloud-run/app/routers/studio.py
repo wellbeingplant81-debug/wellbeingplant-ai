@@ -890,6 +890,12 @@ class ReviewScriptRequest(BaseModel):
     timeline: dict = None
 
 
+class ReviewMetadataRequest(BaseModel):
+    # Sprint147 - 사람이 고친 칸. publish_gate.EDITABLE에 있는 것만
+    # 반영된다 - 나머지를 보내도 무시한다.
+    metadata: dict
+
+
 class ReviewProviderRequest(BaseModel):
     # {단계: Provider 이름}. 고르지 않은 단계는 그대로 둔다.
     providers: dict
@@ -977,14 +983,29 @@ def _review_metadata(path):
     쓰는 것이고, 그 전에는 없는 것이 사실이다.
     """
 
-    package = studio_service._load(os.path.join(path, "publish_package.json"))
+    from app.services import publish_gate
 
-    if not isinstance(package, dict):
+    package = publish_gate.package(path)
+
+    if package is None:
         return None
 
     return {
+        # Sprint147 - 화면이 보여 줄 것과 고칠 수 있는 것.
+        #
+        # 고칠 수 있는 셋(title·description·tags)과 만들어진 것들을
+        # 한 자리에 담되, 무엇이 고칠 수 있는지는 publish_gate가
+        # 정한다 - 화면이 따로 정하면 두 곳이 갈린다.
+        "editable": list(publish_gate.EDITABLE),
+        "tags": package.get("tags") or [],
+        "category": package.get("category"),
+        "category_id": package.get("category_id"),
+        "thumbnail_text": package.get("thumbnail_text"),
+        "privacy_status": package.get("privacy_status"),
+        **{
         key: package.get(key)
         for key in ("title", "description", "hashtags", "playlist_title")
+        },
     }
 
 
@@ -992,7 +1013,9 @@ def _review_metadata(path):
 def review_state(project_id: str):
     """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
 
-    from app.services import provider_selection, scene_order, studio_review
+    from app.services import (
+        provider_selection, publish_gate, scene_order, studio_review,
+    )
 
     path = _project_path(project_id)
     state = studio_review.state(path)
@@ -1015,6 +1038,15 @@ def review_state(project_id: str):
         # 그때는 위 scenes 순서가 그대로 렌더 차례다.
         "timeline": scene_order.load(path),
         "metadata": _review_metadata(path),
+        # Sprint147 - 지금 올리면 무엇이 걸리는가. 화면이 짐작하지
+        # 않고 이 목록을 그대로 보여 준다.
+        "publish_problems": publish_gate.problems(path),
+        # 썸네일이 실제로 있는가. 없으면 화면이 있는 척하지 않는다.
+        "thumbnail_url": (
+            f"/studio/api/projects/{project_id}/media/thumbnail"
+            if os.path.exists(os.path.join(path, publish_gate.THUMBNAIL))
+            else None
+        ),
         "scenes": [
             {
                 **scene,
@@ -1119,6 +1151,27 @@ def review_save_script(project_id: str, request: ReviewScriptRequest):
             order=request.timeline.get("order"),
             deleted=request.timeline.get("deleted"),
         )
+
+    return review_state(project_id)
+
+
+@router.put("/api/review/{project_id}/metadata")
+def review_save_metadata(project_id: str, request: ReviewMetadataRequest):
+    """
+    사람이 고친 제목·설명·태그를 확정한다. 다시 만들지 않는다.
+
+    새로 만드는 것은 없다 - 놓여 있는 publish_package.json의 그 세 칸만
+    바꿔 다시 적는다. 없으면 만들지 않고 거절한다.
+    """
+
+    from app.services import publish_gate
+
+    path = _project_path(project_id)
+
+    try:
+        publish_gate.save_edits(path, request.metadata or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     return review_state(project_id)
 

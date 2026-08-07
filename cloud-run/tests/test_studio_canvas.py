@@ -260,12 +260,27 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(hasattr(studio_review, name))
 
-    def test_the_endpoints_are_the_same_eight(self):
-        """Sprint126 - Provider 선택을 적는 자리가 하나 늘었다."""
+    def test_the_review_endpoints_grow_only_on_purpose(self):
+        """
+        Sprint126이 Provider 선택을, Sprint147이 공개 정보 수정을
+        더했다. 숫자를 세는 것이 목적이 아니라 "조용히 늘지 않는다"가
+        목적이므로 무엇이 있는지 이름으로 적는다.
+        """
 
         paths = {p for p in app.openapi()["paths"] if "review" in p}
 
-        self.assertEqual(len(paths), 9)
+        self.assertEqual(paths, {
+            "/studio/api/review",
+            "/studio/api/review/{project_id}",
+            "/studio/api/review/{project_id}/providers",
+            "/studio/api/review/{project_id}/metadata",
+            "/studio/api/review/{project_id}/script",
+            "/studio/api/review/{project_id}/images",
+            "/studio/api/review/{project_id}/images/{scene}",
+            "/studio/api/review/{project_id}/voices",
+            "/studio/api/review/{project_id}/voices/{scene}",
+            "/studio/api/review/{project_id}/render",
+        })
 
     def test_the_scene_features_survive(self):
         page = _page()

@@ -251,6 +251,22 @@ a{color:var(--accent)}
   border-radius:99px;padding:1px 8px}
 .tlbar .save.dirty{color:#d29922;border-color:#d29922}
 .tlbar .save.just{color:#3fb950;border-color:#3fb950}
+.pub{margin-top:10px;background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;padding:10px 11px}
+.pub .h{display:flex;align-items:center;gap:6px;font-size:12px;
+  font-weight:600;margin-bottom:4px}
+.pub .prov{font-size:10px;font-weight:400;color:var(--dim);
+  border:1px solid var(--line);border-radius:99px;padding:0 7px}
+.pub .prov.manual{color:#a371f7;border-color:#a371f7}
+.pub .save{margin-left:auto;font-size:10px;font-weight:400;color:var(--dim);
+  border:1px solid var(--line);border-radius:99px;padding:0 8px}
+.pub .save.dirty{color:#d29922;border-color:#d29922}
+.pub .save.just{color:#3fb950;border-color:#3fb950}
+.pub .sub{font-size:10.5px;color:var(--dim);margin:8px 0 3px}
+.pub .facts{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;
+  font-size:10.5px;color:var(--dim)}
+.pub .thumb{display:block;width:100%;max-width:200px;margin-top:8px;
+  border-radius:6px}
 .rprob{margin-top:6px;padding:7px 9px;border:1px solid #f85149;
   border-radius:6px;font-size:11px;color:var(--text)}
 .rprob b{display:block;color:#f85149;margin-bottom:3px}
@@ -1380,6 +1396,13 @@ let timelineJustSaved = false;
 // 짐작하지 않는다.
 let renderProblems = [];
 
+// Sprint147 - 사람이 고쳤지만 아직 저장하지 않은 메타데이터.
+// {title, description, tags}
+let publishDraft = {};
+
+// 방금 저장했는가.
+let publishJustSaved = false;
+
 // 지금 고른 scene. 없으면 첫 scene을 본다.
 let scenePick = null;
 
@@ -1460,7 +1483,9 @@ function canvasVideo(state){
       <div id="canvasSceneBox">${canvasScene(state)}</div>
       <div class="rowbtns">
         <a class="rbtn" href="${base}" download>다운로드</a>
-        <button class="sm ghost" onclick="reviewUpload()">YouTube</button>
+        <button class="sm ghost" ${publishButtonState(state).ready
+          ? "" : "disabled"} title="${publishButtonState(state).why}"
+          onclick="reviewUpload()">${publishButtonState(state).label}</button>
         <button class="sm ghost" disabled
           title="Meta App 자격증명과 저장소 설정이 아직 없습니다">
           Instagram</button>
@@ -1518,6 +1543,146 @@ function reviewMetadataStep(state){
   </dl>
   <p class="muted" style="margin:7px 0 0">
     Render가 만든 publish_package.json입니다.</p>`;
+}
+
+// Sprint147 - 올리기 전 마지막 자리.
+//
+// 고칠 수 있는 것은 서버가 말해 준다(metadata.editable). 화면이 따로
+// 정하면 두 곳이 갈린다.
+function publishValue(state, key){
+  if(publishDraft[key] !== undefined) return publishDraft[key];
+  return (state.metadata || {})[key];
+}
+
+function publishDirty(){
+  return Object.keys(publishDraft).length > 0;
+}
+
+function publishSaveState(){
+  if(publishDirty()) return {key:"dirty", label:"저장하지 않은 변경"};
+  if(publishJustSaved) return {key:"just", label:"저장 완료"};
+  return {key:"clean", label:"저장됨"};
+}
+
+function notePublish(key, value){
+  publishDraft[key] = value;
+  publishJustSaved = false;
+
+  const badge = document.querySelector(".pub .save");
+  if(badge){
+    const st = publishSaveState();
+    badge.className = `save ${st.key}`;
+    badge.textContent = st.label;
+  }
+}
+
+function notePublishTags(value){
+  notePublish("tags",
+    value.split(",").map(x => x.trim()).filter(Boolean));
+}
+
+// metadata_provider가 무엇을 뜻하는지 그대로 적는다.
+function metadataProviderLabel(state){
+  const chosen = (state.providers || {}).metadata || "current";
+  return chosen === "manual"
+    ? {key:"manual", label:"직접 입력", note:"엔진이 만들지 않습니다."}
+    : {key:"current", label:"자동 생성",
+       note:"다시 렌더하면 엔진이 이 내용을 다시 만듭니다."};
+}
+
+// 올리기 버튼이 지금 무엇을 말해야 하는가. 서버가 준 검사 결과만
+// 본다 - 화면이 따로 판정하지 않는다.
+function publishButtonState(state){
+  const problems = state.publish_problems || [];
+
+  if(problems.length){
+    return {ready:false, label:"YouTube 업로드 준비 필요",
+            why: problems.join(" · ")};
+  }
+
+  return {ready:true, label:"업로드 요청",
+          why:"Production Queue에서 승인해야 실제로 올라갑니다."};
+}
+
+function publishPanel(state){
+  const meta = state.metadata;
+
+  if(!meta){
+    return `<div class="pub">
+      <div class="h">공개 준비</div>
+      <p class="muted">영상을 만들면 제목·설명·태그가 생깁니다.
+        아직 없는 것을 미리 보여 주지 않습니다.</p>
+    </div>`;
+  }
+
+  const provider = metadataProviderLabel(state);
+  const save = publishSaveState();
+  const button = publishButtonState(state);
+  const tags = publishValue(state, "tags") || [];
+
+  return `<div class="pub">
+    <div class="h">공개 준비
+      <span class="prov ${provider.key}">${provider.label}</span>
+      <span class="save ${save.key}">${save.label}</span>
+    </div>
+    <p class="muted">${provider.note}</p>
+
+    <div class="sub">제목</div>
+    <input id="pubTitle" value="${publishValue(state, "title") || ""}"
+      oninput="notePublish('title', this.value)">
+
+    <div class="sub">설명</div>
+    <textarea id="pubDesc" rows="4"
+      oninput="notePublish('description', this.value)">${
+        publishValue(state, "description") || ""}</textarea>
+
+    <div class="sub">태그 (쉼표로 나눕니다)</div>
+    <input id="pubTags" value="${tags.join(", ")}"
+      oninput="notePublishTags(this.value)">
+
+    <div class="facts">
+      <span>카테고리 · ${meta.category || "없음"}${
+        meta.category_id ? ` (${meta.category_id})` : ""}</span>
+      <span>공개 설정 · ${meta.privacy_status || "없음"}</span>
+      <span>Playlist · ${meta.playlist_title || "없음"}</span>
+      <span>플랫폼 · YouTube${
+        state.thumbnail_url ? " · 썸네일 있음" : " · 썸네일 없음"}</span>
+    </div>
+
+    ${state.thumbnail_url
+      ? `<img class="thumb" src="${state.thumbnail_url}&t=${Date.now()}">`
+      : ""}
+
+    <div class="rowbtns">
+      <button class="sm ghost" onclick="savePublish()">저장</button>
+      ${publishDirty()
+        ? `<button class="sm ghost" onclick="revertPublish()">되돌리기</button>`
+        : ""}
+      <button class="sm ghost" ${button.ready ? "" : "disabled"}
+        title="${button.why}"
+        onclick="reviewUpload()">${button.label}</button>
+    </div>
+    <p class="muted">${button.why}</p>
+  </div>`;
+}
+
+async function savePublish(){
+  if(!publishDirty()) return;
+
+  reviewNote("공개 정보를 저장하는 중…");
+  const d = await reviewCall("PUT", "/metadata", {metadata: publishDraft});
+
+  if(d){
+    publishDraft = {};
+    publishJustSaved = true;
+    renderReview(d);
+  }
+}
+
+function revertPublish(){
+  publishDraft = {};
+  publishJustSaved = false;
+  if(reviewState) renderReview(reviewState);
 }
 
 // Sprint142 - scene을 한 줄로 편다.
@@ -2118,7 +2283,8 @@ function renderReview(state){
   renderCanvas(state);
   $("reviewProgress").innerHTML = reviewProgress(state);
   $("reviewBody").innerHTML = sceneTimeline(state)
-    + REVIEW_STEPS.map(step => reviewSection(step, state)).join("");
+    + REVIEW_STEPS.map(step => reviewSection(step, state)).join("")
+    + publishPanel(state);
 }
 
 async function reviewGenerateScript(){
