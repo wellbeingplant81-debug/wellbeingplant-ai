@@ -199,6 +199,30 @@ a{color:var(--accent)}
 .pcard .model{flex-basis:100%;color:var(--dim);font-size:10.5px;
   padding-left:23px}
 
+/* Sprint123 - 영상 카드. 스크롤해도 따라온다. */
+.canvas{position:sticky;top:0;z-index:3;background:var(--panel2);
+  padding-bottom:10px;margin-bottom:6px;
+  border-bottom:1px solid var(--line)}
+.canvas video{width:100%;max-height:320px;border-radius:8px;background:#000;
+  display:block}
+.cplace{height:180px;border-radius:8px;background:#0b0f14 center/cover;
+  display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--line)}
+.cplace span{background:#000a;border-radius:6px;padding:4px 10px;
+  font-size:12px;color:var(--dim)}
+.cstat{margin-top:8px}
+.cstat .t{font-size:14px;font-weight:650}
+.cstat .t.ok{color:var(--ok)}
+.cstat .bar{height:8px;background:#0e1319;border-radius:99px;
+  overflow:hidden;margin-top:6px}
+.cstat .bar b{display:block;height:100%;background:var(--accent);
+  transition:width .2s}
+.cstat .dots{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;
+  font-size:11px;color:var(--dim)}
+.cstat .dots .on{color:var(--ok)}
+.cstat .dots .now{color:var(--accent)}
+.cstat .len{font-size:11.5px;color:var(--dim);margin-top:4px}
+
 /* Sprint122 - 한 화면에서 아래로. 진행 표시는 위에 붙어 있고,
    지금 단계만 펼쳐진다. */
 .rprog{position:sticky;top:0;background:var(--panel2);z-index:2;
@@ -384,6 +408,12 @@ a{color:var(--accent)}
       <button class="sm ghost" onclick="startReview()">검토하며 만들기</button>
     </div>
     <div id="reviewPanel" class="review" style="display:none">
+      <!-- Sprint123 - 화면의 주인공은 지금 만들고 있는 영상이다.
+           스크롤해도 따라온다. -->
+      <div class="canvas">
+        <div id="canvasPreview"></div>
+        <div id="canvasStatus"></div>
+      </div>
       <!-- 진행 표시는 항상 위에 붙어 있다. -->
       <div id="reviewProgress"></div>
       <p class="muted" id="reviewBusy" style="margin:0 0 8px"></p>
@@ -1116,6 +1146,8 @@ const REVIEW_STEPS = [
   {key:"image",  label:"이미지", next:"voices", nextLabel:"승인하고 음성 생성"},
   {key:"voice",  label:"음성",   next:"render", nextLabel:"승인하고 영상 생성"},
   {key:"video",  label:"영상",   next:null,     nextLabel:null},
+  // Render가 만드는 것이라 승인할 것이 없다 - 보여 주기만 한다.
+  {key:"metadata", label:"메타데이터", next:null, nextLabel:null},
 ];
 
 function reviewNote(text){
@@ -1172,6 +1204,116 @@ function reviewProgress(state){
     <div class="bar"><b style="width:${percent}%"></b></div>
     <div class="pct">${percent}%</div>
   </div>`;
+}
+
+// Sprint123 - 영상을 보면서 고친다.
+//
+// 화면의 주인공은 단계가 아니라 지금 만들고 있는 영상이다. 무엇을
+// 고치든 위의 영상 카드가 따라 바뀐다.
+
+// 잴 수 있으면 잰 값을, 아직이면 미루어 본 값을 쓴다. 잴 수 있는데
+// 미루어 보면 화면이 틀린 숫자를 말하게 된다.
+function canvasLength(state){
+  if(state.measured_seconds != null){
+    return `${state.measured_seconds.toFixed(1)}초 · 음성 실측`;
+  }
+  if(state.estimated_seconds){
+    return `약 ${state.estimated_seconds.toFixed(1)}초 · 대본 기준 예상`;
+  }
+  return "길이 미정";
+}
+
+// STEP 번호를 앞세우지 않는다. 지금 영상이 어떤 상태인가를 말한다.
+function canvasStatus(state){
+  const flow = [
+    {key:"script", making:"대본 생성중", done:"대본 준비됨"},
+    {key:"image",  making:"이미지 생성중", done:"이미지 준비됨"},
+    {key:"voice",  making:"음성 생성중", done:"음성 준비됨"},
+    {key:"video",  making:"영상 생성중", done:"영상 준비 완료"},
+  ];
+  const at = flow.findIndex(f => f.key === state.step);
+  const ready = state.done.video;
+  const percent = Math.round(
+    Object.values(state.done).filter(Boolean).length / 4 * 100);
+
+  const headline = ready ? "영상 준비 완료"
+    : (at >= 0 ? flow[at].making : "준비중");
+
+  return `<div class="cstat">
+    <div class="t ${ready?"ok":""}">${headline}</div>
+    <div class="bar"><b style="width:${percent}%"></b></div>
+    <div class="dots">${flow.map((f, i) => {
+      const on = state.done[f.key];
+      const now = !ready && i === at;
+      return `<span class="${on?"on":""} ${now?"now":""}">${
+        on ? "●" : (now ? "◐" : "○")} ${on ? f.done : f.making}</span>`;
+    }).join("")}</div>
+    <div class="len">${canvasLength(state)}</div>
+  </div>`;
+}
+
+function canvasVideo(state){
+  const base = `/studio/api/projects/${reviewProject}/media/video`;
+  const stamp = Date.now();
+
+  if(state.done.video){
+    return `<video controls src="${base}?t=${stamp}"></video>
+      <div class="rowbtns">
+        <a class="rbtn" href="${base}" download>다운로드</a>
+        <button class="sm ghost" onclick="reviewUpload()">YouTube</button>
+        <button class="sm ghost" disabled
+          title="Meta App 자격증명과 저장소 설정이 아직 없습니다">
+          Instagram</button>
+      </div>
+      <p class="muted" style="margin:6px 0 0">
+        ▶ 재생으로 확인하고 내려받거나 올리십시오.
+        YouTube는 Production Queue에서 승인한 뒤에 올라갑니다.
+        Instagram은 Meta App 자격증명과 저장소 설정이 아직 없습니다.</p>`;
+  }
+
+  // 아직 영상이 없다. 만드는 중에도 무엇을 만들고 있는지는 보여야
+  // 하므로 첫 scene 그림을 자리 표시로 쓴다.
+  const first = (state.scenes || [])[0];
+  const poster = first && first.image_url
+    ? `${first.image_url}&t=${stamp}` : null;
+
+  return `<div class="cplace" ${poster
+      ? `style="background-image:url('${poster}')"` : ""}>
+      <span>${poster ? "아직 영상이 없습니다" : "아직 만든 것이 없습니다"}</span>
+    </div>
+    <div class="rowbtns">
+      <button class="sm ghost" disabled>▶ 재생</button>
+      <button class="sm ghost" disabled>다운로드</button>
+      <button class="sm ghost" disabled>YouTube</button>
+      <button class="sm ghost" disabled
+        title="Meta App 자격증명과 저장소 설정이 아직 없습니다">
+        Instagram</button>
+    </div>`;
+}
+
+function renderCanvas(state){
+  $("canvasPreview").innerHTML = canvasVideo(state);
+  $("canvasStatus").innerHTML = canvasStatus(state);
+}
+
+// 메타데이터는 Render 중에 만들어진다. 여기서 만들지 않는다 - 없는
+// 것을 있는 것처럼 보여 주지 않고, 언제 생기는지 적는다.
+function reviewMetadataStep(state){
+  const m = state.metadata;
+
+  if(!m){
+    return '<p class="muted">Render 중에 만들어집니다.'
+      + ' 대본을 그대로 읽어 제목·설명·해시태그를 정합니다.</p>';
+  }
+
+  return `<dl class="kv">
+    <dt>제목</dt><dd>${m.title || "-"}</dd>
+    <dt>설명</dt><dd>${(m.description || "-").slice(0, 200)}</dd>
+    <dt>해시태그</dt><dd>${(m.hashtags || []).join(" ") || "-"}</dd>
+    <dt>재생목록</dt><dd>${m.playlist_title || "-"}</dd>
+  </dl>
+  <p class="muted" style="margin:7px 0 0">
+    Render가 만든 publish_package.json입니다.</p>`;
 }
 
 function reviewScriptStep(state){
@@ -1234,20 +1376,9 @@ function reviewVideoStep(state){
     return '<p class="muted">승인하면 자막·영상·썸네일·품질 단계가 돕니다.'
       + ' 대본·이미지·음성은 확정된 것을 그대로 씁니다.</p>';
   }
-
-  const url = `/studio/api/projects/${reviewProject}/media/video`;
-
-  return `<video controls src="${url}?t=${Date.now()}"></video>
-    <div class="rowbtns">
-      <a class="rbtn" href="${url}" download>저장</a>
-      <button class="sm ghost" onclick="reviewUpload()">YouTube</button>
-      <button class="sm ghost" disabled
-        title="Meta App 자격증명과 저장소 설정이 아직 없습니다">
-        Instagram</button>
-    </div>
-    <p class="muted" style="margin:7px 0 0">
-      YouTube는 Production Queue에서 승인한 뒤에 올라갑니다.
-      Instagram은 Meta App 자격증명과 저장소 설정이 아직 없습니다.</p>`;
+  // 재생·다운로드·업로드는 위 영상 카드에 있다. 두 곳에 두지 않는다.
+  return '<p class="muted">완성되었습니다. 재생과 내려받기는 위 영상'
+    + ' 카드에 있습니다.</p>';
 }
 
 const REVIEW_BODY = {
@@ -1255,6 +1386,7 @@ const REVIEW_BODY = {
   image: reviewImageStep,
   voice: reviewVoiceStep,
   video: reviewVideoStep,
+  metadata: reviewMetadataStep,
 };
 
 function toggleReviewSection(key){
@@ -1263,7 +1395,8 @@ function toggleReviewSection(key){
 }
 
 function reviewSection(step, state){
-  const done = state.done[step.key];
+  const done = (step.key === "metadata")
+    ? !!state.metadata : state.done[step.key];
   const current = state.step === step.key
     || (state.step === "done" && step.key === "video");
   const open = reviewOpen ? (reviewOpen === step.key) : current;
@@ -1288,7 +1421,10 @@ function reviewSection(step, state){
     <div class="rsechead" onclick="toggleReviewSection('${step.key}')">
       <span class="m">${mark}</span>
       <span class="n">${step.label}</span>
-      ${approved ? '<span class="ok">승인 완료</span>' : ""}
+      ${approved
+        ? `<span class="ok">${
+            step.key === "metadata" ? "생성됨" : "승인 완료"}</span>`
+        : ""}
       ${current && done && step.next
         ? '<span class="wait">확인 후 승인하세요</span>' : ""}
     </div>
@@ -1299,6 +1435,7 @@ function reviewSection(step, state){
 function renderReview(state){
   reviewState = state;
 
+  renderCanvas(state);
   $("reviewProgress").innerHTML = reviewProgress(state);
   $("reviewBody").innerHTML = REVIEW_STEPS
     .map(step => reviewSection(step, state)).join("");
@@ -1834,6 +1971,8 @@ async function pollJob(){
     $("jobState").textContent = d.state === "done" ? "완료" : ("실패: " + (d.error||""));
     preparedProjectId = null;
     if(d.project_id){ await loadProjects(); await openProject(d.project_id); }
+    // Sprint123 - 검토 중이었다면 완성된 영상으로 미리보기를 교체한다.
+    if(reviewProject) await openReview(reviewProject);
     else if(currentProject){ await openProject(currentProject); }
     await loadDataset();
     jobId = null;

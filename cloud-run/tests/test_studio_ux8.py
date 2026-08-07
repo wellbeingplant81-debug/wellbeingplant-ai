@@ -195,10 +195,13 @@ class TestTheReviewFeaturesSurvive(unittest.TestCase):
 class TestTheFinalStep(unittest.TestCase):
 
     def test_it_offers_save_and_the_two_platforms(self):
-        page = _page()
-        block = _block(page, "function reviewVideoStep")
+        """Sprint123 - 재생·내려받기·업로드가 영상 카드로 옮겨졌다.
+        두 곳에 두지 않는다."""
 
-        for label in ("저장", "YouTube", "Instagram"):
+        page = _page()
+        block = _block(page, "function canvasVideo")
+
+        for label in ("다운로드", "YouTube", "Instagram"):
             with self.subTest(label=label):
                 self.assertIn(label, block)
 
@@ -206,7 +209,7 @@ class TestTheFinalStep(unittest.TestCase):
         """오늘 올릴 수 없다 - 되는 척하지 않는다."""
 
         page = _page()
-        block = _block(page, "function reviewVideoStep")
+        block = _block(page, "function canvasVideo")
 
         self.assertIn("disabled", block)
         self.assertIn("Meta", block)
@@ -227,9 +230,10 @@ class TestTheFinalStep(unittest.TestCase):
 
     def test_saving_is_a_download_of_what_the_pipeline_made(self):
         page = _page()
-        block = _block(page, "function reviewVideoStep")
+        block = _block(page, "function canvasVideo")
 
         self.assertIn("media/video", block)
+        self.assertIn("download", block)
 
 
 class TestNothingBehindTheScreenMoved(unittest.TestCase):

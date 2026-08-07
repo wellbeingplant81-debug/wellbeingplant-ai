@@ -756,6 +756,59 @@ def review_create(request: GenerateRequest):
     return {"project_id": project["id"]}
 
 
+def _review_length(path, state):
+    """
+    지금 영상이 몇 초짜리인가.
+
+    음성이 생기기 전에는 대본 글자 수로 미루어 볼 수밖에 없고, 생긴
+    뒤에는 잴 수 있다. 잴 수 있는데 미루어 보면 화면이 틀린 숫자를
+    말하게 되므로 둘을 나눠서 준다.
+
+    새 계산은 만들지 않는다 - 예상은 Duration Gate가 쓰는 그 estimator,
+    실측은 Duration Optimizer가 쓰는 그 ffprobe 호출이다.
+    """
+
+    from app.services import audio_policy, duration_estimator
+    from app.services.duration_optimizer import get_audio_duration
+
+    scenes = state.get("scenes") or []
+
+    estimated = duration_estimator.estimate_script_duration(
+        [{"narration": s.get("narration") or ""} for s in scenes],
+    )
+
+    measured = None
+    if scenes and all(s.get("has_voice") for s in scenes):
+        total = 0.0
+        for scene in scenes:
+            total += get_audio_duration(os.path.join(
+                path, "audio", "scenes",
+                audio_policy.scene_audio_filename(scene["scene"]),
+            ))
+        measured = round(total, 2)
+
+    return round(estimated, 2), measured
+
+
+def _review_metadata(path):
+    """
+    Render가 만든 publish_package.json. 없으면 None.
+
+    여기서 만들지 않는다 - 메타데이터는 파이프라인이 영상을 만들면서
+    쓰는 것이고, 그 전에는 없는 것이 사실이다.
+    """
+
+    package = studio_service._load(os.path.join(path, "publish_package.json"))
+
+    if not isinstance(package, dict):
+        return None
+
+    return {
+        key: package.get(key)
+        for key in ("title", "description", "hashtags", "playlist_title")
+    }
+
+
 @router.get("/api/review/{project_id}")
 def review_state(project_id: str):
     """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
@@ -764,10 +817,16 @@ def review_state(project_id: str):
 
     path = _project_path(project_id)
     state = studio_review.state(path)
+    estimated, measured = _review_length(path, state)
 
     return {
         "project_id": project_id,
         **state,
+        # Sprint123 - 화면이 영상을 보여 주는 데 필요한 읽기값.
+        # studio_review는 손대지 않는다.
+        "estimated_seconds": estimated,
+        "measured_seconds": measured,
+        "metadata": _review_metadata(path),
         "scenes": [
             {
                 **scene,
