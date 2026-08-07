@@ -277,9 +277,12 @@ class TestNothingBehindTheScreenMoved(unittest.TestCase):
                 self.assertTrue(hasattr(studio_review, name))
 
     def test_no_new_review_endpoint_was_needed(self):
+        """Sprint126이 Provider 선택을 적는 자리 하나를 더했다.
+        화면 흐름은 그대로다."""
+
         paths = {p for p in app.openapi()["paths"] if "review" in p}
 
-        self.assertEqual(len(paths), 8)
+        self.assertEqual(len(paths), 9)
 
     def test_the_handlers_the_markup_calls_are_declared(self):
         page = _page()

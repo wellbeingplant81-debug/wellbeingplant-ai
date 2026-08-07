@@ -799,6 +799,11 @@ class ReviewScriptRequest(BaseModel):
     data: dict
 
 
+class ReviewProviderRequest(BaseModel):
+    # {단계: Provider 이름}. 고르지 않은 단계는 그대로 둔다.
+    providers: dict
+
+
 @router.post("/api/review")
 def review_create(request: GenerateRequest):
     """
@@ -875,7 +880,7 @@ def _review_metadata(path):
 def review_state(project_id: str):
     """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
 
-    from app.services import studio_review
+    from app.services import provider_selection, studio_review
 
     path = _project_path(project_id)
     state = studio_review.state(path)
@@ -886,6 +891,9 @@ def review_state(project_id: str):
         **state,
         # Sprint123 - 화면이 영상을 보여 주는 데 필요한 읽기값.
         # studio_review는 손대지 않는다.
+        # Sprint126 - 이 프로젝트가 고른 Provider. 안 고른 것은
+        # current로 온다.
+        "providers": provider_selection.all_selected(path),
         "estimated_seconds": estimated,
         "measured_seconds": measured,
         "metadata": _review_metadata(path),
@@ -906,6 +914,61 @@ def review_state(project_id: str):
             for scene in state["scenes"]
         ],
     }
+
+
+@router.put("/api/review/{project_id}/providers")
+def review_save_providers(project_id: str, request: ReviewProviderRequest):
+    """
+    이 프로젝트가 어느 Provider로 만들지 적는다.
+
+    환경변수를 바꾸지 않는다 - 프로젝트에 적고, 만들 때 그 프로젝트를
+    아는 자리가 읽는다.
+    """
+
+    from app.providers import tts_provider
+    from app.services import provider_selection
+
+    path = _project_path(project_id)
+    registry = _registry()
+
+    for stage, name in (request.providers or {}).items():
+        try:
+            provider_selection.require_stage(stage)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if name in (None, "", provider_selection.CURRENT):
+            continue
+
+        # 모르는 이름을 적어 두면 만들 때가 되어서야 깨진다.
+        #
+        # 음성은 두 층이 있다. 실제로 만드는 것은 tts_provider이고 그것이
+        # 아는 이름은 google·elevenlabs다. app.production 등록소의
+        # "google_tts"는 모델을 직접 부르는 다른 자리(아직 비어 있음)라
+        # 여기에 적으면 안 된다.
+        if stage == "voice":
+            if name not in tts_provider.PROVIDERS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"음성 단계가 모르는 Provider입니다: {name}. "
+                        f"사용 가능한 값: current, "
+                        f"{', '.join(tts_provider.PROVIDERS)}"
+                    ),
+                )
+            continue
+
+        try:
+            registry.get(stage, name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        provider_selection.save(path, request.providers)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return review_state(project_id)
 
 
 @router.post("/api/review/{project_id}/script")

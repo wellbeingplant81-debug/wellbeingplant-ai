@@ -6,6 +6,15 @@ from app.services.speech_normalizer import normalize_for_speech
 from app.services.voice_quality_engine import optimize_for_tts
 
 
+# Sprint126 - 이 경로가 아는 이름. 화면이 프로젝트에 적을 수 있는
+# 값이기도 하므로 여기서 소유한다.
+#
+# app.production 등록소의 이름과는 다른 층이다. 거기 있는 "google_tts"는
+# 파이프라인을 거치지 않고 모델을 직접 부르는 자리(아직 비어 있음)이고,
+# 여기 "google"은 지금 엔진이 실제로 쓰는 그 경로다.
+PROVIDERS = ("google", "elevenlabs")
+
+
 def generate_voice(text: str, output_file: str, provider: str = None):
     """
     Sprint125 - 어느 Provider를 쓸지 인자로도 받는다.

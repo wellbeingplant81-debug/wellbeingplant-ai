@@ -369,13 +369,18 @@ class TestNothingElseMoved(unittest.TestCase):
         self.assertNotIn("elevenlabs", source)
         self.assertNotIn("app.production", source)
 
-    def test_scene_tts_service_is_untouched(self):
+    def test_scene_tts_service_names_no_provider_itself(self):
+        """Sprint126 - 어느 Provider로 만들지는 프로젝트가 정하고,
+        여기는 그것을 읽어 넘기기만 한다. 특정 Provider 이름을
+        여기 적어 두지 않는다."""
+
         from app.services import scene_tts_service
 
         source = open(scene_tts_service.__file__, encoding="utf-8").read()
 
         self.assertNotIn("elevenlabs", source)
-        self.assertNotIn("provider=", source)
+        self.assertNotIn("google", source)
+        self.assertIn("provider_selection", source)
 
     def test_the_pipeline_and_resolvers_are_untouched(self):
         import app.pipeline.pipeline as pipeline

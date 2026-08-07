@@ -126,6 +126,10 @@ ENDPOINTS = [
     ("POST", "/studio/api/review/{project_id}/script", None,
      ["app.services.studio_review.generate_script"],
      f"/studio/api/review/{PROJECT_ID}/script"),
+    ("PUT", "/studio/api/review/{project_id}/providers",
+     {"providers": {"voice": "current"}},
+     ["app.services.provider_selection.save"],
+     f"/studio/api/review/{PROJECT_ID}/providers"),
     ("PUT", "/studio/api/review/{project_id}/script",
      {"data": {"title": "t", "scenes": [
          {"scene": 1, "narration": "n", "image_prompt": "p"}]}},

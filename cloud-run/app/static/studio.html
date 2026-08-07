@@ -199,6 +199,16 @@ a{color:var(--accent)}
 .pcard .model{flex-basis:100%;color:var(--dim);font-size:10.5px;
   padding-left:23px}
 
+/* Sprint126 - 이 프로젝트의 Provider 선택. */
+.rprov{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  padding:9px 10px;margin-bottom:8px}
+.rprov .h{font-size:11.5px;color:var(--dim);margin-bottom:5px}
+.rprov .row{display:flex;align-items:center;gap:7px;font-size:12px;
+  padding:3px 0;cursor:pointer}
+.rprov .row.off{opacity:.45;cursor:not-allowed}
+.rprov .row input{width:auto;flex:none;margin:0;accent-color:var(--accent)}
+.rprov .why{margin-left:auto;color:var(--dim);font-size:10.5px}
+
 /* Sprint124 - 아직 붙지 않은 Provider 목록. */
 .pcat{margin-top:8px;font-size:11px}
 .pcat summary{color:var(--dim);cursor:pointer;font-size:11.5px}
@@ -1363,10 +1373,36 @@ function reviewImageStep(state){
       </div>`;
 }
 
+// Sprint126 - 이 프로젝트를 어느 Provider로 만들지. 고른 것은
+// project.json에 적히고, 만들 때 그 프로젝트를 아는 자리가 읽는다 -
+// 환경변수를 바꾸지 않는다.
+function reviewVoiceProviders(state){
+  const spec = (stageSpec && stageSpec.stages.find(x => x.stage === "voice"));
+  if(!spec) return "";
+
+  const chosen = (state.providers || {}).voice || "current";
+  const rows = [{name:"current", display_name:"현재 엔진", vendor:"",
+                 available:true, unavailable_reason:""}]
+    .concat((spec.provider_list || []).filter(
+      p => p.source_modes.includes("generate") && p.name !== "current"));
+
+  return `<div class="rprov">
+    <div class="h">이 프로젝트의 음성 Provider</div>
+    ${rows.map(p => `<label class="row ${p.available?"":"off"}">
+      <input type="radio" name="voiceProvider" value="${p.name}"
+        ${chosen === p.name ? "checked" : ""}
+        ${p.available ? "" : "disabled"}
+        onchange="reviewPickVoiceProvider('${p.name}')">
+      <span>${p.display_name}${p.vendor ? ` · ${p.vendor}` : ""}</span>
+      ${p.available ? "" : `<span class="why">${p.unavailable_reason}</span>`}
+    </label>`).join("")}
+  </div>`;
+}
+
 function reviewVoiceStep(state){
   if(!state.scenes.length) return '<p class="muted">대본이 먼저 필요합니다.</p>';
 
-  return state.scenes.map(s => `<div class="rscene">
+  return reviewVoiceProviders(state) + state.scenes.map(s => `<div class="rscene">
       <div class="h">Scene ${s.scene}</div>
       <div class="rowbtns" style="margin-top:0">
         ${s.voice_url
@@ -1482,6 +1518,12 @@ async function reviewSaveScript(){
   const d = await reviewCall("PUT", "/script", {
     data: {title: reviewState.title || "제목", scenes: scenes},
   });
+  if(d) renderReview(d);
+}
+
+async function reviewPickVoiceProvider(name){
+  reviewNote("Provider를 적는 중…");
+  const d = await reviewCall("PUT", "/providers", {providers: {voice: name}});
   if(d) renderReview(d);
 }
 

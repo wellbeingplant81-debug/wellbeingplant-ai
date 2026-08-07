@@ -261,9 +261,11 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
                 self.assertTrue(hasattr(studio_review, name))
 
     def test_the_endpoints_are_the_same_eight(self):
+        """Sprint126 - Provider 선택을 적는 자리가 하나 늘었다."""
+
         paths = {p for p in app.openapi()["paths"] if "review" in p}
 
-        self.assertEqual(len(paths), 8)
+        self.assertEqual(len(paths), 9)
 
     def test_the_scene_features_survive(self):
         page = _page()

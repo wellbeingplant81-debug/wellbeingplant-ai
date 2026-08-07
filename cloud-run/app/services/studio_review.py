@@ -41,7 +41,7 @@ import json
 import os
 
 from app.providers.tts_provider import generate_voice
-from app.services import audio_policy
+from app.services import audio_policy, provider_selection
 from app.steps import step01_script_resolve
 
 SCRIPT = "script"
@@ -262,7 +262,12 @@ def regenerate_voice(project_path, scene_number):
     target = _voice_path(project_path, scene_number)
 
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    generate_voice(scene.get("narration") or "", target)
+    # Sprint126 - 이 프로젝트가 고른 Provider를 따른다. 안 골랐으면
+    # None이라 예전 경로 그대로다.
+    generate_voice(
+        scene.get("narration") or "", target,
+        provider=provider_selection.selected(project_path, "voice"),
+    )
 
     return target
 
