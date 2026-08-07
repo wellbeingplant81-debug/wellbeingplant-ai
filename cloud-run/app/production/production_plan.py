@@ -67,6 +67,19 @@ class ProductionPlan:
         stages.require_stage(selection.stage)
         source_modes.require_source_mode(selection.source_mode)
 
+        # Sprint109 - 모드가 허용하는 것과 단계가 허용하는 것 둘 다
+        # 만족해야 한다. 대본은 건너뛸 수 없고, Manual 모드에서는
+        # AI 생성을 고를 수 없다.
+        allowed_here = stages.allowed_source_modes(selection.stage)
+
+        if selection.source_mode not in allowed_here:
+            raise PlanError(
+                f"{stages.LABELS[selection.stage]} 단계에는 "
+                f"{source_modes.LABELS[selection.source_mode]}을(를) "
+                f"쓸 수 없습니다. 허용: "
+                f"{[source_modes.LABELS[m] for m in allowed_here]}"
+            )
+
         allowed = self.policy.allowed_source_modes
 
         if selection.source_mode not in allowed:
@@ -106,6 +119,9 @@ class ProductionPlan:
                     f"{stages.LABELS[selection.stage]} 단계가 AI 생성인데 "
                     "Provider가 정해지지 않았습니다."
                 )
+            if selection.source_mode == source_modes.NONE:
+                # 건너뛰는 단계는 줄 것도 고를 것도 없다.
+                continue
             if not selection.calls_api and selection.payload is None:
                 raise PlanError(
                     f"{stages.LABELS[selection.stage]} 단계가 "
@@ -137,8 +153,14 @@ class ProductionPlan:
             if not selection.calls_api:
                 from app.production.cost import free_estimate
 
+                note = (
+                    "이 단계를 건너뜁니다."
+                    if selection.source_mode == source_modes.NONE
+                    else "API를 호출하지 않습니다."
+                )
                 breakdown.add(free_estimate(
                     stage, selection.provider or "-", selection.source_mode,
+                    note=note,
                 ))
                 continue
 
@@ -158,12 +180,33 @@ class ProductionPlan:
 
         return breakdown
 
+    def estimate_seconds(self) -> float:
+        """이 계획으로 만들면 얼마나 걸리는가.
+
+        만드는 단계만 시간이 든다 - 붙여넣거나 직접 준 것은 만들
+        시간이 없고, 건너뛴 것은 아예 돌지 않는다. 자막/렌더/썸네일/
+        품질은 무엇을 고르든 항상 돌므로 늘 더해진다.
+
+        숫자는 stage_timing이 갖고 있고 그것은 실측 37편의 중앙값이다.
+        """
+
+        from app.production import stage_timing
+
+        total = stage_timing.FIXED_SECONDS
+
+        for selection in self.selections.values():
+            if selection.calls_api:
+                total += stage_timing.seconds_for(selection.stage)
+
+        return round(total, 1)
+
     def as_dict(self) -> dict:
         return {
             "mode": self.mode,
             "label": production_modes.LABELS[self.mode],
             "calls_api": self.calls_api,
             "api_stages": self.api_stages,
+            "estimated_seconds": self.estimate_seconds(),
             "stages": {
                 stage: {
                     "source_mode": s.source_mode,

@@ -110,6 +110,10 @@ ENDPOINTS = [
     ("GET", "/studio/api/production/modes", None, []),
     # Sprint107 - 프로젝트를 실제로 만드는 엔드포인트다. create_project를
     # 패치해 디스크에 남기지 않는다 - 계약만 확인한다.
+    # Sprint109 - 단계별 선택. 계획만 만들고 실행하지 않는다.
+    ("GET", "/studio/api/production/stages", None, []),
+    ("POST", "/studio/api/production/plan",
+     {"selections": {"script": "generate"}}, []),
     ("POST", "/studio/api/production/project",
      {"raw": "{\"title\":\"t\",\"scenes\":[{\"narration\":\"n\"}]}"},
      ["app.production.imported_project.create_from_script"]),

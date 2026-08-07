@@ -17,13 +17,18 @@ API를 부르지 않으므로 비용이 0이다. MANUAL(사람이 직접 씀)과
 GENERATE = "generate"
 IMPORT = "import"
 MANUAL = "manual"
+# Sprint109 - 그 단계를 아예 건너뛴다. "이미지는 내가 넣는다"가 아니라
+# "이미지가 없는 영상을 만든다"는 뜻이다. MANUAL과 다르다 - MANUAL은
+# 사용자가 무언가를 주지만 NONE은 아무것도 없다.
+NONE = "none"
 
-SOURCE_MODES = (GENERATE, IMPORT, MANUAL)
+SOURCE_MODES = (GENERATE, IMPORT, MANUAL, NONE)
 
 LABELS = {
     GENERATE: "AI 생성",
     IMPORT: "붙여넣기 / 가져오기",
     MANUAL: "직접 작성 / 업로드",
+    NONE: "건너뛰기",
 }
 
 # API를 부르는 방식은 하나뿐이다. 비용 계산과 "Manual은 API 호출 0"

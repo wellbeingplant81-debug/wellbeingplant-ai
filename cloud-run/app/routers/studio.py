@@ -63,6 +63,11 @@ class ImportProjectRequest(ChatImportRequest):
     source: str = "import"
 
 
+class StagePlanRequest(BaseModel):
+    # {단계: 입력방식}. 고르지 않은 단계는 계획에 들어가지 않는다.
+    selections: dict
+
+
 class RegenerateRequest(BaseModel):
     # None이면 엔진이 실패 scene 전부를 알아서 고른다. 목록을 주면
     # 그 안으로 좁혀진다 - 통과한 scene을 넣어도 정책이 걸러낸다.
@@ -220,6 +225,91 @@ def production_modes_view():
         "current_engine_mode": modes.CURRENT_ENGINE_MODE,
         "stage_labels": stages.LABELS,
     }
+
+
+@router.get("/api/production/stages")
+def production_stages_view():
+    """단계마다 무엇을 고를 수 있고, 지금 누가 그것을 맡을 수 있는가."""
+
+    from app.production import source_modes, stage_timing, stages
+
+    registry = _registry()
+    rows = []
+
+    for stage in stages.STAGES:
+        allowed = stages.allowed_source_modes(stage)
+        rows.append({
+            "stage": stage,
+            "label": stages.LABELS[stage],
+            "source_modes": list(allowed),
+            "source_labels": {m: source_modes.LABELS[m] for m in allowed},
+            # 그 방식을 맡을 Provider가 지금 있는가. 없으면 화면이
+            # 고를 수는 있어도 만들 수 없다는 것을 말해야 한다.
+            "providers": {
+                mode: [p.name for p in registry.available(stage, mode)]
+                for mode in allowed if mode != source_modes.NONE
+            },
+            "seconds_if_generated": stage_timing.seconds_for(stage),
+            "note": stages.NOTES.get(stage, ""),
+        })
+
+    return {
+        "stages": rows,
+        "fixed_seconds": stage_timing.FIXED_SECONDS,
+        "observed_total_seconds": stage_timing.OBSERVED_TOTAL_SECONDS,
+        "sample_size": stage_timing.SAMPLE_SIZE,
+        "measured_at": stage_timing.MEASURED_AT,
+    }
+
+
+@router.post("/api/production/plan")
+def production_plan_view(request: StagePlanRequest):
+    """
+    고른 것으로 계획을 만들어 비용·시간·API 사용을 돌려준다.
+
+    실행하지 않는다 - 계획만 만든다.
+    """
+
+    from app.production import production_modes, source_modes, stages
+    from app.production.production_plan import (
+        PlanError, ProductionPlan, StageSelection,
+    )
+
+    registry = _registry()
+    plan = ProductionPlan(mode=production_modes.ASSISTED)
+
+    try:
+        for stage, mode in (request.selections or {}).items():
+            stages.require_stage(stage)
+            source_modes.require_source_mode(mode)
+
+            provider = None
+            if source_modes.calls_api(mode):
+                chosen = registry.available(stage, mode)
+                provider = chosen[0].name if chosen else None
+
+            plan.select(StageSelection(
+                stage=stage, source_mode=mode, provider=provider,
+                # 화면이 아직 내용을 보내지 않는다 - 계획만 세우는
+                # 단계라 있는 셈 친다.
+                payload="(선택함)" if mode in (
+                    source_modes.IMPORT, source_modes.MANUAL) else None,
+            ))
+    except (PlanError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    result = plan.as_dict()
+    result["cost"] = plan.estimate_cost(registry=registry).as_dict()
+    result["missing_stages"] = [
+        stages.LABELS[s] for s in plan.missing_stages()
+    ]
+    result["stages_without_provider"] = [
+        stages.LABELS[s.stage]
+        for s in plan.selections.values()
+        if s.calls_api and not s.provider
+    ]
+
+    return result
 
 
 @router.post("/api/production/import")

@@ -48,3 +48,40 @@ def require_stage(value: str) -> str:
             f"알 수 없는 단계입니다: {value!r}. 사용 가능한 값: {list(STAGES)}"
         )
     return value
+
+
+# Sprint109 - 단계마다 고를 수 있는 것.
+#
+# 건너뛸 수 있는 것은 셋뿐이다. 대본이 없으면 만들 것이 없고,
+# 메타데이터는 업로드가 읽는 자리라 비우면 제목 없는 영상이 올라간다.
+SKIPPABLE_STAGES = (IMAGE, VOICE, MUSIC)
+
+
+def allowed_source_modes(stage: str) -> tuple:
+    """이 단계에 쓸 수 있는 입력 방식."""
+
+    from app.production import source_modes
+
+    require_stage(stage)
+
+    if stage in SKIPPABLE_STAGES:
+        return source_modes.SOURCE_MODES
+
+    return tuple(
+        mode for mode in source_modes.SOURCE_MODES
+        if mode != source_modes.NONE
+    )
+
+
+# Sprint109 - 화면이 오해하지 않게 적어 두는 사실.
+#
+# 배경음악은 "만들 수 없는 것"이 아니다. 엔진이 렌더 중에 넣는다
+# (bgm_service). 다만 Provider로 감싸지 않았을 뿐이고, 그 이유는
+# 별도 산출물이 없어 감싸려면 렌더 경로를 건드려야 하기 때문이다
+# (Sprint103).
+NOTES = {
+    MUSIC: (
+        "엔진이 렌더 중에 넣습니다. Provider로 감싸지 않아 목록에는 "
+        "없지만 실제로는 들어갑니다."
+    ),
+}

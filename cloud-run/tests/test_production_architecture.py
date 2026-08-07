@@ -516,7 +516,7 @@ class TestNothingWasWiredIn(unittest.TestCase):
         Sprint105가 제작 방식 화면을 붙이며 둘을 만들었으므로 그
         문장은 더 이상 사실이 아니다.
 
-        지켜야 할 경계는 그대로다 - 셋 다 영상 생성을 시작하지
+        지켜야 할 경계는 그대로다 - 전부 영상 생성을 시작하지
         않는다. project는 프로젝트만 만들고, 만드는 것은 여전히 기존
         생성 엔드포인트다(Sprint107)."""
 
@@ -528,7 +528,9 @@ class TestNothingWasWiredIn(unittest.TestCase):
             sorted(paths),
             ["/studio/api/production/import",
              "/studio/api/production/modes",
-             "/studio/api/production/project"],
+             "/studio/api/production/plan",
+             "/studio/api/production/project",
+             "/studio/api/production/stages"],
         )
 
 
