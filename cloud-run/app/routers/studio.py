@@ -324,6 +324,19 @@ def production_stages_view():
                     # Sprint138 - 환경변수로 담을 수 없는 인증 방식.
                     # 화면이 "필요 없음"이라고 잘못 말하지 않게 한다.
                     "authentication": p.capabilities.authentication,
+                    # Sprint140 - 이 엔진이 안에서 함께 쓰는 곳들.
+                    # 화면이 추가로 필요한 인증을 말할 수 있게 한다.
+                    "secondary_providers": [
+                        {
+                            "name": s.name,
+                            "display_name": s.label,
+                            "vendor": s.vendor,
+                            "authentication": s.authentication,
+                            "required_settings": list(s.required_settings),
+                            "note": s.description,
+                        }
+                        for s in p.capabilities.secondary_providers
+                    ],
                     "note": p.capabilities.description,
                 }
                 for p in registry.for_stage(stage)

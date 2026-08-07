@@ -224,6 +224,7 @@ a{color:var(--accent)}
 .pcmp tr.off{opacity:.55}
 .pcmp .n{display:block;font-weight:600;color:var(--text)}
 .pcmp .r{display:block;color:var(--dim);font-size:10px;white-space:normal}
+.pcmp .x{display:block;color:var(--dim);font-size:10px}
 
 /* Sprint123 - 영상 카드. 스크롤해도 따라온다. */
 .canvas{position:sticky;top:0;z-index:3;background:var(--panel2);
@@ -1649,10 +1650,13 @@ function providerCard(stage, option, spec){
   const measured = option.engine && providers.length;
   // 고른 것이 실제로 무엇을 요구하는지. 카드가 목록과 다른 말을
   // 하면 안 된다.
-  const auth = measured
-    ? providerAuth((spec.provider_list || []).find(
-        x => x.name === providers[0]) || {})
-    : "";
+  const chosen = measured
+    ? ((spec.provider_list || []).find(x => x.name === providers[0]) || {})
+    : {};
+  const auth = measured ? providerAuth(chosen) : "";
+  // 안에서 함께 쓰는 곳. 어느 쪽이 먼저인지는 그 자리가 들고 있는
+  // 설명이 말한다 - 화면이 순서를 지어내지 않는다.
+  const extra = measured ? providerExtraAuth(chosen) : [];
 
   return `<label class="pcard ${cardKind(option)} ${on?"on":""} ${off?"off":""}"
       ${soon?'title="향후 지원 예정"':""}>
@@ -1664,6 +1668,9 @@ function providerCard(stage, option, spec){
     ${missing?'<span class="soon">Provider 없음</span>':""}
     ${measured?`<span class="q">${UNMEASURED}</span>`:""}
     ${auth?`<span class="a">${auth}</span>`:""}
+    ${measured && extra.length
+      ? `<span class="a" title="${chosen.note || ""}">함께 쓰는 곳 · ${
+          extra.join(" · ")}</span>` : ""}
     <span class="c">${cost}</span>
     ${on && option.engine && !soon
       ? `<span class="model">현재 엔진 · ${engine.name}${
@@ -1692,6 +1699,15 @@ function providerAuth(p){
   if(p.authentication) return p.authentication;
   if(p.required_settings.length) return p.required_settings.join(" · ");
   return NO_AUTH;
+}
+
+// Sprint140 - 이 Provider가 안에서 함께 쓰는 곳들이 요구하는 인증.
+//
+// 현재 이미지 엔진이 그런 경우다 - Imagen은 Vertex ADC로 부르지만
+// 스톡 검색은 다른 키를 쓴다. 이름도 키도 서버가 준 것만 옮긴다.
+function providerExtraAuth(p){
+  return (p.secondary_providers || []).map(
+    s => `${s.display_name}: ${providerAuth(s)}`);
 }
 
 function providerKind(p){
@@ -1760,7 +1776,8 @@ function providerCompare(spec){
         <td>${p.vendor || "—"}</td>
         <td>${providerKind(p)}</td>
         <td title="${p.unavailable_reason || ""}">${providerStatus(p)}</td>
-        <td>${providerAuth(p)}</td>
+        <td>${providerAuth(p)}${providerExtraAuth(p).map(
+          x => `<span class="x">+ ${x}</span>`).join("")}</td>
         <td>${p.source_modes.map(m => labels[m] || m).join(" · ")}</td>
         <td>${providerEngineUse(p)}</td>
         <td>${providerMeasured(p, spec)}</td>

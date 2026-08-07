@@ -61,6 +61,14 @@ class ProviderCapabilities:
     #
     # 둘 다 비어 있으면 정말로 인증이 필요 없는 것이다.
     authentication: str = ""
+    # Sprint140 - 이 Provider가 안에서 함께 쓰는 곳들. 단계의 대안이
+    # 아니라 이 엔진 내부의 일부다 - 현재 이미지 엔진이 Imagen과 함께
+    # 스톡 검색을 쓰는 것이 그 예다.
+    #
+    # 각 항목은 그 자리의 ProviderCapabilities다. 이름을 여기 다시
+    # 적으면 한쪽만 바뀌는 날이 온다.
+    secondary_providers: Tuple["ProviderCapabilities", ...] = field(
+        default_factory=tuple)
     description: str = ""
 
     # Sprint124 - 화면이 Provider를 고르게 하려면 이름만으로는 부족하다.

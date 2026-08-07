@@ -31,6 +31,10 @@ Plan은 만들어지지만 그 단계를 맡을 Provider가 아직 없고, 등�
 """
 
 from app.production import source_modes, stages
+from app.production.providers.stock_image import (
+    ORDER_NOTE,
+    stock_image_capabilities,
+)
 from app.production.stage_provider import (
     STANDARD,
     ProviderCapabilities,
@@ -61,6 +65,10 @@ class _CurrentEngineProvider(StageProvider):
     # 화면이 "인증 없음"이라 말하게 되는데, 셋은 그렇지 않다.
     authentication = ""
 
+    # Sprint140 - 이 엔진이 안에서 함께 쓰는 곳들. 이름과 키는 그쪽
+    # 자리가 들고 있다 - 여기 다시 적지 않는다.
+    secondary = ()
+
     def __init__(self):
         self.capabilities = ProviderCapabilities(
             name=CURRENT,
@@ -68,6 +76,7 @@ class _CurrentEngineProvider(StageProvider):
             quality_tier=STANDARD,
             supported_source_modes=(source_modes.GENERATE,),
             authentication=self.authentication,
+            secondary_providers=tuple(self.secondary),
             description=self.description,
         )
 
@@ -98,8 +107,12 @@ class CurrentImageProvider(_CurrentEngineProvider):
     authentication = VERTEX_ADC
     description = (
         "지금 쓰는 이미지 엔진. scene마다 스톡 검색과 Imagen 생성을 "
-        "골라 붙인다."
+        "골라 붙인다. " + ORDER_NOTE
     )
+
+    # scene마다 스톡 검색을 함께 쓴다. 어느 쪽이 먼저인지는 scene의
+    # visual_type이 정한다 - stock_image가 그 사실도 들고 있다.
+    secondary = stock_image_capabilities()
 
     def generate(self, request):
         self._require(source_modes.GENERATE)

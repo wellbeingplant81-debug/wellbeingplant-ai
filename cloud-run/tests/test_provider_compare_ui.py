@@ -250,7 +250,7 @@ class TestTheServerSendsWhatTheTableNeeds(unittest.TestCase):
             {"name", "display_name", "vendor", "quality_tier",
              "estimated_cost", "source_modes", "coming_soon", "available",
              "unavailable_reason", "required_settings", "authentication",
-             "note"})
+             "secondary_providers", "note"})
 
     def test_everything_the_table_needs_is_already_sent(self):
         row = next(s for s in self._payload()["stages"]
