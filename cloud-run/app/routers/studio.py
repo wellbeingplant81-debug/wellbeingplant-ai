@@ -258,6 +258,8 @@ def production_stages_view():
                 for mode in allowed if mode != source_modes.NONE
                 for p in registry.available(stage, mode)
             },
+            # Sprint117 - 무슨 AI인지 화면이 말할 수 있도록.
+            "engine": ENGINE_FACTS[stage],
             "seconds_if_generated": stage_timing.seconds_for(stage),
             "note": stages.NOTES.get(stage, ""),
         })
@@ -269,6 +271,47 @@ def production_stages_view():
         "sample_size": stage_timing.SAMPLE_SIZE,
         "measured_at": stage_timing.MEASURED_AT,
     }
+
+
+# Sprint117 - 단계마다 실제로 도는 것.
+#
+# 화면이 "AI 생성"이라고만 적던 자리에 이 이름이 들어간다. 모델
+# 문자열은 서비스 함수 안에 인라인으로 박혀 있어서 import할 상수가
+# 없다 - 그래서 여기 적고, 그것이 실제 코드와 어긋나지 않는지는
+# tests/test_studio_ux3.py가 잠근다. 모델을 바꾸면 그 테스트가 먼저
+# 깨진다.
+#
+# calls_api는 돈이 나가는가이다. 메타데이터는 규칙 기반이라 호출이
+# 없고(Sprint94), BGM은 assets/music/의 mp3를 고르는 것이라 역시 없다.
+# 계획의 api_stages는 generate면 전부 세므로 그 둘까지 포함하는데,
+# 화면은 실제로 나가는 것만 센다.
+ENGINE_FACTS = {
+    "script": {
+        "name": "Gemini 2.5 Pro",
+        "model": "gemini-2.5-pro",
+        "calls_api": True,
+    },
+    "image": {
+        "name": "Imagen 4.0",
+        "model": "imagen-4.0-generate-001",
+        "calls_api": True,
+    },
+    "voice": {
+        "name": "Google TTS Chirp3-HD",
+        "model": "ko-KR-Chirp3-HD-Aoede",
+        "calls_api": True,
+    },
+    "metadata": {
+        "name": "규칙 기반 생성기",
+        "model": None,
+        "calls_api": False,
+    },
+    "music": {
+        "name": "로컬 BGM",
+        "model": None,
+        "calls_api": False,
+    },
+}
 
 
 @router.post("/api/production/plan")

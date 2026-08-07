@@ -153,12 +153,42 @@ a{color:var(--accent)}
 .pick{background:var(--panel2);border:1px solid var(--line);
   border-radius:8px;padding:9px 10px}
 .pick .h{font-size:12px;font-weight:600;margin-bottom:6px}
-.pick .row{display:flex;align-items:center;gap:7px;font-size:12px;
-  padding:3px 0;cursor:pointer}
-.pick .row.na{opacity:.45;cursor:not-allowed}
-.pick .row .why{color:var(--dim);font-size:10.5px;margin-left:auto}
+/* Sprint117 - Provider 카드. 다섯만 말한다 - 이름·현재 여부·품질·
+   비용·지원 여부. 설명문은 넣지 않는다. */
+.pick .pcard{display:flex;align-items:center;gap:8px;font-size:12px;
+  padding:7px 9px;margin-top:5px;border-radius:7px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line)}
+.pick .pcard:hover{border-color:#3b4757}
+.pick .pcard.on{border-color:var(--accent);background:#12243d}
+.pick .pcard.off{opacity:.45;cursor:not-allowed}
 /* 전역 input{width:100%}가 라디오까지 늘려 라벨을 밀어낸다. */
-.pick .row input{width:auto;flex:none;margin:0;accent-color:var(--accent)}
+.pick .pcard input{width:auto;flex:none;margin:0;accent-color:var(--accent)}
+.pick .pcard .n{font-weight:600}
+.pick .pcard .cur{font-size:10px;color:var(--accent);border:1px solid #244469;
+  border-radius:99px;padding:0 6px}
+.pick .pcard .soon{font-size:10px;color:var(--dim);border:1px solid var(--line);
+  border-radius:99px;padding:0 6px}
+.pick .pcard .q{margin-left:auto;color:var(--warn);font-size:11px;
+  letter-spacing:-1px}
+.pick .pcard .c{color:var(--dim);font-size:11px;min-width:56px;
+  text-align:right}
+.pick .pcard .q + .c{margin-left:0}
+.pick .pcard .c:first-of-type{margin-left:auto}
+
+/* 요약 카드 */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:9px 10px;display:flex;flex-direction:column;gap:2px}
+.card .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.6px}
+.card b{font-size:15px;line-height:1.2}
+.card .s{font-size:10.5px;color:var(--dim)}
+
+/* 헤더의 현재 Provider */
+.cps{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.cp{font-size:10.5px;color:var(--dim);border:1px solid var(--line);
+  border-radius:99px;padding:2px 9px}
+.cp b{color:var(--text);font-weight:600;margin-right:4px}
 </style>
 </head>
 <body>
@@ -170,6 +200,8 @@ a{color:var(--accent)}
      text-decoration:none">Production Queue</a>
   <a href="/studio/replay" style="color:#4c9aff;font-size:12px;
      text-decoration:none">Replay Viewer</a>
+  <!-- Sprint117 - 지금 무엇이 도는지는 무엇을 고르든 항상 보인다. -->
+  <div id="currentProviders" class="cps"></div>
 </header>
 
 <!-- 새 영상 만들기 - 단계마다 무엇으로 만들지 직접 고른다.
@@ -694,68 +726,91 @@ async function createFromImport(sourceId, source){
 
 let stageSpec = null;
 let stagePick = {};
-// 화면에서 고른 항목. 대본의 붙여넣기 넷은 서버에는 똑같은 import로
-// 가고, 다른 것은 안내 문구뿐이다 - 파서는 넷을 구분하지 않는다
+// 화면에서 고른 항목. 대본의 붙여넣기 셋은 서버에는 똑같은 import로
+// 가고, 다른 것은 안내 문구뿐이다 - 파서는 셋을 구분하지 않는다
 // (Sprint104). 구분하는 척하지 않으려고 여기 적어 둔다.
 let uiPick = {};
 
-// 단계마다 실제로 고를 수 있는 것. mode는 서버가 아는 source_mode이고,
-// label은 그 방식으로 만들면 무엇이 도는지를 이름으로 말한다 -
-// "AI 생성"만으로는 어떤 AI인지 알 수 없다는 것이 이번 변경의 이유다.
+// 품질은 Provider가 신고한 등급이다. 별은 그 등급을 그리는 것일 뿐,
+// 화면이 점수를 매기지 않는다.
+const STARS = {premium: 5, standard: 4, economy: 3};
+
+// 단계마다 고를 수 있는 것. generate는 이름을 서버에서 받아 온다 -
+// 무슨 AI인지 화면이 말해야 하고, 그 이름은 실제 코드에 있는 모델이다.
 const STAGE_UI = {
   script: [
-    {key:"generate", mode:"generate", label:"AI 생성"},
-    {key:"chatgpt",  mode:"import",   label:"ChatGPT 붙여넣기",  tool:"ChatGPT"},
-    {key:"claude",   mode:"import",   label:"Claude 붙여넣기",   tool:"Claude"},
-    {key:"gemini",   mode:"import",   label:"Gemini 붙여넣기",   tool:"Gemini"},
-    {key:"deepseek", mode:"import",   label:"DeepSeek 붙여넣기", tool:"DeepSeek"},
+    {key:"generate", mode:"generate", engine:true},
+    {key:"chatgpt",  mode:"import",   label:"ChatGPT",  tool:"ChatGPT"},
+    {key:"claude",   mode:"import",   label:"Claude",   tool:"Claude"},
+    {key:"gemini",   mode:"import",   label:"Gemini",   tool:"Gemini"},
+    {key:"deepseek", mode:"import",   label:"DeepSeek", tool:"DeepSeek"},
     {key:"manual",   mode:"manual",   label:"직접 작성"},
   ],
   image: [
-    {key:"generate", mode:"generate", label:"AI 생성"},
+    {key:"generate", mode:"generate", engine:true},
     {key:"import",   mode:"import",   label:"직접 업로드"},
     {key:"none",     mode:"none",     label:"사용 안 함"},
   ],
   voice: [
-    {key:"generate", mode:"generate", label:"Google TTS"},
-    {key:"eleven",   mode:"generate", label:"ElevenLabs (예정)", soon:true},
+    {key:"generate", mode:"generate", engine:true},
+    {key:"eleven",   mode:"generate", label:"ElevenLabs", soon:true},
     {key:"import",   mode:"import",   label:"직접 업로드"},
     {key:"none",     mode:"none",     label:"사용 안 함"},
   ],
   metadata: [
-    {key:"generate", mode:"generate", label:"AI 생성"},
+    {key:"generate", mode:"generate", engine:true},
     {key:"manual",   mode:"manual",   label:"직접 작성"},
   ],
 };
 
-// 배경음악은 고를 것이 없다 - 엔진이 렌더 중에 섞고 별도 산출물이
-// 없다. 숨기지는 않고 요약에서 그 사실을 말한다.
+// 배경음악은 고를 것이 없다 - 엔진이 렌더 중에 로컬 mp3를 섞고 별도
+// 산출물이 없다. 숨기지는 않고 요약에서 그 사실을 말한다.
 const HIDDEN_STAGES = ["music"];
+
+// Provider가 있어야 하는 것은 API를 부르는 방식뿐이다. 서버가 그렇게
+// 판정한다(source_modes.BILLABLE_SOURCE_MODES).
+const API_MODES = ["generate"];
 
 function stageLabel(stage){
   const spec = (stageSpec && stageSpec.stages.find(s => s.stage === stage));
   return spec ? spec.label : stage;
 }
 
-// Provider가 있어야 하는 것은 API를 부르는 방식뿐이다. 서버가 그렇게
-// 판정한다(source_modes.BILLABLE_SOURCE_MODES) - 붙여넣기와 직접 작성은
-// 등록소를 거치지 않고 가져오기 경로로 들어간다.
-const API_MODES = ["generate"];
+function starText(tier){
+  const n = STARS[tier] || 0;
+  return n ? "★".repeat(n) + "☆".repeat(5 - n) : "";
+}
 
-function stageRow(stage, option, spec){
-  const providers = spec.providers[option.mode];
-  const missing = API_MODES.includes(option.mode)
-    && providers !== undefined && providers.length === 0;
-  const off = option.soon || missing;
-  const why = option.soon ? "아직 붙지 않았습니다"
-            : (missing ? "맡을 Provider가 없습니다" : "");
+// 카드가 말하는 것은 다섯뿐이다 - 이름 · 현재 여부 · 품질 · 비용 ·
+// 지원 여부. 설명문은 넣지 않는다.
+function providerCard(stage, option, spec){
+  const engine = spec.engine;
+  const providers = spec.providers[option.mode] || [];
+  const missing = API_MODES.includes(option.mode) && providers.length === 0;
+  const soon = !!option.soon;
+  const off = soon || missing;
 
-  return `<label class="row ${off?"na":""}">
+  const name = option.engine ? engine.name : option.label;
+  const current = option.engine && !soon;
+  // 돈이 나가는 것은 엔진이 API를 부르는 경우뿐이다. 붙여넣기·직접
+  // 업로드·사용 안 함은 호출이 없다.
+  const cost = option.engine
+    ? (engine.calls_api ? "Unknown" : "무료")
+    : (soon ? "—" : "무료");
+  const tier = (option.engine && providers.length)
+    ? spec.provider_quality[providers[0]] : "";
+
+  return `<label class="pcard ${uiPick[stage]===option.key?"on":""} ${off?"off":""}"
+      ${soon?'title="향후 지원 예정"':""}>
     <input type="radio" name="pick-${stage}" value="${option.key}"
       ${uiPick[stage]===option.key?"checked":""} ${off?"disabled":""}
       onchange="pickStage('${stage}','${option.key}')">
-    <span>${option.label}</span>
-    ${why?`<span class="why">${why}</span>`:""}
+    <span class="n">${name}</span>
+    ${current?'<span class="cur">Current</span>':""}
+    ${soon?'<span class="soon">Coming Soon</span>':""}
+    ${missing?'<span class="soon">Provider 없음</span>':""}
+    ${tier?`<span class="q" title="${tier}">${starText(tier)}</span>`:""}
+    <span class="c">${cost}</span>
   </label>`;
 }
 
@@ -769,8 +824,18 @@ function renderStagePicks(){
     if(!spec) return "";
     return `<div class="pick">
       <div class="h">${spec.label}</div>
-      ${STAGE_UI[stage].map(o => stageRow(stage, o, spec)).join("")}
+      ${STAGE_UI[stage].map(o => providerCard(stage, o, spec)).join("")}
     </div>`;
+  }).join("");
+}
+
+// 우측 상단. 지금 무엇이 도는지는 무엇을 고르든 항상 보여야 한다.
+function renderCurrentProviders(){
+  if(!stageSpec) return;
+  $("currentProviders").innerHTML = Object.keys(STAGE_UI).map(stage => {
+    const spec = stageSpec.stages.find(s => s.stage === stage);
+    if(!spec) return "";
+    return `<span class="cp"><b>${spec.label}</b> ${spec.engine.name}</span>`;
   }).join("");
 }
 
@@ -808,8 +873,6 @@ function renderScriptBox(){
 
   $("scriptBox").innerHTML = "";
 
-  // AI 생성으로 돌아가면 준비된 대본을 버린다 - 남아 있으면 고른
-  // 것과 다르게 돈다.
   if(preparedProjectId){
     preparedProjectId = null;
     $("jobState").textContent = "대기 중";
@@ -829,42 +892,52 @@ async function pickStage(stage, key){
   await refreshPlan();
 }
 
-// Provider가 스스로 신고한 등급이다 - 화면이 지어내지 않는다.
-function stageQuality(stage, provider){
-  const spec = stageSpec.stages.find(s => s.stage === stage);
-  if(!spec || !provider) return "";
-  return spec.provider_quality[provider] || "";
-}
-
-function qualityLine(d){
-  const made = [], given = [], off = [];
-
+// 고른 것들의 등급 중 가장 낮은 것. 하나라도 낮으면 결과가 그만큼
+// 내려가므로 평균이 아니라 최저를 쓴다.
+function planQuality(d){
+  const tiers = [];
   Object.keys(STAGE_UI).forEach(stage => {
     const row = d.stages[stage];
-    if(!row) return;
-    if(row.source_mode === "none"){ off.push(stageLabel(stage)); return; }
-    if(row.source_mode === "generate"){
-      const tier = stageQuality(stage, row.provider);
-      made.push(stageLabel(stage) + (tier ? `(${tier})` : ""));
-      return;
-    }
-    given.push(stageLabel(stage));
+    if(!row || row.source_mode !== "generate" || !row.provider) return;
+    const spec = stageSpec.stages.find(s => s.stage === stage);
+    const tier = spec && spec.provider_quality[row.provider];
+    if(tier) tiers.push(tier);
   });
-
-  const parts = [];
-  if(made.length) parts.push("AI 생성 " + made.join(" · "));
-  if(given.length) parts.push("직접 제공 " + given.join(" · "));
-  if(off.length) parts.push("사용 안 함 " + off.join(" · "));
-  return parts.join("<br>");
+  if(!tiers.length) return {stars: "", tier: "직접 제공"};
+  const worst = tiers.reduce((a, b) => (STARS[a] <= STARS[b] ? a : b));
+  return {stars: starText(worst), tier: worst};
 }
 
-function providerLine(d){
-  const named = [];
-  Object.keys(STAGE_UI).forEach(stage => {
-    const row = d.stages[stage];
-    if(row && row.provider) named.push(stageLabel(stage) + " → " + row.provider);
+// 계획의 api_stages는 generate면 전부 센다 - 메타데이터는 규칙 기반이고
+// BGM은 로컬 파일인데도 들어간다. 카드는 실제로 나가는 것만 센다.
+function payingStages(d){
+  return Object.keys(d.stages).filter(stage => {
+    if(d.stages[stage].source_mode !== "generate") return false;
+    const spec = stageSpec.stages.find(s => s.stage === stage);
+    return spec && spec.engine.calls_api;
   });
-  return named.length ? named.join("<br>") : "API를 쓰는 단계가 없습니다";
+}
+
+function summaryCards(d){
+  const c = d.cost;
+  const cost = c.complete
+    ? (c.known_total === 0 ? "무료" : "$" + c.known_total.toFixed(4))
+    : "Unknown";
+  const q = planQuality(d);
+  const paying = payingStages(d);
+
+  return `<div class="cards">
+    <div class="card"><span class="k">예상 비용</span><b>${cost}</b>
+      ${c.complete ? "" :
+        `<span class="s">예상 비용 계산 불가 · 단가 미상 ${
+          c.unknown_stages.length}단계</span>`}</div>
+    <div class="card"><span class="k">예상 시간</span><b>${d.estimated_seconds}초</b>
+      <span class="s">실측 ${stageSpec.sample_size}편 중앙값</span></div>
+    <div class="card"><span class="k">품질</span><b>${q.stars || "—"}</b>
+      <span class="s">${q.tier}</span></div>
+    <div class="card"><span class="k">API</span><b>${paying.length} Stages</b>
+      <span class="s">${paying.map(stageLabel).join(" · ") || "없음"}</span></div>
+  </div>`;
 }
 
 async function refreshPlan(){
@@ -878,40 +951,22 @@ async function refreshPlan(){
     return;
   }
 
-  const c = d.cost;
-  const cost = c.complete
-    ? (c.known_total === 0 ? "무료" : "$" + c.known_total.toFixed(4))
-    : "예상 비용 계산 불가 — 단가를 모르는 단계 " + c.unknown_stages.length + "개";
-  const mins = Math.round(d.estimated_seconds / 60 * 10) / 10;
-  const api = d.api_stages.length
-    ? d.api_stages.map(stageLabel).join(" · ") : "없음";
   const musicNote = (stageSpec.stages.find(s => s.stage === "music") || {}).note;
 
-  $("planSummary").innerHTML = `<dl>
-    <dt>예상 비용</dt><dd>${cost}</dd>
-    <dt>예상 시간</dt><dd>약 ${mins}분 (${d.estimated_seconds}초)</dd>
-    <dt>API 호출</dt><dd>${api}</dd>
-    <dt>품질 예상</dt><dd>${qualityLine(d)}</dd>
-    <dt>Provider</dt><dd>${providerLine(d)}</dd>
-    ${d.stages_without_provider.length
-      ? `<dt>Provider 미등록</dt><dd class="rb">${
-          d.stages_without_provider.join(", ")}</dd>`
-      : ""}
-  </dl>
-  <p class="muted" style="margin:7px 0 0">배경음악 : ${musicNote || ""}</p>
-  <p class="muted" style="margin:5px 0 0">
-    시간은 실제 ${stageSpec.sample_size}편의 중앙값 기준입니다.</p>`;
+  $("planSummary").innerHTML = summaryCards(d)
+    + `<p class="muted" style="margin:8px 0 0">배경음악 : ${musicNote || ""}</p>`;
 }
 
 async function loadStages(){
   try{
     stageSpec = await (await fetch("/studio/api/production/stages")).json();
-    // 지금 파이프라인이 하는 일이 기본값이다 - 전부 AI 생성.
+    // 지금 파이프라인이 하는 일이 기본값이다.
     Object.keys(STAGE_UI).forEach(stage => {
       uiPick[stage] = "generate";
       stagePick[stage] = "generate";
     });
     HIDDEN_STAGES.forEach(stage => { stagePick[stage] = "generate"; });
+    renderCurrentProviders();
     renderStagePicks();
     renderScriptBox();
     showImageImport();
