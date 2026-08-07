@@ -53,62 +53,25 @@ def _block(page, start, end="\nfunction "):
     return cut[:cut.index(end)]
 
 
-class TestTheResultPresets(unittest.TestCase):
+class TestTheResultPresetsWereReplaced(unittest.TestCase):
+    """Sprint120 - 예산으로 묻던 것을 가진 자료로 바꿨다.
 
-    def test_the_question_is_asked(self):
-        self.assertIn("이번 영상은 어떻게 만들까요?", _page())
+    금액은 우리가 계산할 수 없는 값이라 카드가 "목표"라고 적어 두는
+    수밖에 없었다. 이제 사용자가 답을 아는 것만 묻는다. 새 질문은
+    test_studio_ux6가 본다."""
 
-    def test_the_five_presets_are_offered(self):
+    def test_the_situations_took_their_place(self):
         page = _page()
-        block = _block(page, "const PRESETS", "\n];")
 
-        for label in ("무료", "500원 이하", "1000원 이하", "최고 품질",
-                      "직접 제작"):
-            with self.subTest(label=label):
-                self.assertIn(label, block)
+        self.assertNotIn("const PRESETS", page)
+        self.assertIn("const SITUATIONS", page)
 
-    def test_exactly_one_is_recommended(self):
+    def test_it_still_only_sets_defaults(self):
         page = _page()
-        block = _block(page, "const PRESETS", "\n];")
-
-        self.assertEqual(block.count("recommend:true"), 1)
-
-    def test_the_recommended_one_is_the_500_won_preset(self):
-        page = _page()
-        block = _block(page, "const PRESETS", "\n];")
-
-        chosen = block[:block.index("recommend:true")]
-
-        self.assertIn("500원 이하", chosen.rsplit("{key:", 1)[-1])
-
-    def test_each_preset_says_who_it_is_for(self):
-        page = _page()
-        block = _block(page, "const PRESETS", "\n];")
-
-        self.assertEqual(block.count("who:"), 5)
-
-    def test_a_preset_only_sets_defaults(self):
-        """카드를 눌러도 아래 Stage는 계속 바꿀 수 있어야 한다."""
-
-        page = _page()
-        block = _block(page, "async function pickPreset")
+        block = _block(page, "async function pickSituation")
 
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
-
-    def test_the_preset_keys_are_real_option_keys(self):
-        page = _page()
-        ui = re.search(r"const STAGE_UI = \{(.*?)\n\};", page, re.S).group(1)
-        keys = set(re.findall(r'\{key:"(\w+)"', ui))
-
-        block = _block(page, "const PRESETS", "\n];")
-        used = set(re.findall(
-            r'(?:script|image|voice|metadata):\s*"(\w+)"', block))
-
-        self.assertTrue(used)
-        for key in used:
-            with self.subTest(key=key):
-                self.assertIn(key, keys)
 
 
 class TestTheMoneyIsNotInvented(unittest.TestCase):
@@ -125,13 +88,15 @@ class TestTheMoneyIsNotInvented(unittest.TestCase):
         self.assertEqual(plan["cost"]["known_total"], 0.0)
         self.assertFalse(plan["cost"]["complete"])
 
-    def test_the_preset_amount_is_labelled_as_a_target(self):
-        """카드의 금액이 계산 결과인 척하면 안 된다."""
+    def test_the_screen_no_longer_asks_about_money(self):
+        """Sprint120 - 카드가 금액을 말하지 않게 되면서 이 문제가
+        아예 사라졌다. 우리가 계산할 수 없는 것을 묻지 않는다."""
 
         page = _page()
-        block = _block(page, "function presetCard")
+        block = _block(page, "function situationCard")
 
-        self.assertIn("목표", block)
+        self.assertNotIn("원", block)
+        self.assertNotIn("amount", block)
 
     def test_the_summary_still_shows_what_is_actually_known(self):
         page = _page()
@@ -267,7 +232,7 @@ class TestTheHeaderLine(unittest.TestCase):
     def test_it_is_redrawn_on_every_change(self):
         page = _page()
 
-        for fn in ("async function pickStage", "async function pickPreset"):
+        for fn in ("async function pickStage", "async function pickSituation"):
             with self.subTest(fn=fn):
                 self.assertIn("renderCurrentProviders", _block(page, fn))
 

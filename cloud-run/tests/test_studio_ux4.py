@@ -55,19 +55,19 @@ class TestTheStrategyPanelWasReplaced(unittest.TestCase):
     이제 test_studio_ux5가 본다. 여기서는 갈아탄 사실과, 그 계약이
     새 이름으로도 지켜지는지만 남긴다."""
 
-    def test_the_result_presets_took_its_place(self):
+    def test_the_question_panel_took_its_place(self):
+        """Sprint119는 결과 카드로, Sprint120은 가진 자료를 묻는
+        질문으로 바뀌었다. 전략 카드는 돌아오지 않는다."""
+
         page = _page()
 
         self.assertNotIn("const STRATEGIES", page)
-        self.assertIn("const PRESETS", page)
-        self.assertIn("이번 영상은 어떻게 만들까요?", page)
-
-    def test_one_of_them_is_still_recommended(self):
-        self.assertIn("추천", _page())
+        self.assertIn("const SITUATIONS", page)
+        self.assertIn("이번 영상을 어떻게 만들까요?", page)
 
     def test_it_still_only_sets_defaults(self):
         page = _page()
-        block = _block(page, "async function pickPreset")
+        block = _block(page, "async function pickSituation")
 
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
