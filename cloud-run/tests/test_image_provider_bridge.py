@@ -108,16 +108,17 @@ class TestTheSelectionIsStored(_Case):
 class TestWhatIsActuallyWired(unittest.TestCase):
     """되는 척하지 않는다."""
 
-    def test_only_flux_is_wired_for_images(self):
-        """Sprint130 - FLUX가 실제로 붙었다. 나머지 자리는 그대로다."""
+    def test_the_wired_image_providers(self):
+        """Sprint130 FLUX, Sprint131 GPT Image. 나머지 자리는 그대로다."""
 
-        self.assertEqual(provider_selection.WIRED["image"], ("flux",))
+        self.assertEqual(
+            set(provider_selection.WIRED["image"]), {"flux", "gpt_image"})
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("image", None)
 
     def test_choosing_anything_else_is_refused(self):
-        for name in ("imagen", "gpt_image", "ideogram"):
+        for name in ("imagen", "ideogram"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired) as caught:
                     provider_selection.require_wired("image", name)
@@ -377,9 +378,17 @@ class TestNothingGlobalOrStructuralMoved(unittest.TestCase):
         self.assertNotIn("putenv", called)
         self.assertNotIn("setdefault", called)
 
-        source = open(asset_integration_service.__file__,
-                      encoding="utf-8").read()
-        self.assertNotIn("IMAGE_PROVIDER", source)
+        # Sprint131 - 환경변수 이름은 문자열로 쓰인다(os.getenv("...")).
+        # 원문을 훑으면 SINGLE_IMAGE_PROVIDERS 같은 식별자가 이 이름을
+        # 품고 있다는 이유로 걸린다 - 묻고 싶은 것은 "그 이름을 값으로
+        # 쓰는가"이므로 정확히 같은 값만 본다.
+        written = {
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+
+        self.assertNotIn("IMAGE_PROVIDER", written)
 
 
 class TestTheScreenCanSetIt(unittest.TestCase):

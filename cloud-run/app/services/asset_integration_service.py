@@ -1,3 +1,4 @@
+import importlib
 import os
 import subprocess
 
@@ -44,7 +45,22 @@ def resolve_image_style(scene: dict) -> str:
 
 
 # 프롬프트로 만든 이미지들. 스톡과 confidence·outcome 판정이 다르다.
-AI_SOURCES = ("ai_image", provider_selection.FLUX)
+# Sprint130 FLUX, Sprint131 GPT Image. 이름 -> 이미지 한 장을 만드는
+# 모듈. 부를 때 import한다 - 고르지 않은 사람이 남의 Provider까지
+# 짊어질 이유가 없다.
+#
+# 여기 한 줄이 곧 새 Provider다. 분기를 늘리면 세 번째부터 서로
+# 조금씩 다른 모양을 돌려주기 시작한다 - 이 저장소가 반복해서 겪은
+# 결함이다.
+SINGLE_IMAGE_PROVIDERS = {
+    provider_selection.FLUX: "app.providers.flux_provider",
+    provider_selection.GPT_IMAGE: "app.providers.gpt_image_provider",
+}
+
+# 프롬프트로 만든 것들. 검색으로 찾은 스톡(0.8)과 confidence가 다르다.
+# 표에서 끌어온다 - 새 Provider를 붙이면서 여기를 잊으면 같은 AI
+# 이미지가 프로젝트마다 다른 신뢰도를 갖게 된다.
+AI_SOURCES = ("ai_image",) + tuple(SINGLE_IMAGE_PROVIDERS)
 
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
@@ -69,17 +85,17 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
     # 고른 것이 없으면(None) 예전 경로 그대로다.
     provider_selection.require_wired("image", provider)
 
-    if provider == provider_selection.FLUX:
-        # Sprint130 - FLUX는 이미지 한 장을 만드는 Provider다. current의
-        # Best-of-N·품질 게이트를 대신하지 않는다 - 그 둘은 후보를
-        # 여럿 뽑아 고르는 일이고 여기는 한 장이다. 뒤 단계가 차이를
-        # 모르도록 같은 모양으로 돌려준다.
-        from app.providers import flux_provider
-
-        flux_provider.generate_image(image_prompt, staging_path)
+    if provider in SINGLE_IMAGE_PROVIDERS:
+        # Sprint130, Sprint131 - 이들은 이미지 한 장을 만드는
+        # Provider다. current의 Best-of-N·품질 게이트를 대신하지 않는다
+        # - 그 둘은 후보를 여럿 뽑아 고르는 일이고 여기는 한 장이다.
+        # 뒤 단계가 차이를 모르도록 같은 모양으로 돌려준다.
+        importlib.import_module(
+            SINGLE_IMAGE_PROVIDERS[provider]
+        ).generate_image(image_prompt, staging_path)
 
         return {
-            "source": provider_selection.FLUX,
+            "source": provider,
             "local_path": staging_path,
             "metadata": {"query": extract_search_query(image_prompt)},
             "candidate_count": 1,

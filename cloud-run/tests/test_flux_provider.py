@@ -119,14 +119,16 @@ class _Case(unittest.TestCase):
 
 class TestItIsWiredNow(unittest.TestCase):
 
-    def test_flux_is_the_only_image_provider_that_is_wired(self):
-        self.assertEqual(provider_selection.WIRED["image"], ("flux",))
+    def test_flux_is_wired(self):
+        """Sprint131에서 GPT Image가 옆에 붙었다. FLUX는 그대로다."""
+
+        self.assertIn("flux", provider_selection.WIRED["image"])
 
     def test_choosing_flux_passes(self):
         provider_selection.require_wired("image", "flux")
 
     def test_the_others_are_still_refused(self):
-        for name in ("imagen", "gpt_image", "ideogram"):
+        for name in ("imagen", "ideogram"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired):
                     provider_selection.require_wired("image", name)
