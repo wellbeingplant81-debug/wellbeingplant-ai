@@ -36,6 +36,9 @@ from app.services import project_service, studio_jobs
 
 PROJECT_ID = "20260805_120000"
 
+# Sprint150 - 실제로 있는 폴더가 필요한 자리에 쓴다.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 # (method, path, 유효 payload, autospec으로 패치할 서비스 경로들)
 ENDPOINTS = [
@@ -140,6 +143,16 @@ ENDPOINTS = [
      {"metadata": {"title": "t"}},
      ["app.services.publish_gate.save_edits"],
      f"/studio/api/review/{PROJECT_ID}/metadata"),
+    # Sprint150 - 내 PC 폴더를 훑는다. 없는 폴더는 400이므로 root는
+    # 실제로 있는 곳을 준다(이 저장소 자신). 훑기와 적기는 패치한다 -
+    # 여기는 계약을 보는 자리이지 파일 시스템을 보는 자리가 아니다.
+    ("POST", "/studio/api/review/{project_id}/library",
+     {"root": REPO_ROOT},
+     ["app.services.local_library.scan", "app.services.local_library.save",
+      "app.services.local_library.counts"],
+     f"/studio/api/review/{PROJECT_ID}/library",
+     {"app.services.local_library.scan": {"items": []},
+      "app.services.local_library.counts": {}}),
     ("POST", "/studio/api/review/{project_id}/images", None,
      ["app.services.studio_review.generate_images"],
      f"/studio/api/review/{PROJECT_ID}/images"),

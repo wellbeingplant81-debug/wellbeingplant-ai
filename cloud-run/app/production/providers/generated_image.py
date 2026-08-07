@@ -58,7 +58,7 @@ class GeneratedImageProvider(StageProvider):
             # 재 본 적이 없다. 등급을 매길 근거가 생기면 그때 바꾼다.
             quality_tier=STANDARD,
             supported_source_modes=(source_modes.GENERATE,),
-            required_settings=(key_setting,),
+            required_settings=(key_setting,) if key_setting else (),
             description=description,
             display_name=display_name,
             vendor=vendor,
@@ -71,6 +71,12 @@ class GeneratedImageProvider(StageProvider):
 
     def availability(self):
         """(쓸 수 있는가, 왜 못 쓰는가). 화면이 그대로 보여 준다."""
+
+        # Sprint150 - 키가 필요 없는 자리도 있다. 내 PC 자료는 인증이
+        # 아니라 폴더를 훑었는지가 조건이고, 그것은 프로젝트마다
+        # 다르므로 등록소가 여기서 답할 수 없다.
+        if not self._key_setting:
+            return True, ""
 
         if os.getenv(self._key_setting):
             return True, ""
@@ -128,6 +134,11 @@ GENERATED_IMAGE_PROVIDERS = (
      "app.providers.flux_provider",
      "FLUX로 이미지를 만듭니다. 현재 엔진의 Best-of-N·품질 게이트·"
      "스톡 폴백은 거치지 않고 한 장씩 만듭니다."),
+    ("local_stock", "내 PC 자료", "직접 준비", "",
+     "app.providers.local_stock_provider",
+     "내 PC 폴더에서 scene에 맞는 그림이나 영상을 고릅니다. 모델을 "
+     "부르지 않으므로 돈이 들지 않고, 맞는 자료가 없으면 만들지 않고 "
+     "그대로 멈춥니다."),
     ("gpt_image", "GPT Image", "OpenAI", "OPENAI_API_KEY",
      "app.providers.gpt_image_provider",
      "GPT Image로 이미지를 만듭니다. 세로 크기가 1024x1536(2:3)이라 "

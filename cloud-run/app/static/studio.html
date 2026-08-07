@@ -416,6 +416,11 @@ a{color:var(--accent)}
 .cp{font-size:10.5px;color:var(--dim);border:1px solid var(--line);
   border-radius:99px;padding:2px 9px}
 .cp b{color:var(--text);font-weight:600;margin-right:4px}
+.cmode{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.cmode .cm{display:flex;align-items:center;gap:7px;padding:9px 13px;
+  border:1px solid #2a3346;border-radius:9px;cursor:pointer}
+.cmode .cm.on{border-color:#4a7dff;background:#141c2e}
+.cmode .cm em{font-style:normal;color:#8b97ad;font-size:12px}
 </style>
 </head>
 <body>
@@ -479,6 +484,10 @@ a{color:var(--accent)}
         <button class="sm ghost" id="backToSituation"
                 onclick="backToSituation()">◀ 다시 고르기</button>
       </div>
+
+      <!-- Sprint150 - 무료 제작 모드. 아래 카드들을 한 번에 맞춰 주는
+           지름길일 뿐이고, 켜져 보이는지는 그 카드들을 되읽어 정한다. -->
+      <div id="costMode" class="cmode"></div>
 
       <div id="stagePicks" class="picks muted">불러오는 중…</div>
 
@@ -2703,8 +2712,98 @@ function pickProvider(stage, name){
 
 function renderStagePicks(){
   if(!stageSpec) return;
+  renderCostMode();
   $("stagePicks").innerHTML = BASIC_STAGES.map(renderStageBlock).join("");
   $("advancedPicks").innerHTML = ADVANCED_STAGES.map(renderStageBlock).join("");
+}
+
+// Sprint150 - 무료 제작 모드.
+//
+// 새 상태를 만들지 않는다. 아래 카드들(uiPick)과 Provider 고르기
+// (uiProvider)를 한 번에 맞춰 주는 지름길일 뿐이고, 켜져 보이는지는
+// 그 둘을 되읽어 정한다 - 별도 플래그를 두면 사람이 카드를 하나
+// 바꿨을 때 화면이 거짓말을 하게 된다.
+//
+// 무엇이 무료인가
+//   대본  Gemini 채팅에 붙여넣기   API를 부르지 않는다
+//   이미지 내 PC 자료에서 고르기    모델을 부르지 않는다
+//   음성  내가 만든 파일 올리기     TTS를 부르지 않는다
+const FREE_MODE = {script: "gemini", image: "generate", voice: "import"};
+const FREE_IMAGE_PROVIDER = "local_stock";
+const API_MODE = {script: "generate", image: "generate", voice: "generate"};
+
+function isFreeMode(){
+  return uiPick.script === FREE_MODE.script
+    && uiPick.image === FREE_MODE.image
+    && uiProvider.image === FREE_IMAGE_PROVIDER
+    && uiPick.voice === FREE_MODE.voice;
+}
+
+function isApiMode(){
+  return uiPick.script === API_MODE.script
+    && uiPick.image === API_MODE.image
+    && uiProvider.image !== FREE_IMAGE_PROVIDER
+    && uiPick.voice === API_MODE.voice;
+}
+
+// 내 PC 자료를 고를 수 있는가. 등록소가 그렇게 말할 때만이다 -
+// 화면이 있는 척하지 않는다.
+function freeModeAvailable(){
+  if(!stageSpec) return false;
+
+  const image = stageSpec.stages.find(s => s.stage === "image");
+  if(!image) return false;
+
+  return generateProviders(image).some(
+    p => p.name === FREE_IMAGE_PROVIDER && p.available);
+}
+
+async function pickCostMode(free){
+  const wanted = free ? FREE_MODE : API_MODE;
+
+  ["script", "image", "voice"].forEach(stage => {
+    uiPick[stage] = wanted[stage];
+    stagePick[stage] = optionOf(stage, wanted[stage]).mode;
+  });
+
+  uiProvider.image = free ? FREE_IMAGE_PROVIDER : "current";
+
+  renderStagePicks();
+  renderCostMode();
+  renderCurrentProviders();
+  renderScriptBox();
+  showImageImport();
+  await refreshPlan();
+}
+
+function renderCostMode(){
+  const box = $("costMode");
+  if(!box) return;
+
+  if(!freeModeAvailable()){
+    box.innerHTML = "";
+    return;
+  }
+
+  const free = isFreeMode();
+  const api = isApiMode();
+
+  // 셋 다 아닌 경우가 있다 - 사람이 카드를 하나만 바꾼 때다. 그때는
+  // 둘 다 켜지 않고, 지금 무엇이 섞여 있는지 말한다.
+  box.innerHTML = `
+    <label class="cm ${api ? "on" : ""}">
+      <input type="radio" name="costmode" ${api ? "checked" : ""}
+             onchange="pickCostMode(false)">
+      <span>API 사용</span>
+    </label>
+    <label class="cm ${free ? "on" : ""}">
+      <input type="radio" name="costmode" ${free ? "checked" : ""}
+             onchange="pickCostMode(true)">
+      <span>무료 제작 모드</span>
+      <em>Gemini 채팅 + 내 PC 자료 사용</em>
+    </label>
+    ${free || api ? "" : `<p class="muted" style="margin:6px 0 0">
+      아래에서 단계별로 고른 상태입니다.</p>`}`;
 }
 
 function toggleAdvanced(){

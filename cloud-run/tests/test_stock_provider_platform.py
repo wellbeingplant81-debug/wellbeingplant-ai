@@ -168,13 +168,27 @@ class TestTheyAreNotStageAlternatives(unittest.TestCase):
                 self.assertNotIn(name, names)
 
     def test_the_selectable_list_did_not_grow(self):
+        """
+        이 Sprint가 등록한 것들 때문에 고를 것이 늘지 않았다.
+
+        Sprint150까지는 목록 전체를 적어 두었다. 그 뒤로 다른 Sprint가
+        제 Provider를 붙이므로 목록을 통째로 못 박으면 여기가 남의
+        Sprint를 막는 자리가 된다 - 지킬 것은 "스톡이 단계 선택지로
+        올라오지 않았다"이므로 그것만 본다.
+        """
+
         usable = sorted(
             p.name for p in self.registry.available(
                 stages.IMAGE, source_modes.GENERATE)
             if not getattr(p, "coming_soon", False)
         )
 
-        self.assertEqual(usable, ["current", "flux", "gpt_image"])
+        for name in ("pexels", "pixabay"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, usable)
+
+        # 이 Sprint 전에 있던 것들은 그대로 있다.
+        self.assertLessEqual({"current", "flux", "gpt_image"}, set(usable))
 
     def test_calling_one_as_a_stage_provider_is_refused(self):
         from app.production.stage_provider import ProviderUnavailable

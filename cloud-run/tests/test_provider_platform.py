@@ -249,7 +249,9 @@ class TestTheCurrentProviderIsUntouched(unittest.TestCase):
         expected = {
             stages.SCRIPT: ["claude", "current", "deepseek", "gemini",
                             "openai"],
-            stages.IMAGE: ["current", "flux", "gpt_image"],
+            # Sprint150 - local_stock은 키가 아니라 훑어 둔 폴더가
+            # 조건이라 여기 목록에 함께 뜬다.
+            stages.IMAGE: ["current", "flux", "gpt_image", "local_stock"],
             stages.VOICE: ["current", "elevenlabs"],
         }
 

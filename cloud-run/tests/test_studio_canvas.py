@@ -262,9 +262,10 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
 
     def test_the_review_endpoints_grow_only_on_purpose(self):
         """
-        Sprint126이 Provider 선택을, Sprint147이 공개 정보 수정을
-        더했다. 숫자를 세는 것이 목적이 아니라 "조용히 늘지 않는다"가
-        목적이므로 무엇이 있는지 이름으로 적는다.
+        Sprint126이 Provider 선택을, Sprint147이 공개 정보 수정을,
+        Sprint150이 내 PC 폴더 훑기를 더했다. 숫자를 세는 것이 목적이
+        아니라 "조용히 늘지 않는다"가 목적이므로 무엇이 있는지 이름으로
+        적는다.
         """
 
         paths = {p for p in app.openapi()["paths"] if "review" in p}
@@ -274,6 +275,7 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
             "/studio/api/review/{project_id}",
             "/studio/api/review/{project_id}/providers",
             "/studio/api/review/{project_id}/metadata",
+            "/studio/api/review/{project_id}/library",
             "/studio/api/review/{project_id}/script",
             "/studio/api/review/{project_id}/images",
             "/studio/api/review/{project_id}/images/{scene}",

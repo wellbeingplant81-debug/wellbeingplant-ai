@@ -52,6 +52,10 @@ MANUAL = "manual"
 FLUX = "flux"
 GPT_IMAGE = "gpt_image"
 
+# Sprint150 - 내 PC 자료에서 고른다. 모델을 부르지 않으므로 돈이 들지
+# 않는다.
+LOCAL_STOCK = "local_stock"
+
 # Sprint133 - 실제로 붙은 대본 Provider. current와 같은 모델을 부르지만
 # Writer·게이트·재시도를 거치지 않는 직접 호출 쪽이다.
 GEMINI = "gemini"
@@ -92,7 +96,7 @@ def _wired_for(stage):
     # Sprint130 FLUX, Sprint131 GPT Image가 실제로 붙었다. 나머지
     # 이미지 자리들(imagen·ideogram)은 여전히 비어 있다.
     if stage == "image":
-        return (FLUX, GPT_IMAGE)
+        return (FLUX, GPT_IMAGE, LOCAL_STOCK)
 
     # Sprint133~141에 넷이 모두 붙었다. 대본 단계에는 자리만 있는
     # 것이 하나도 남지 않았다.

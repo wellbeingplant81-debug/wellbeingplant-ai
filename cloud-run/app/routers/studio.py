@@ -988,6 +988,11 @@ class ReviewScriptRequest(BaseModel):
     timeline: dict = None
 
 
+class LibraryScanRequest(BaseModel):
+    # Sprint150 - 훑을 폴더. 그 아래 images/videos/music/voice를 본다.
+    root: str
+
+
 class RejectRequest(BaseModel):
     # Sprint148 - 사람이 쓴 거절 사유. 비어 있어도 거절은 된다.
     reason: str = ""
@@ -1112,12 +1117,27 @@ def _review_metadata(path):
     }
 
 
+def _library_state(path: str) -> dict:
+    """훑어 둔 내 PC 자료의 요약. 목록 전체는 보내지 않는다 - 화면이
+    쓰는 것은 어느 폴더를 훑었는가와 몇 개인가뿐이다."""
+
+    from app.services import local_library
+
+    index = local_library.load(path)
+
+    return {
+        "root": index.get("root"),
+        "counts": local_library.counts(index),
+    }
+
+
 @router.get("/api/review/{project_id}")
 def review_state(project_id: str):
     """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
 
     from app.services import (
-        provider_selection, publish_gate, scene_order, studio_review,
+        local_library, provider_selection, publish_gate, scene_order,
+        studio_review,
     )
 
     path = _project_path(project_id)
@@ -1144,6 +1164,9 @@ def review_state(project_id: str):
         # Sprint147 - 지금 올리면 무엇이 걸리는가. 화면이 짐작하지
         # 않고 이 목록을 그대로 보여 준다.
         "publish_problems": publish_gate.problems(path),
+        # Sprint150 - 내 PC 자료가 몇 개나 있는가. 훑은 적이 없으면
+        # root가 없고 전부 0이다 - 화면은 그 사실을 그대로 말한다.
+        "library": _library_state(path),
         # Sprint148 - 큐에서 지금 어디쯤인가. 화면이 버튼 글자를
         # 지어내지 않고 이 값을 그대로 읽는다.
         "queue_status": studio_workflow.status_for(
@@ -1264,6 +1287,36 @@ def review_save_script(project_id: str, request: ReviewScriptRequest):
         )
 
     return review_state(project_id)
+
+
+@router.post("/api/review/{project_id}/library")
+def review_scan_library(project_id: str, request: LibraryScanRequest):
+    """
+    Sprint150 - 내 PC 폴더를 훑어 목록을 만든다.
+
+    파일은 한 바이트도 건드리지 않는다. 읽어서 목록만 적는다 - 무료
+    제작 모드가 그 목록에서 고른다.
+    """
+
+    from app.services import local_library
+
+    path = _project_path(project_id)
+    root = (request.root or "").strip()
+
+    if not root or not os.path.isdir(root):
+        raise HTTPException(
+            status_code=400,
+            detail=f"그런 폴더가 없습니다: {root or '(비어 있음)'}",
+        )
+
+    index = local_library.scan(root)
+    local_library.save(path, index)
+
+    return {
+        "root": root,
+        "counts": local_library.counts(index),
+        "total": len(index["items"]),
+    }
 
 
 @router.put("/api/review/{project_id}/metadata")

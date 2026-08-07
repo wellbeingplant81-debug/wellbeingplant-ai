@@ -420,15 +420,30 @@ class TestNothingElseMoved(unittest.TestCase):
         self.assertEqual(paths, {'"/studio/api/review"'})
 
     def test_the_engine_layer_did_not_change(self):
-        self.assertEqual(
-            set(provider_selection.WIRED["image"]), set(WIRED_IMAGE))
+        """
+        이 Sprint가 화면만 고쳤다는 것. 엔진 쪽 목록에서 빠진 것이 없다.
+
+        Sprint150까지는 "정확히 이 둘"이었다. 그 뒤로 local_stock이
+        붙었으므로 목록 전체가 아니라 "빠지지 않았다"를 본다 - 이
+        Sprint가 지킨 것은 화면 작업이 엔진을 건드리지 않는다는 쪽이지
+        엔진에 아무것도 붙지 못한다는 쪽이 아니다.
+        """
+
+        self.assertLessEqual(
+            set(WIRED_IMAGE), set(provider_selection.WIRED["image"]))
 
     def test_the_bridge_was_not_touched(self):
+        """
+        다리도 마찬가지다. 덧붙여, 두 자리가 같은 것을 들고 있는지
+        본다 - 갈라지면 고를 수는 있는데 부를 수 없는 이름이 생긴다.
+        """
+
         from app.services import asset_integration_service
 
-        self.assertEqual(
-            set(asset_integration_service.SINGLE_IMAGE_PROVIDERS),
-            set(WIRED_IMAGE))
+        bridge = set(asset_integration_service.SINGLE_IMAGE_PROVIDERS)
+
+        self.assertLessEqual(set(WIRED_IMAGE), bridge)
+        self.assertEqual(bridge, set(provider_selection.WIRED["image"]))
 
     def test_the_pipeline_and_resolver_do_not_know_these_names(self):
         import app.pipeline.pipeline as pipeline

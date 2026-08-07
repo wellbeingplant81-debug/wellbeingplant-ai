@@ -214,6 +214,8 @@ class TestThePayloadCarriesIt(unittest.TestCase):
              "done", "scenes", "providers", "estimated_seconds",
              "measured_seconds", "scene_seconds", "timeline",
              "metadata", "publish_problems", "thumbnail_url",
+             # Sprint150 - 훑어 둔 내 PC 자료의 요약.
+             "library",
              "queue_status"})
 
 

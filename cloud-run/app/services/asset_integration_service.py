@@ -55,6 +55,9 @@ def resolve_image_style(scene: dict) -> str:
 SINGLE_IMAGE_PROVIDERS = {
     provider_selection.FLUX: "app.providers.flux_provider",
     provider_selection.GPT_IMAGE: "app.providers.gpt_image_provider",
+    # Sprint150 - 이쪽은 만들지 않고 고른다. 다리가 보기에는 같다 -
+    # 프롬프트를 받아 그 자리에 그림 파일을 놓는다.
+    provider_selection.LOCAL_STOCK: "app.providers.local_stock_provider",
 }
 
 # 프롬프트로 만든 것들. 검색으로 찾은 스톡(0.8)과 confidence가 다르다.

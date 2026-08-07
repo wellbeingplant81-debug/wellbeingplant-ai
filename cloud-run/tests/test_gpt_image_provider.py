@@ -167,8 +167,18 @@ class TestItIsWiredNow(unittest.TestCase):
         provider_selection.require_wired("image", "flux")
 
     def test_both_are_listed(self):
-        self.assertEqual(
-            set(provider_selection.WIRED["image"]), {"flux", "gpt_image"})
+        """
+        둘 다 목록에 있다.
+
+        Sprint150까지는 "정확히 이 둘뿐"이었다. 그 뒤로 local_stock이
+        붙었으므로 목록 전체를 못 박지 않는다 - 여기서 지킬 것은 이
+        Sprint가 붙인 둘이 사라지지 않았다는 사실이고, 아직 안 붙은
+        것이 섞여 들지 않는다는 것은 아래
+        test_only_gpt_image_was_removed_from_the_refused가 지킨다.
+        """
+
+        self.assertLessEqual(
+            {"flux", "gpt_image"}, set(provider_selection.WIRED["image"]))
 
     def test_only_gpt_image_was_removed_from_the_refused(self):
         for name in ("imagen", "ideogram"):

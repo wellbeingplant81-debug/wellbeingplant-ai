@@ -350,6 +350,8 @@ class TestNothingBelowTheScreenMoved(unittest.TestCase):
              "done", "scenes", "providers", "estimated_seconds",
              "measured_seconds", "scene_seconds", "timeline",
              "metadata", "publish_problems", "thumbnail_url",
+             # Sprint150 - 훑어 둔 내 PC 자료의 요약.
+             "library",
              "queue_status"})
 
     def test_the_pipeline_and_steps_did_not_change(self):

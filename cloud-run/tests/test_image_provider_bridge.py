@@ -109,10 +109,16 @@ class TestWhatIsActuallyWired(unittest.TestCase):
     """되는 척하지 않는다."""
 
     def test_the_wired_image_providers(self):
-        """Sprint130 FLUX, Sprint131 GPT Image. 나머지 자리는 그대로다."""
+        """
+        Sprint130 FLUX, Sprint131 GPT Image. 붙은 것은 붙은 채로 있다.
 
-        self.assertEqual(
-            set(provider_selection.WIRED["image"]), {"flux", "gpt_image"})
+        Sprint150이 local_stock을 붙였으므로 목록 전체를 못 박지
+        않는다. 아직 안 붙은 것이 섞여 들지 않는다는 것은 아래
+        test_choosing_anything_else_is_refused가 지킨다.
+        """
+
+        self.assertLessEqual(
+            {"flux", "gpt_image"}, set(provider_selection.WIRED["image"]))
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("image", None)
