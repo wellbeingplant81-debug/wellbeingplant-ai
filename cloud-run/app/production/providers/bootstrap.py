@@ -18,7 +18,9 @@ from typing import List
 from app.production.providers.chat_import import ChatImportScriptProvider
 from app.production.providers.coming_soon import coming_soon_providers
 from app.production.providers.elevenlabs_voice import ElevenLabsVoiceProvider
-from app.production.providers.gemini_script import GeminiScriptProvider
+from app.production.providers.generated_script import (
+    generated_script_providers,
+)
 from app.production.providers.generated_image import (
     generated_image_providers,
 )
@@ -50,9 +52,6 @@ def register_current_providers(
         # Sprint125 - 엔진이 이미 있어서 실제로 부를 수 있다. 설정이
         # 없으면 generate()가 ProviderUnavailable을 던진다.
         ElevenLabsVoiceProvider,
-        # Sprint133 - 같은 이유로 대본 쪽에도 하나 붙었다. 현재
-        # 엔진과 같은 모델을 부르지만 거치는 것이 다르다.
-        GeminiScriptProvider,
     ):
         provider = provider_class()
 
@@ -68,7 +67,9 @@ def register_current_providers(
     #
     # 키가 없으면 availability()가 무엇이 없는지 말한다. Coming Soon과
     # 달리 키만 넣으면 바로 쓸 수 있는 상태다.
-    for provider in generated_image_providers():
+    # Sprint133 Gemini, Sprint134 Claude. 코드가 실제로 있는 대본
+    # Provider들. 이미지와 같은 이유로 Coming Soon보다 먼저 올린다.
+    for provider in generated_script_providers() + generated_image_providers():
         try:
             registry.get(provider.stage, provider.name)
         except ValueError:

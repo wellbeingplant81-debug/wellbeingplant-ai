@@ -154,11 +154,13 @@ class TestItIsWiredNow(unittest.TestCase):
     def test_gemini_is_wired(self):
         provider_selection.require_wired("script", "gemini")
 
-    def test_it_is_the_only_one(self):
-        self.assertEqual(provider_selection.WIRED["script"], ("gemini",))
+    def test_it_is_wired(self):
+        """Sprint134에서 Claude가 옆에 붙었다. Gemini는 그대로다."""
+
+        self.assertIn("gemini", provider_selection.WIRED["script"])
 
     def test_the_others_are_still_refused(self):
-        for name in ("claude", "openai", "deepseek"):
+        for name in ("openai", "deepseek"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired):
                     provider_selection.require_wired("script", name)
@@ -554,9 +556,11 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         무거운 모듈이 켜진다. 그래서 두 값이 어긋나지 않도록 잠근다.
         """
 
-        from app.production.providers import gemini_script
+        from app.production.providers import generated_script
 
-        self.assertEqual(gemini_script.API_KEY_SETTING,
+        names = {e[0]: e[3] for e in generated_script.GENERATED_SCRIPT_PROVIDERS}
+
+        self.assertEqual(names["gemini"],
                          gemini_script_provider.API_KEY_SETTING)
 
     def test_registering_does_not_wake_the_model_library(self):
@@ -579,7 +583,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "0", result.stderr[-800:])
 
     def test_the_unwired_ones_are_still_coming_soon(self):
-        for name in ("claude", "openai", "deepseek"):
+        for name in ("openai", "deepseek"):
             with self.subTest(name=name):
                 self.assertTrue(getattr(
                     self.registry.get(stages.SCRIPT, name),

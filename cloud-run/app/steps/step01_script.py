@@ -1,8 +1,23 @@
+import importlib
 import json
 import os
 
 from app.services import provider_selection
 from app.services.duration_gate import generate_script_within_duration
+
+# Sprint133 Gemini, Sprint134 Claude. 이름 -> 모델을 직접 부르는 모듈.
+#
+# 여기 한 줄이 곧 새 Provider다. 분기를 늘리면 세 번째부터 서로
+# 조금씩 다른 모양을 돌려주기 시작한다 - 이 저장소가 반복해서 겪은
+# 결함이다.
+#
+# provider_selection.WIRED["script"]와 같은 이름들이어야 한다. 한쪽은
+# 고를 수 있는 이름을 알고 다른 쪽은 부를 모듈을 안다 - 어긋나면
+# 고를 수는 있는데 만들 때 깨진다. 테스트가 둘을 잠근다.
+DIRECT_SCRIPT_PROVIDERS = {
+    provider_selection.GEMINI: "app.providers.gemini_script_provider",
+    provider_selection.CLAUDE: "app.providers.claude_script_provider",
+}
 
 
 def _generate_script(topic: str, provider: str = None):
@@ -22,12 +37,12 @@ def _generate_script(topic: str, provider: str = None):
 
     provider_selection.require_wired("script", provider)
 
-    if provider == provider_selection.GEMINI:
-        # 늦게 부른다 - current로 만드는 사람이 이 모듈을 짊어질
-        # 이유가 없다.
-        from app.providers import gemini_script_provider
-
-        return gemini_script_provider.script_outcome(topic)
+    if provider in DIRECT_SCRIPT_PROVIDERS:
+        # 늦게 부른다 - current로 만드는 사람이 남의 Provider를
+        # 짊어질 이유가 없다.
+        return importlib.import_module(
+            DIRECT_SCRIPT_PROVIDERS[provider]
+        ).script_outcome(topic)
 
     # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
     # 길이가 43~47초 범위인지 먼저 확인하고, 벗어나면 Writer를 다시

@@ -110,16 +110,17 @@ class TestTheSelectionIsStored(_Case):
 
 class TestWhatIsActuallyWired(_Case):
 
-    def test_only_gemini_is_wired(self):
-        """Sprint133 - Gemini가 붙었다. 나머지 자리는 그대로다."""
+    def test_the_wired_script_providers(self):
+        """Sprint133 Gemini, Sprint134 Claude. 나머지는 그대로다."""
 
-        self.assertEqual(provider_selection.WIRED["script"], ("gemini",))
+        self.assertEqual(
+            set(provider_selection.WIRED["script"]), {"gemini", "claude"})
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("script", None)
 
     def test_choosing_anything_else_is_refused(self):
-        for name in ("claude", "openai", "deepseek"):
+        for name in ("openai", "deepseek"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired) as caught:
                     provider_selection.require_wired("script", name)
@@ -197,7 +198,7 @@ class TestTheNameReachesTheGenerator(_Case):
     def test_the_generator_refuses_what_is_not_wired(self):
         from app.steps import step01_script
 
-        provider_selection.save(self.project, {"script": "claude"})
+        provider_selection.save(self.project, {"script": "openai"})
 
         with self.assertRaises(ProviderNotWired):
             step01_script.run("주제", self.project)
@@ -205,7 +206,7 @@ class TestTheNameReachesTheGenerator(_Case):
     def test_a_refusal_writes_no_script(self):
         from app.steps import step01_script
 
-        provider_selection.save(self.project, {"script": "claude"})
+        provider_selection.save(self.project, {"script": "openai"})
 
         with self.assertRaises(ProviderNotWired):
             step01_script.run("주제", self.project)
@@ -329,11 +330,27 @@ class TestNothingGlobalOrStructuralMoved(unittest.TestCase):
     def test_no_environment_variable_is_used(self):
         from app.steps import step01_script
 
-        source = open(step01_script.__file__, encoding="utf-8").read()
+        import ast
 
-        self.assertNotIn("SCRIPT_PROVIDER", source)
-        self.assertNotIn("getenv", source)
-        self.assertNotIn("putenv", source)
+        with open(step01_script.__file__, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+
+        # Sprint134 - 환경변수 이름은 문자열로 쓰인다. 원문을 훑으면
+        # DIRECT_SCRIPT_PROVIDERS 같은 식별자가 이 이름을 품고 있다는
+        # 이유로 걸린다 - 묻고 싶은 것은 "그 이름을 값으로 쓰는가"다.
+        written = {
+            node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+        }
+        called = {
+            node.func.attr for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+        }
+
+        self.assertNotIn("SCRIPT_PROVIDER", written)
+        self.assertNotIn("getenv", called)
+        self.assertNotIn("putenv", called)
 
     def test_the_resolver_is_untouched(self):
         from app.steps import step01_script_resolve

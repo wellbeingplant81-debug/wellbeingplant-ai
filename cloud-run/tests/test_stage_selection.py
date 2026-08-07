@@ -285,7 +285,8 @@ class TestNothingWasExecuted(unittest.TestCase):
         )
 
         # Sprint133 - Gemini가 더해졌다(직접 호출 Provider).
-        self.assertEqual(usable, ["chat_import", "current", "gemini"])
+        self.assertEqual(
+            usable, ["chat_import", "claude", "current", "gemini"])
         self.assertEqual(registry.for_stage(stages.MUSIC), [])
 
 

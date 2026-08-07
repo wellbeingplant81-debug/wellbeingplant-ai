@@ -55,6 +55,7 @@ GPT_IMAGE = "gpt_image"
 # Sprint133 - 실제로 붙은 대본 Provider. current와 같은 모델을 부르지만
 # Writer·게이트·재시도를 거치지 않는 직접 호출 쪽이다.
 GEMINI = "gemini"
+CLAUDE = "claude"
 
 
 class ProviderNotWired(RuntimeError):
@@ -91,10 +92,10 @@ def _wired_for(stage):
     if stage == "image":
         return (FLUX, GPT_IMAGE)
 
-    # Sprint133 - Gemini가 실제로 붙었다. 나머지 대본 자리들
-    # (claude·openai·deepseek)은 여전히 비어 있다.
+    # Sprint133 Gemini, Sprint134 Claude가 실제로 붙었다. 나머지
+    # 대본 자리들(openai·deepseek)은 여전히 비어 있다.
     if stage == "script":
-        return (GEMINI,)
+        return (GEMINI, CLAUDE)
 
     return ()
 

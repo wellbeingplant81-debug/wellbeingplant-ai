@@ -44,24 +44,24 @@ current는 Vertex AI로 간다 - genai.Client(vertexai=True, project=...)
 -------
 여기는 엔진 층이라 app.production을 import하지 않는다
 (test_production_architecture가 강제한다). 등록소에 올라가는
-StageProvider는 app/production/providers/gemini_script.py가 맡고,
-이 모듈을 감싸기만 한다.
+StageProvider는 app/production/providers/generated_script.py가 맡고,
+이 모듈을 감싸기만 한다(Sprint134에 Claude와 한 표로 합쳤다).
 """
 
-import json
 import os
 
 from google import genai
 
 from app.prompts.script_prompt import SCRIPT_PROMPT
-from app.services import scene_prompt_service, topic_fidelity
-from app.services.duration_estimator import estimate_script_duration
-
-# 범위는 게이트가 정한다. 여기 다시 적으면 한쪽만 바뀌는 날이 온다.
-from app.services.duration_gate import (
-    MAX_ACCEPTABLE_SECONDS,
-    MIN_ACCEPTABLE_SECONDS,
-    _is_within_range,
+from app.providers.direct_script import (
+    DEFAULT_SCENE_COUNT,
+    DEFAULT_TARGET_DURATION,
+    ScriptProviderError,
+    ScriptProviderUnavailable,
+    build_outcome,
+    gate_label,
+    require_topic,
+    script_from_text,
 )
 
 API_KEY_SETTING = "GOOGLE_API_KEY"
@@ -70,32 +70,21 @@ MODEL_SETTING = "GEMINI_SCRIPT_MODEL"
 # 현재 엔진이 부르는 것과 같은 모델이다. 거치는 것이 다를 뿐이다.
 DEFAULT_MODEL = "gemini-2.5-pro"
 
-DEFAULT_TARGET_DURATION = 45
-DEFAULT_SCENE_COUNT = 6
-
 # 모델이 말을 멈춘 이유 중 "만들지 않기로 했다"에 해당하는 것들.
 # 부르는 쪽이 고칠 수 있는 일이므로 망가진 호출과 구분해서 말한다.
 BLOCKED_FINISH_REASONS = (
     "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION", "SPII",
 )
 
-FENCE = "```"
-
-# 로그 머리말. 게이트가 돌지 않았다는 것을 로그가 그대로 말해야 한다.
-GATE_LABEL = "Gemini 직접 호출 · 게이트 없음"
+DISPLAY_NAME = "Gemini"
 
 
-class GeminiScriptUnavailable(RuntimeError):
-    """Gemini를 쓸 수 없다.
-
-    설정이 없다. 무엇이 없는지 이름으로 말한다 - 사람이 넣고 다시
-    할 수 있어야 한다."""
+class GeminiScriptUnavailable(ScriptProviderUnavailable):
+    """설정이 없어 Gemini를 쓸 수 없다."""
 
 
-class GeminiScriptError(RuntimeError):
-    """불렀는데 대본을 얻지 못했다.
-
-    모델이 거절했거나, 호출이 실패했거나, 돌아온 것이 대본이 아니다."""
+class GeminiScriptError(ScriptProviderError):
+    """불렀는데 대본을 얻지 못했다."""
 
 
 def model_id() -> str:
@@ -155,9 +144,6 @@ def _text(response) -> str:
     if not text:
         raise GeminiScriptError("Gemini가 빈 답을 돌려주었습니다.")
 
-    if text.startswith(FENCE):
-        text = text.replace("```json", "").replace(FENCE, "").strip()
-
     return text
 
 
@@ -174,10 +160,7 @@ def generate_script(
     돌려준다 - 그 판단과 재생성은 current 엔진의 일이다.
     """
 
-    # 빈 주제를 받은 모델은 반드시 무언가를 지어내고, 그 대본으로
-    # 이미지와 음성과 영상이 만들어진다. Provider를 바꿨다고 이
-    # 보호까지 사라지면 안 된다.
-    topic_fidelity.validate_topic(topic)
+    require_topic(topic)
 
     key = _api_key()
 
@@ -197,23 +180,7 @@ def generate_script(
             f"Gemini 호출이 실패했습니다: {exc}"
         ) from exc
 
-    text = _text(response)
-
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        raise GeminiScriptError(
-            f"Gemini가 돌려준 것이 대본 형식이 아닙니다: {exc}"
-        ) from exc
-
-    if not isinstance(data, dict) or not data.get("scenes"):
-        raise GeminiScriptError("Gemini가 돌려준 대본에 scene이 없습니다.")
-
-    # step02와 스톡 검색이 읽는 필드를 채운다. 현재 엔진이 거치는 그
-    # 서비스를 그대로 쓴다 - 여기만 건너뛰면 뒤 단계가 빈 칸을 읽는다.
-    data["scenes"] = scene_prompt_service.apply_prompt_elements(
-        data["scenes"],
-    )
+    data = script_from_text(_text(response), GeminiScriptError)
 
     print(f"STEP01 GEMINI DIRECT - {model_id()} · scenes={len(data['scenes'])}")
 
@@ -221,38 +188,8 @@ def generate_script(
 
 
 def script_outcome(topic: str) -> dict:
-    """
-    step01이 읽는 모양으로 돌려준다.
+    """step01이 읽는 모양으로 돌려준다."""
 
-    Duration Gate가 돌려주는 것과 같은 칸을 쓰되, 값은 전부 실제로
-    일어난 것이다.
-
-        attempts          언제나 1. 다시 쓰지 않았다
-        estimated_seconds 게이트가 쓰는 그 estimator로 잰 값
-        passed            만들어진 대본이 범위 안이고 주제를 지켰는가
-
-    passed는 "게이트가 통과시켰다"가 아니라 관찰이다. 떨어져도 다시
-    만들지 않는다 - 그것이 current 엔진과의 차이고, 감출 일이 아니다.
-    """
-
-    result = generate_script(topic)
-
-    scenes = result["data"]["scenes"]
-    estimated = estimate_script_duration(scenes)
-
-    within_range = _is_within_range(
-        estimated, MIN_ACCEPTABLE_SECONDS, MAX_ACCEPTABLE_SECONDS,
+    return build_outcome(
+        topic, generate_script(topic), gate_label(DISPLAY_NAME),
     )
-    fidelity = topic_fidelity.check(topic, result["data"])
-
-    return {
-        "result": result,
-        # step01이 로그 머리말로 쓴다. 게이트가 돌지 않았는데 "Duration
-        # Gate"라고 적히면 로그가 사실이 아닌 말을 하게 된다.
-        "gate": GATE_LABEL,
-        "estimated_seconds": estimated,
-        "attempts": 1,
-        "duration_passed": within_range,
-        "topic_fidelity": fidelity,
-        "passed": within_range and fidelity["passed"],
-    }

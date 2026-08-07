@@ -81,9 +81,9 @@ _ALREADY = (
 
 COMING_SOON = (
     # --- 대본 ---
-    # Sprint133 - Gemini는 실제로 붙었다. gemini_script.py로 옮겼다.
-    ("claude", stages.SCRIPT, "Claude", "Anthropic",
-     ("ANTHROPIC_API_KEY",), ""),
+    # Sprint133 Gemini, Sprint134 Claude는 실제로 붙었다.
+    # generated_script.py로 옮겼다.
+    # Sprint134 - Claude도 실제로 붙었다. generated_script.py로 옮겼다.
     ("openai", stages.SCRIPT, "OpenAI", "OpenAI",
      ("OPENAI_API_KEY",), ""),
     ("deepseek", stages.SCRIPT, "DeepSeek", "DeepSeek",
