@@ -163,11 +163,12 @@ class TestTheyRefuseHonestly(unittest.TestCase):
         수가 줄어드는 것이 이 표의 정상적인 방향이다.
         """
 
-        self.assertGreaterEqual(len(self._coming_soon()), 6)
+        self.assertGreaterEqual(len(self._coming_soon()), 5)
 
         names = {p.name for p in self._coming_soon()}
 
-        for wired in ("elevenlabs", "flux", "gpt_image", "gemini", "claude"):
+        for wired in ("elevenlabs", "flux", "gpt_image", "gemini", "claude",
+                      "openai"):
             with self.subTest(name=wired):
                 self.assertNotIn(wired, names)
 
@@ -246,7 +247,7 @@ class TestTheCurrentProviderIsUntouched(unittest.TestCase):
         registry = _registry()
 
         expected = {
-            stages.SCRIPT: ["claude", "current", "gemini"],
+            stages.SCRIPT: ["claude", "current", "gemini", "openai"],
             stages.IMAGE: ["current", "flux", "gpt_image"],
             stages.VOICE: ["current", "elevenlabs"],
         }
@@ -314,13 +315,13 @@ class TestTheScreenIsToldTheTruth(unittest.TestCase):
                         self.assertIn(key, provider)
 
     def test_the_coming_soon_ones_are_flagged(self):
-        """Sprint133 Gemini, Sprint134 Claude는 빠졌다."""
+        """Sprint133~135에서 Gemini·Claude·OpenAI가 빠졌다."""
 
-        openai = [p for p in self.rows["script"]["provider_list"]
-                  if p["name"] == "openai"][0]
+        deepseek = [p for p in self.rows["script"]["provider_list"]
+                    if p["name"] == "deepseek"][0]
 
-        self.assertTrue(openai["coming_soon"])
-        self.assertIsNone(openai["estimated_cost"])
+        self.assertTrue(deepseek["coming_soon"])
+        self.assertIsNone(deepseek["estimated_cost"])
 
     def test_current_is_not_flagged(self):
         current = [p for p in self.rows["script"]["provider_list"]

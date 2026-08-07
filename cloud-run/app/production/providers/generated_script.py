@@ -129,6 +129,10 @@ GENERATED_SCRIPT_PROVIDERS = (
     ("claude", "Claude", "Anthropic", "ANTHROPIC_API_KEY",
      "app.providers.claude_script_provider",
      "Claude를 직접 불러 대본을 만듭니다. " + _BYPASSES),
+    ("openai", "OpenAI", "OpenAI", "OPENAI_API_KEY",
+     "app.providers.openai_script_provider",
+     "OpenAI를 직접 불러 대본을 만듭니다. 이미지의 GPT Image와 같은 "
+     "키를 씁니다. " + _BYPASSES),
 )
 
 

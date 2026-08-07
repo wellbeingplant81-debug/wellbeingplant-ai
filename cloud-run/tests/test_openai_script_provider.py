@@ -1,23 +1,29 @@
 """
-Sprint134 - Claude를 대본 Provider로 붙인다 (Epic 56, Phase 11).
+Sprint135 - OpenAI를 대본 Provider로 붙인다 (Epic 56, Phase 12).
 
-Sprint133의 Gemini에 이어 두 번째 실제 Script Provider다. 다리는
-Sprint128에 놓였으므로 이번에 하는 일은 도착지 하나를 더 여는 것이다.
+세 번째 실제 Script Provider다. Sprint134가 공용 자리를 만들어 둔
+덕분에 이번에 새로 쓰는 것은 "어떻게 부르는가" 하나뿐이다.
 
-둘이 되면 복제가 시작된다
--------------------------
-Sprint133은 Gemini 하나를 if로 받았고, 대본을 글에서 꺼내 검사하고
-step01이 읽는 모양으로 싸는 일을 그 파일 안에서 했다. 여기에 하나를
-더 얹으면 같은 일이 두 벌이 되고, 세 번째부터 조금씩 갈라진다 -
-이 저장소가 반복해서 겪은 결함이다.
+    새로 쓴다   openai_script_provider.py   주소 · 머리말 · 응답 읽기
+    가져다 쓴다 direct_script                글->대본 · outcome · 예외 뿌리
+                generated_script 표          등록소 목록 한 줄
+                DIRECT_SCRIPT_PROVIDERS 표   다리 한 줄
 
-그래서 이번에 공용 자리를 만든다.
+세 번째가 두 줄로 끝나는 것이 Sprint134에서 표로 모아 둔 이유다.
 
-    app/providers/direct_script.py      글 -> 대본 · outcome 모양 · 예외
-    app/production/providers/generated_script.py   등록소 목록(표 하나)
+Responses API를 쓴다
+--------------------
+이 저장소는 이미 OpenAI를 부른다 - Sprint131의 GPT Image가 같은
+호스트에 같은 Bearer 인증으로 간다. 그래서 대본도 그 옆으로 붙이는
+것이 가장 자연스럽다.
 
-Gemini는 그 공용 자리를 쓰도록 옮겼다. 동작은 그대로다 - Sprint133의
-시험이 전부 그대로 통과해야 한다.
+    POST {base}/v1/responses
+
+답의 모양이 Claude와 다르다. 글은 output 배열 안 message 항목의
+output_text에 들어 있고, 거절은 별도 content 종류(refusal)로 오며,
+잘림은 status="incomplete"와 incomplete_details.reason으로 온다.
+추론 모델은 output에 reasoning 항목도 함께 넣는다 - message가 아닌
+것을 걸러내지 않으면 대본이 아닌 것을 읽게 된다.
 
 current를 대체하지 않는다
 -------------------------
@@ -25,16 +31,11 @@ current는 Writer(바이럴 템플릿·인물 일관성 규칙) · Duration Gate
 재생성 루프 · Topic Fidelity 판정 · 최대 3회 재시도가 붙은 엔진
 전체다. 이쪽은 모델을 한 번 부르는 것뿐이다.
 
-새 의존성을 더하지 않는다
--------------------------
-anthropic 패키지는 이 저장소에 없다. FLUX·GPT Image가 그랬듯
-requests로 Messages API를 직접 부른다 - 대본 하나를 만들자고
-의존성을 늘릴 이유가 없다.
-
 검증하지 못한 것 - 정직하게 적어 둔다
 -------------------------------------
-ANTHROPIC_API_KEY가 없어 실제 왕복을 확인하지 못했다. 아래 시험은
-HTTP 계층만 세우고 그 위를 전부 진짜로 돌린다.
+OPENAI_API_KEY가 없어 실제 왕복을 확인하지 못했다. 아래 시험은 HTTP
+계층만 세우고 그 위를 전부 진짜로 돌린다. 모델 이름과 주소는
+환경변수로 바꿀 수 있게 두었다.
 """
 
 import ast
@@ -53,11 +54,12 @@ sys.path.insert(
 
 from app.production import stages
 from app.production.providers import bootstrap
+from app.production.providers import generated_script
 from app.production.registry import StageProviderRegistry
 from app.production.stage_provider import ProviderUnavailable, StageProviderError
 from app.production.stage_request import StageRequest
-from app.providers import claude_script_provider as claude
 from app.providers import direct_script
+from app.providers import openai_script_provider as openai
 from app.services import provider_selection
 from app.services.provider_selection import ProviderNotWired
 from app.steps import step01_script
@@ -75,19 +77,38 @@ SCRIPT = {
     ],
 }
 
-CONFIGURED = {"ANTHROPIC_API_KEY": "sk-ant-134",
+CONFIGURED = {"OPENAI_API_KEY": "sk-openai-135",
               "PATH": os.environ.get("PATH", "")}
 
 
-def _message(text=None, stop_reason="end_turn"):
-    return {
-        "id": "msg_1",
-        "type": "message",
-        "role": "assistant",
-        "content": [] if text is None else [{"type": "text", "text": text}],
-        "stop_reason": stop_reason,
-        "usage": {"input_tokens": 10, "output_tokens": 100},
-    }
+def _answer(text=None, status="completed", reason=None, refusal=None,
+            with_reasoning=False):
+    """Responses API가 돌려줄 법한 몸통."""
+
+    content = []
+
+    if text is not None:
+        content.append({"type": "output_text", "text": text})
+
+    if refusal is not None:
+        content.append({"type": "refusal", "refusal": refusal})
+
+    output = []
+
+    if with_reasoning:
+        # 추론 모델이 함께 넣는 항목. 대본이 아니다.
+        output.append({"type": "reasoning", "id": "rs_1", "summary": []})
+
+    output.append({"type": "message", "role": "assistant",
+                   "content": content})
+
+    payload = {"id": "resp_1", "object": "response", "status": status,
+               "model": "gpt-5", "output": output}
+
+    if reason is not None:
+        payload["incomplete_details"] = {"reason": reason}
+
+    return payload
 
 
 class _Response:
@@ -102,14 +123,13 @@ class _Response:
 
 
 class _Transport:
-    """Anthropic이 돌려줄 법한 응답. 한 번에 끝난다."""
 
     def __init__(self, payload=None, status_code=200, raises=None):
         self.status_code = status_code
         self._raises = raises
         self._payload = (
             payload if payload is not None
-            else _message(json.dumps(SCRIPT, ensure_ascii=False)))
+            else _answer(json.dumps(SCRIPT, ensure_ascii=False)))
         self.calls = []
 
     def post(self, url, headers=None, json=None, timeout=None):
@@ -126,96 +146,76 @@ def _run(transport=None, env=None, topic=TOPIC):
     transport = transport or _Transport()
 
     with patch.dict(os.environ, env or CONFIGURED, clear=True):
-        with patch.object(claude, "requests", transport):
-            return claude.generate_script(topic), transport
+        with patch.object(openai, "requests", transport):
+            return openai.generate_script(topic), transport
 
 
 class TestItIsWiredNow(unittest.TestCase):
 
-    def test_claude_is_wired(self):
-        provider_selection.require_wired("script", "claude")
+    def test_openai_is_wired(self):
+        provider_selection.require_wired("script", "openai")
 
-    def test_gemini_is_still_wired(self):
-        """Sprint133이 붙인 것을 건드리지 않았다."""
-
-        provider_selection.require_wired("script", "gemini")
-
-    def test_both_are_listed(self):
-        """Sprint135에서 OpenAI가 옆에 붙었다. 둘은 그대로다."""
-
-        self.assertLessEqual(
-            {"gemini", "claude"}, set(provider_selection.WIRED["script"]))
-
-    def test_the_unwired_ones_are_still_refused(self):
-        for name in ("deepseek",):
+    def test_the_earlier_ones_are_still_wired(self):
+        for name in ("gemini", "claude"):
             with self.subTest(name=name):
-                with self.assertRaises(ProviderNotWired):
-                    provider_selection.require_wired("script", name)
+                provider_selection.require_wired("script", name)
+
+    def test_all_three_are_listed(self):
+        self.assertEqual(set(provider_selection.WIRED["script"]),
+                         {"gemini", "claude", "openai"})
+
+    def test_deepseek_is_still_refused(self):
+        with self.assertRaises(ProviderNotWired):
+            provider_selection.require_wired("script", "deepseek")
+
+    def test_current_still_passes(self):
+        self.assertIsNone(provider_selection.require_wired("script", None))
+        self.assertIsNone(
+            provider_selection.require_wired("script", "current"))
 
     def test_the_bridge_table_matches_what_is_wired(self):
-        """
-        이름을 아는 자리와 부를 모듈을 아는 자리가 다르다. 어긋나면
-        고를 수는 있는데 만들 때 깨진다.
-        """
-
         self.assertEqual(
             set(step01_script.DIRECT_SCRIPT_PROVIDERS),
             set(provider_selection.WIRED["script"]))
 
+    def test_the_catalog_table_matches_too(self):
+        names = {entry[0]
+                 for entry in generated_script.GENERATED_SCRIPT_PROVIDERS}
 
-class TestItCallsTheMessagesApi(unittest.TestCase):
+        self.assertEqual(names, set(provider_selection.WIRED["script"]))
 
-    def test_it_posts_to_the_messages_endpoint(self):
+
+class TestItCallsTheResponsesApi(unittest.TestCase):
+
+    def test_it_posts_to_the_responses_endpoint(self):
         _, transport = _run()
 
         self.assertEqual(len(transport.calls), 1)
         self.assertEqual(transport.calls[0]["url"],
-                         "https://api.anthropic.com/v1/messages")
+                         "https://api.openai.com/v1/responses")
 
-    def test_the_key_travels_in_the_x_api_key_header(self):
+    def test_the_key_travels_as_a_bearer_token(self):
         _, transport = _run()
 
-        self.assertEqual(transport.calls[0]["headers"]["x-api-key"],
-                         "sk-ant-134")
+        self.assertEqual(transport.calls[0]["headers"]["Authorization"],
+                         "Bearer sk-openai-135")
 
-    def test_it_names_the_api_version(self):
-        """버전 머리말이 없으면 API가 거절한다."""
-
-        _, transport = _run()
-
-        self.assertTrue(transport.calls[0]["headers"]["anthropic-version"])
-
-    def test_it_asks_one_user_turn_with_the_topic(self):
+    def test_the_topic_travels_in_the_input(self):
         _, transport = _run()
 
         body = transport.calls[0]["body"]
-        messages = body["messages"]
 
-        self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["role"], "user")
-        self.assertIn(TOPIC, messages[0]["content"])
-
-    def test_it_sets_a_token_ceiling(self):
-        """max_tokens는 Messages API의 필수값이다."""
-
-        _, transport = _run()
-
-        self.assertGreater(transport.calls[0]["body"]["max_tokens"], 0)
-
-    def test_the_model_is_a_current_generation_one(self):
-        _, transport = _run()
-
-        self.assertIn("claude", transport.calls[0]["body"]["model"])
+        self.assertIn(TOPIC, json.dumps(body["input"], ensure_ascii=False))
 
     def test_the_model_can_be_changed_without_touching_code(self):
-        env = dict(CONFIGURED, CLAUDE_SCRIPT_MODEL="claude-opus-5")
+        env = dict(CONFIGURED, OPENAI_SCRIPT_MODEL="gpt-5-mini")
 
         _, transport = _run(env=env)
 
-        self.assertEqual(transport.calls[0]["body"]["model"], "claude-opus-5")
+        self.assertEqual(transport.calls[0]["body"]["model"], "gpt-5-mini")
 
     def test_the_address_can_be_changed_without_touching_code(self):
-        env = dict(CONFIGURED, ANTHROPIC_API_URL="https://proxy.test")
+        env = dict(CONFIGURED, OPENAI_API_URL="https://proxy.test")
 
         _, transport = _run(env=env)
 
@@ -227,17 +227,28 @@ class TestItCallsTheMessagesApi(unittest.TestCase):
 
         self.assertIsNotNone(transport.calls[0]["timeout"])
 
+    def test_it_shares_the_key_with_the_image_provider(self):
+        """
+        같은 회사 키다. 두 이름을 쓰면 하나만 넣고 나머지가 왜 안 되는지
+        모르게 된다.
+        """
+
+        from app.providers import gpt_image_provider
+
+        self.assertEqual(openai.API_KEY_SETTING,
+                         gpt_image_provider.API_KEY_SETTING)
+
     def test_it_does_not_change_the_environment(self):
         with patch.dict(os.environ, CONFIGURED, clear=True):
             before = dict(os.environ)
 
-            with patch.object(claude, "requests", _Transport()):
-                claude.generate_script(TOPIC)
+            with patch.object(openai, "requests", _Transport()):
+                openai.generate_script(TOPIC)
 
             self.assertEqual(dict(os.environ), before)
 
 
-class TestTheOutputMatchesTheEngineContract(unittest.TestCase):
+class TestItReadsTheAnswerShape(unittest.TestCase):
 
     def test_it_returns_what_the_writer_returns(self):
         result, _ = _run()
@@ -248,16 +259,24 @@ class TestTheOutputMatchesTheEngineContract(unittest.TestCase):
     def test_a_json_fence_is_stripped(self):
         fenced = "```json\n" + json.dumps(SCRIPT, ensure_ascii=False) + "\n```"
 
-        result, _ = _run(_Transport(_message(fenced)))
+        result, _ = _run(_Transport(_answer(fenced)))
 
         self.assertEqual(len(result["data"]["scenes"]), 6)
 
-    def test_several_text_blocks_are_joined(self):
-        payload = _message(json.dumps(SCRIPT, ensure_ascii=False))
-        text = payload["content"][0]["text"]
-        payload["content"] = [
-            {"type": "text", "text": text[:40]},
-            {"type": "text", "text": text[40:]},
+    def test_reasoning_items_are_not_mistaken_for_the_script(self):
+        """추론 모델은 output에 reasoning 항목도 넣는다."""
+
+        result, _ = _run(_Transport(_answer(
+            json.dumps(SCRIPT, ensure_ascii=False), with_reasoning=True)))
+
+        self.assertEqual(result["data"]["title"], SCRIPT["title"])
+
+    def test_several_text_parts_are_joined(self):
+        text = json.dumps(SCRIPT, ensure_ascii=False)
+        payload = _answer(text)
+        payload["output"][0]["content"] = [
+            {"type": "output_text", "text": text[:40]},
+            {"type": "output_text", "text": text[40:]},
         ]
 
         result, _ = _run(_Transport(payload))
@@ -271,52 +290,34 @@ class TestTheOutputMatchesTheEngineContract(unittest.TestCase):
             with self.subTest(scene=scene["scene"]):
                 self.assertTrue(scene.get("image_prompt"))
 
-    def test_it_looks_exactly_like_the_gemini_result(self):
-        """두 Provider가 다른 모양을 돌려주면 뒤 단계가 갈린다."""
-
-        from app.providers import gemini_script_provider
-
-        claude_result, _ = _run()
-
-        from app.services import scene_prompt_service
-
-        with patch.object(scene_prompt_service, "apply_prompt_elements",
-                          side_effect=lambda s: s):
-            gemini_data = direct_script.script_from_text(
-                json.dumps(SCRIPT, ensure_ascii=False))
-
-        self.assertEqual(set(claude_result), {"success", "data"})
-        self.assertEqual(set(claude_result["data"]), set(gemini_data))
-        self.assertTrue(hasattr(gemini_script_provider, "script_outcome"))
-
 
 class TestItFailsHonestly(unittest.TestCase):
 
     def _fails_with(self, transport, expected=None):
-        expected = expected or claude.ClaudeScriptError
+        expected = expected or openai.OpenAIScriptError
 
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests", transport):
+            with patch.object(openai, "requests", transport):
                 with self.assertRaises(expected) as caught:
-                    claude.generate_script(TOPIC)
+                    openai.generate_script(TOPIC)
 
         return str(caught.exception)
 
     def test_no_key_is_refused_by_name(self):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(
-                    claude.ClaudeScriptUnavailable) as caught:
-                claude.generate_script(TOPIC)
+                    openai.OpenAIScriptUnavailable) as caught:
+                openai.generate_script(TOPIC)
 
-        self.assertIn("ANTHROPIC_API_KEY", str(caught.exception))
+        self.assertIn("OPENAI_API_KEY", str(caught.exception))
 
     def test_it_refuses_before_calling_anything(self):
         transport = _Transport()
 
         with patch.dict(os.environ, {}, clear=True):
-            with patch.object(claude, "requests", transport):
-                with self.assertRaises(claude.ClaudeScriptUnavailable):
-                    claude.generate_script(TOPIC)
+            with patch.object(openai, "requests", transport):
+                with self.assertRaises(openai.OpenAIScriptUnavailable):
+                    openai.generate_script(TOPIC)
 
         self.assertEqual(transport.calls, [])
 
@@ -324,44 +325,54 @@ class TestItFailsHonestly(unittest.TestCase):
         transport = _Transport()
 
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests", transport):
+            with patch.object(openai, "requests", transport):
                 with self.assertRaises(Exception):
-                    claude.generate_script("   ")
+                    openai.generate_script("   ")
 
         self.assertEqual(transport.calls, [])
 
     def test_a_refusal_is_told_apart_from_a_broken_call(self):
-        """안전 거절은 키가 틀린 것과도, 서버가 죽은 것과도 다르다."""
-
-        message = self._fails_with(
-            _Transport(_message("", stop_reason="refusal")))
+        message = self._fails_with(_Transport(
+            _answer(refusal="I can't help with that.")))
 
         self.assertIn("거절", message)
 
-    def test_a_truncated_answer_says_so(self):
-        """토큰 한도에 걸려 잘린 JSON을 '형식이 아니다'로 말하면
-        사람이 프롬프트를 고치려 든다. 고칠 곳은 한도다."""
+    def test_the_refusal_text_is_shown(self):
+        """모델이 왜 거절했는지는 사람이 읽어야 고칠 수 있다."""
 
-        message = self._fails_with(
-            _Transport(_message('{"title": "잘린', stop_reason="max_tokens")))
+        message = self._fails_with(_Transport(
+            _answer(refusal="정책에 어긋납니다")))
 
-        self.assertIn("max_tokens", message)
+        self.assertIn("정책에 어긋납니다", message)
+
+    def test_a_content_filter_stop_says_so(self):
+        message = self._fails_with(_Transport(_answer(
+            "", status="incomplete", reason="content_filter")))
+
+        self.assertIn("content_filter", message)
+
+    def test_a_truncated_answer_points_at_the_ceiling(self):
+        message = self._fails_with(_Transport(_answer(
+            '{"title": "잘린', status="incomplete",
+            reason="max_output_tokens")))
+
+        self.assertIn("max_output_tokens", message)
 
     def test_a_rejected_key_says_the_status(self):
         message = self._fails_with(_Transport(
-            {"type": "error", "error": {"type": "authentication_error",
-                                        "message": "invalid x-api-key"}},
+            {"error": {"type": "invalid_request_error",
+                       "message": "Incorrect API key provided"}},
             status_code=401))
 
         self.assertIn("401", message)
 
-    def test_an_overloaded_server_says_the_status(self):
+    def test_a_rate_limit_says_the_status(self):
         message = self._fails_with(_Transport(
-            {"type": "error", "error": {"type": "overloaded_error",
-                                        "message": "Overloaded"}},
-            status_code=529))
+            {"error": {"type": "rate_limit_error",
+                       "message": "Rate limit reached"}},
+            status_code=429))
 
-        self.assertIn("529", message)
+        self.assertIn("429", message)
 
     def test_a_network_failure_is_an_error(self):
         message = self._fails_with(
@@ -370,13 +381,13 @@ class TestItFailsHonestly(unittest.TestCase):
         self.assertIn("connection reset", message)
 
     def test_an_answer_without_text_is_an_error(self):
-        self._fails_with(_Transport(_message(None)))
+        self._fails_with(_Transport(_answer(None)))
 
     def test_an_answer_that_is_not_json_is_an_error(self):
-        self._fails_with(_Transport(_message("대본을 써 드릴까요?")))
+        self._fails_with(_Transport(_answer("대본을 써 드릴까요?")))
 
     def test_a_script_without_scenes_is_an_error(self):
-        self._fails_with(_Transport(_message('{"title": "x"}')))
+        self._fails_with(_Transport(_answer('{"title": "x"}')))
 
 
 class TestTheOutcomeLooksLikeTheGates(unittest.TestCase):
@@ -385,8 +396,8 @@ class TestTheOutcomeLooksLikeTheGates(unittest.TestCase):
         transport = transport or _Transport()
 
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests", transport):
-                return claude.script_outcome(TOPIC), transport
+            with patch.object(openai, "requests", transport):
+                return openai.script_outcome(TOPIC), transport
 
     def test_the_keys_are_the_ones_the_gate_returns(self):
         outcome, _ = self._make()
@@ -405,21 +416,21 @@ class TestTheOutcomeLooksLikeTheGates(unittest.TestCase):
         outcome, _ = self._make()
 
         self.assertIn("게이트 없음", outcome["gate"])
-        self.assertIn("Claude", outcome["gate"])
+        self.assertIn("OpenAI", outcome["gate"])
 
     def test_it_does_not_retry_when_the_script_is_off_target(self):
         short = {"title": "짧게", "scenes": [
             {"scene": 1, "narration": "짧다.", "image_prompt": "x"}]}
 
         outcome, transport = self._make(_Transport(
-            _message(json.dumps(short, ensure_ascii=False))))
+            _answer(json.dumps(short, ensure_ascii=False))))
 
         self.assertEqual(len(transport.calls), 1)
         self.assertEqual(outcome["attempts"], 1)
         self.assertFalse(outcome["passed"])
 
     def test_the_bounds_come_from_the_gate_itself(self):
-        with open(claude.__file__, encoding="utf-8") as f:
+        with open(openai.__file__, encoding="utf-8") as f:
             tree = ast.parse(f.read())
 
         numbers = {
@@ -439,7 +450,7 @@ class TestTheBridgeReachesIt(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.project = self._tmp.name
 
-    def test_current_runs_the_existing_engine_and_never_claude(self):
+    def test_current_runs_the_existing_engine_and_never_openai(self):
         with patch.object(step01_script,
                           "generate_script_within_duration") as gate:
             gate.return_value = {
@@ -447,42 +458,45 @@ class TestTheBridgeReachesIt(unittest.TestCase):
                 "attempts": 1, "duration_passed": True,
                 "topic_fidelity": {"passed": True}, "passed": True,
             }
-            with patch.object(claude, "script_outcome") as direct:
+            with patch.object(openai, "script_outcome") as direct:
                 step01_script.run(TOPIC, self.project)
 
         gate.assert_called_once()
         direct.assert_not_called()
 
-    def test_choosing_claude_skips_the_existing_engine(self):
-        provider_selection.save(self.project, {"script": "claude"})
+    def test_choosing_openai_skips_the_existing_engine(self):
+        provider_selection.save(self.project, {"script": "openai"})
 
         with patch.object(step01_script,
                           "generate_script_within_duration") as gate:
             with patch.dict(os.environ, CONFIGURED, clear=True):
-                with patch.object(claude, "requests", _Transport()):
+                with patch.object(openai, "requests", _Transport()):
                     data = step01_script.run(TOPIC, self.project)
 
         gate.assert_not_called()
         self.assertEqual(data["title"], SCRIPT["title"])
 
-    def test_choosing_claude_never_calls_gemini(self):
-        from app.providers import gemini_script_provider
+    def test_choosing_openai_never_calls_the_other_two(self):
+        from app.providers import claude_script_provider, gemini_script_provider
 
-        provider_selection.save(self.project, {"script": "claude"})
+        provider_selection.save(self.project, {"script": "openai"})
 
         with patch.object(gemini_script_provider,
                           "script_outcome") as gemini:
-            with patch.dict(os.environ, CONFIGURED, clear=True):
-                with patch.object(claude, "requests", _Transport()):
-                    step01_script.run(TOPIC, self.project)
+            with patch.object(claude_script_provider,
+                              "script_outcome") as claude:
+                with patch.dict(os.environ, CONFIGURED, clear=True):
+                    with patch.object(openai, "requests", _Transport()):
+                        step01_script.run(TOPIC, self.project)
 
         gemini.assert_not_called()
+        claude.assert_not_called()
 
     def test_it_writes_the_same_file_the_engine_writes(self):
-        provider_selection.save(self.project, {"script": "claude"})
+        provider_selection.save(self.project, {"script": "openai"})
 
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests", _Transport()):
+            with patch.object(openai, "requests", _Transport()):
                 step01_script.run(TOPIC, self.project)
 
         with open(os.path.join(self.project, "script.json"),
@@ -502,12 +516,12 @@ class TestTheBridgeReachesIt(unittest.TestCase):
     def test_review_regeneration_uses_the_same_provider(self):
         from app.services import studio_review
 
-        provider_selection.save(self.project, {"script": "claude"})
+        provider_selection.save(self.project, {"script": "openai"})
 
         with patch.object(step01_script,
                           "generate_script_within_duration") as gate:
             with patch.dict(os.environ, CONFIGURED, clear=True):
-                with patch.object(claude, "requests",
+                with patch.object(openai, "requests",
                                   _Transport()) as transport:
                     studio_review.generate_script(TOPIC, self.project)
 
@@ -515,16 +529,16 @@ class TestTheBridgeReachesIt(unittest.TestCase):
         self.assertEqual(len(transport.calls), 1)
 
 
-class TestTwoProjectsDoNotMix(unittest.TestCase):
+class TestFourProjectsDoNotMix(unittest.TestCase):
 
     def test_the_choice_does_not_leak_between_threads(self):
-        tmps = [tempfile.TemporaryDirectory() for _ in range(3)]
+        tmps = [tempfile.TemporaryDirectory() for _ in range(4)]
         for tmp in tmps:
             self.addCleanup(tmp.cleanup)
 
-        provider_selection.save(tmps[0].name, {"script": "claude"})
-        provider_selection.save(tmps[1].name, {"script": "gemini"})
-        provider_selection.save(tmps[2].name, {"script": "current"})
+        chosen = ("openai", "claude", "gemini", "current")
+        for tmp, name in zip(tmps, chosen):
+            provider_selection.save(tmp.name, {"script": name})
 
         seen = {}
         lock = threading.Lock()
@@ -542,16 +556,17 @@ class TestTwoProjectsDoNotMix(unittest.TestCase):
             threads = [
                 threading.Thread(target=step01_script.run,
                                  args=(TOPIC, tmp.name), name=name)
-                for name, tmp in zip("ABC", tmps)
+                for name, tmp in zip("ABCD", tmps)
             ]
             for thread in threads:
                 thread.start()
             for thread in threads:
                 thread.join()
 
-        self.assertEqual(seen.get("A"), "claude")
-        self.assertEqual(seen.get("B"), "gemini")
-        self.assertIsNone(seen.get("C"))
+        self.assertEqual(seen.get("A"), "openai")
+        self.assertEqual(seen.get("B"), "claude")
+        self.assertEqual(seen.get("C"), "gemini")
+        self.assertIsNone(seen.get("D"))
 
 
 class TestTheCatalogOffersIt(unittest.TestCase):
@@ -560,31 +575,31 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.registry = StageProviderRegistry()
         bootstrap.register_current_providers(self.registry)
 
-    def _provider(self, name="claude"):
+    def _provider(self, name="openai"):
         return self.registry.get(stages.SCRIPT, name)
 
     def test_it_is_no_longer_coming_soon(self):
         self.assertFalse(getattr(self._provider(), "coming_soon", False))
 
-    def test_gemini_is_still_there(self):
-        self.assertFalse(
-            getattr(self._provider("gemini"), "coming_soon", False))
-
-    def test_the_unwired_ones_are_still_coming_soon(self):
-        for name in ("deepseek",):
+    def test_the_earlier_two_are_still_there(self):
+        for name in ("gemini", "claude"):
             with self.subTest(name=name):
-                self.assertTrue(
+                self.assertFalse(
                     getattr(self._provider(name), "coming_soon", False))
+
+    def test_deepseek_is_still_coming_soon(self):
+        self.assertTrue(
+            getattr(self._provider("deepseek"), "coming_soon", False))
 
     def test_without_a_key_it_says_which(self):
         with patch.dict(os.environ, {}, clear=True):
             available, reason = self._provider().availability()
 
         self.assertFalse(available)
-        self.assertIn("ANTHROPIC_API_KEY", reason)
+        self.assertIn("OPENAI_API_KEY", reason)
 
     def test_with_a_key_it_is_available(self):
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "k"}, clear=True):
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "k"}, clear=True):
             available, reason = self._provider().availability()
 
         self.assertTrue(available)
@@ -597,7 +612,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
 
     def test_an_api_error_becomes_a_stage_provider_error(self):
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests",
+            with patch.object(openai, "requests",
                               _Transport(raises=OSError("boom"))):
                 with self.assertRaises(StageProviderError):
                     self._provider().generate(StageRequest(topic=TOPIC))
@@ -609,7 +624,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
 
     def test_it_reaches_the_same_module_the_bridge_uses(self):
         with patch.dict(os.environ, CONFIGURED, clear=True):
-            with patch.object(claude, "requests",
+            with patch.object(openai, "requests",
                               _Transport()) as transport:
                 result = self._provider().generate(StageRequest(topic=TOPIC))
 
@@ -617,14 +632,12 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.assertEqual(result["data"]["title"], SCRIPT["title"])
 
     def test_the_setting_name_matches_the_engine(self):
-        from app.production.providers import generated_script
-
         names = {
             entry[0]: entry[3]
             for entry in generated_script.GENERATED_SCRIPT_PROVIDERS
         }
 
-        self.assertEqual(names["claude"], claude.API_KEY_SETTING)
+        self.assertEqual(names["openai"], openai.API_KEY_SETTING)
 
     def test_registering_does_not_wake_any_client_library(self):
         import subprocess
@@ -635,7 +648,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
             "from app.production.registry import StageProviderRegistry\n"
             "bootstrap.register_current_providers(StageProviderRegistry())\n"
             "print(len([m for m in sys.modules "
-            "if m.startswith(('google.genai','anthropic'))]))\n"
+            "if m.startswith(('google.genai','anthropic','openai'))]))\n"
         )
         result = subprocess.run(
             [sys.executable, "-c", code],
@@ -646,41 +659,38 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "0", result.stderr[-800:])
 
 
-class TestTheSharedPlaceIsActuallyShared(unittest.TestCase):
-    """복제하면 두 자리가 조금씩 갈라진다."""
+class TestTheSharedPlaceIsStillShared(unittest.TestCase):
 
-    def test_both_providers_use_the_same_text_reader(self):
-        from app.providers import gemini_script_provider
+    def test_it_uses_the_common_reader(self):
+        with open(openai.__file__, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
 
-        for module in (claude, gemini_script_provider):
-            with self.subTest(module=module.__name__):
-                with open(module.__file__, encoding="utf-8") as f:
-                    tree = ast.parse(f.read())
+        imported = {
+            node.module or "" for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+        }
 
-                imported = set()
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ImportFrom):
-                        imported.add(node.module or "")
+        self.assertIn("app.providers.direct_script", imported)
 
-                self.assertIn("app.providers.direct_script", imported)
-
-    def test_both_exceptions_share_a_base(self):
-        from app.providers import gemini_script_provider
-
-        self.assertTrue(issubclass(claude.ClaudeScriptUnavailable,
+    def test_its_exceptions_share_the_base(self):
+        self.assertTrue(issubclass(openai.OpenAIScriptUnavailable,
                                    direct_script.ScriptProviderUnavailable))
-        self.assertTrue(issubclass(claude.ClaudeScriptError,
-                                   direct_script.ScriptProviderError))
-        self.assertTrue(issubclass(gemini_script_provider.GeminiScriptError,
+        self.assertTrue(issubclass(openai.OpenAIScriptError,
                                    direct_script.ScriptProviderError))
 
-    def test_the_catalog_holds_one_table_not_two_classes(self):
-        from app.production.providers import generated_script
+    def test_adding_the_third_did_not_add_a_third_branch(self):
+        """
+        Sprint134가 표로 모아 둔 이유다. 세 번째 Provider가 step01에
+        분기를 하나 더 만들었다면 그 정리가 헛일이 된다.
+        """
 
-        names = {entry[0]
-                 for entry in generated_script.GENERATED_SCRIPT_PROVIDERS}
+        with open(step01_script.__file__, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
 
-        self.assertLessEqual({"gemini", "claude"}, names)
+        branches = [node for node in ast.walk(tree)
+                    if isinstance(node, ast.If)]
+
+        self.assertLessEqual(len(branches), 2)
 
 
 class TestTheCurrentEngineIsUntouched(unittest.TestCase):
@@ -699,7 +709,7 @@ class TestTheCurrentEngineIsUntouched(unittest.TestCase):
 
         for module in (script_service, duration_gate, topic_fidelity):
             with self.subTest(module=module.__name__):
-                self.assertNotIn("claude", self._constants(module))
+                self.assertNotIn("openai", self._constants(module))
 
     def test_the_gate_still_retries_three_times(self):
         from app.services import duration_gate
@@ -709,25 +719,22 @@ class TestTheCurrentEngineIsUntouched(unittest.TestCase):
     def test_the_pipeline_does_not_know_this_provider(self):
         import app.pipeline.pipeline as pipeline
 
-        self.assertNotIn("claude", self._constants(pipeline))
+        self.assertNotIn("openai", self._constants(pipeline))
 
     def test_the_engine_layer_does_not_import_the_production_package(self):
-        from app.providers import gemini_script_provider
+        with open(openai.__file__, encoding="utf-8") as f:
+            tree = ast.parse(f.read())
 
-        for module in (claude, direct_script, gemini_script_provider):
-            with open(module.__file__, encoding="utf-8") as f:
-                tree = ast.parse(f.read())
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.update(a.name for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                names.add(node.module or "")
 
-            names = set()
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    names.update(a.name for a in node.names)
-                elif isinstance(node, ast.ImportFrom):
-                    names.add(node.module or "")
-
-            for name in names:
-                with self.subTest(module=module.__name__, imported=name):
-                    self.assertNotIn("app.production", name)
+        for name in names:
+            with self.subTest(imported=name):
+                self.assertNotIn("app.production", name)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,8 @@ import os
 from app.services import provider_selection
 from app.services.duration_gate import generate_script_within_duration
 
-# Sprint133 Gemini, Sprint134 Claude. 이름 -> 모델을 직접 부르는 모듈.
+# Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI.
+# 이름 -> 모델을 직접 부르는 모듈.
 #
 # 여기 한 줄이 곧 새 Provider다. 분기를 늘리면 세 번째부터 서로
 # 조금씩 다른 모양을 돌려주기 시작한다 - 이 저장소가 반복해서 겪은
@@ -17,6 +18,7 @@ from app.services.duration_gate import generate_script_within_duration
 DIRECT_SCRIPT_PROVIDERS = {
     provider_selection.GEMINI: "app.providers.gemini_script_provider",
     provider_selection.CLAUDE: "app.providers.claude_script_provider",
+    provider_selection.OPENAI: "app.providers.openai_script_provider",
 }
 
 
@@ -28,11 +30,11 @@ def _generate_script(topic: str, provider: str = None):
     current(=고르지 않음)는 None으로 오고 예전 경로를 그대로 탄다 -
     Writer, Duration Gate, Topic Fidelity, QA, Retry 전부.
 
-    Sprint133 - "gemini"는 그 파이프라인 없이 모델을 직접 부르는
-    쪽이다. 같은 gemini-2.5-pro를 부르더라도 거치는 것이 다르므로
-    결과가 같지 않다. 둘을 같게 취급하면 지어내는 것이 된다.
+    아래 표에 있는 이름들은 그 파이프라인 없이 모델을 직접 부르는
+    쪽이다. gemini는 current와 같은 모델을 부르지만 거치는 것이
+    다르므로 결과가 같지 않다 - 둘을 같게 취급하면 지어내는 것이 된다.
 
-    나머지 이름(claude·openai·deepseek)은 아직 비어 있어 거절한다.
+    표에 없는 이름(deepseek)은 아직 비어 있어 거절한다.
     """
 
     provider_selection.require_wired("script", provider)

@@ -160,7 +160,7 @@ class TestItIsWiredNow(unittest.TestCase):
         self.assertIn("gemini", provider_selection.WIRED["script"])
 
     def test_the_others_are_still_refused(self):
-        for name in ("openai", "deepseek"):
+        for name in ("deepseek",):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired):
                     provider_selection.require_wired("script", name)
@@ -583,7 +583,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "0", result.stderr[-800:])
 
     def test_the_unwired_ones_are_still_coming_soon(self):
-        for name in ("openai", "deepseek"):
+        for name in ("deepseek",):
             with self.subTest(name=name):
                 self.assertTrue(getattr(
                     self.registry.get(stages.SCRIPT, name),
