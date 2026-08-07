@@ -18,6 +18,7 @@ from typing import List
 from app.production.providers.chat_import import ChatImportScriptProvider
 from app.production.providers.coming_soon import coming_soon_providers
 from app.production.providers.elevenlabs_voice import ElevenLabsVoiceProvider
+from app.production.providers.gemini_script import GeminiScriptProvider
 from app.production.providers.generated_image import (
     generated_image_providers,
 )
@@ -49,6 +50,9 @@ def register_current_providers(
         # Sprint125 - 엔진이 이미 있어서 실제로 부를 수 있다. 설정이
         # 없으면 generate()가 ProviderUnavailable을 던진다.
         ElevenLabsVoiceProvider,
+        # Sprint133 - 같은 이유로 대본 쪽에도 하나 붙었다. 현재
+        # 엔진과 같은 모델을 부르지만 거치는 것이 다르다.
+        GeminiScriptProvider,
     ):
         provider = provider_class()
 

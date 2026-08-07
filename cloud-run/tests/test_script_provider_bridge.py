@@ -108,27 +108,54 @@ class TestTheSelectionIsStored(_Case):
             step01_script_resolve.detect_source(self.project), "auto")
 
 
-class TestWhatIsActuallyWired(unittest.TestCase):
+class TestWhatIsActuallyWired(_Case):
 
-    def test_nothing_is_wired_for_scripts_yet(self):
-        self.assertEqual(provider_selection.WIRED["script"], ())
+    def test_only_gemini_is_wired(self):
+        """Sprint133 - Gemini가 붙었다. 나머지 자리는 그대로다."""
+
+        self.assertEqual(provider_selection.WIRED["script"], ("gemini",))
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("script", None)
 
     def test_choosing_anything_else_is_refused(self):
-        for name in ("gemini", "claude", "openai", "deepseek"):
+        for name in ("claude", "openai", "deepseek"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired) as caught:
                     provider_selection.require_wired("script", name)
                 self.assertIn(name, str(caught.exception))
 
     def test_gemini_is_not_treated_as_current(self):
-        """현재 엔진은 Writer·Duration Gate·Topic Fidelity·QA·Retry
-        전부다. 모델 하나를 부르는 것이 아니다."""
+        """
+        현재 엔진은 Writer·Duration Gate·Topic Fidelity·QA·Retry
+        전부다. 모델 하나를 부르는 것이 아니다.
 
-        with self.assertRaises(ProviderNotWired):
-            provider_selection.require_wired("script", "gemini")
+        Sprint133에서 gemini가 붙었지만 이 문장은 그대로다 - 붙었다는
+        것은 "고를 수 있다"는 뜻이지 "같다"는 뜻이 아니다. 고르면
+        현재 엔진은 아예 돌지 않는다.
+        """
+
+        from unittest.mock import patch
+
+        from app.providers import gemini_script_provider
+        from app.steps import step01_script
+
+        provider_selection.save(self.project, {"script": "gemini"})
+
+        with patch.object(step01_script,
+                          "generate_script_within_duration") as engine:
+            with patch.object(gemini_script_provider,
+                              "script_outcome") as direct:
+                direct.return_value = {
+                    "result": {"data": {"title": "t", "scenes": []}},
+                    "estimated_seconds": 45.0, "attempts": 1,
+                    "duration_passed": True,
+                    "topic_fidelity": {"passed": True}, "passed": True,
+                }
+                step01_script.run("주제", self.project)
+
+        engine.assert_not_called()
+        direct.assert_called_once()
 
 
 class TestTheNameReachesTheGenerator(_Case):

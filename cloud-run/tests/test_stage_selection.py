@@ -284,7 +284,8 @@ class TestNothingWasExecuted(unittest.TestCase):
             if not getattr(p, "coming_soon", False)
         )
 
-        self.assertEqual(usable, ["chat_import", "current"])
+        # Sprint133 - Gemini가 더해졌다(직접 호출 Provider).
+        self.assertEqual(usable, ["chat_import", "current", "gemini"])
         self.assertEqual(registry.for_stage(stages.MUSIC), [])
 
 

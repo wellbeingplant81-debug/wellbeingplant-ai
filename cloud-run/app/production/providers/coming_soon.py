@@ -81,8 +81,7 @@ _ALREADY = (
 
 COMING_SOON = (
     # --- 대본 ---
-    ("gemini", stages.SCRIPT, "Gemini", "Google",
-     ("GOOGLE_API_KEY",), _ALREADY.format(model="gemini-2.5-pro")),
+    # Sprint133 - Gemini는 실제로 붙었다. gemini_script.py로 옮겼다.
     ("claude", stages.SCRIPT, "Claude", "Anthropic",
      ("ANTHROPIC_API_KEY",), ""),
     ("openai", stages.SCRIPT, "OpenAI", "OpenAI",

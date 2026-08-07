@@ -163,11 +163,11 @@ class TestTheyRefuseHonestly(unittest.TestCase):
         수가 줄어드는 것이 이 표의 정상적인 방향이다.
         """
 
-        self.assertGreaterEqual(len(self._coming_soon()), 8)
+        self.assertGreaterEqual(len(self._coming_soon()), 7)
 
         names = {p.name for p in self._coming_soon()}
 
-        for wired in ("elevenlabs", "flux", "gpt_image"):
+        for wired in ("elevenlabs", "flux", "gpt_image", "gemini"):
             with self.subTest(name=wired):
                 self.assertNotIn(wired, names)
 
@@ -246,7 +246,7 @@ class TestTheCurrentProviderIsUntouched(unittest.TestCase):
         registry = _registry()
 
         expected = {
-            stages.SCRIPT: ["current"],
+            stages.SCRIPT: ["current", "gemini"],
             stages.IMAGE: ["current", "flux", "gpt_image"],
             stages.VOICE: ["current", "elevenlabs"],
         }
@@ -314,11 +314,13 @@ class TestTheScreenIsToldTheTruth(unittest.TestCase):
                         self.assertIn(key, provider)
 
     def test_the_coming_soon_ones_are_flagged(self):
-        gemini = [p for p in self.rows["script"]["provider_list"]
-                  if p["name"] == "gemini"][0]
+        """Sprint133 - Gemini는 빠졌다. 아직 자리만 있는 것으로 본다."""
 
-        self.assertTrue(gemini["coming_soon"])
-        self.assertIsNone(gemini["estimated_cost"])
+        claude = [p for p in self.rows["script"]["provider_list"]
+                  if p["name"] == "claude"][0]
+
+        self.assertTrue(claude["coming_soon"])
+        self.assertIsNone(claude["estimated_cost"])
 
     def test_current_is_not_flagged(self):
         current = [p for p in self.rows["script"]["provider_list"]

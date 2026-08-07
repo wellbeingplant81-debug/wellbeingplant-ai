@@ -336,7 +336,9 @@ class TestProductionModeSelection(unittest.TestCase):
             if not getattr(p, "coming_soon", False)
         ]
 
-        self.assertEqual(usable, [CURRENT])
+        # Sprint133 - Gemini가 실제로 붙었다. 같은 모델을 부르지만
+        # Writer·게이트·재시도를 거치지 않는 직접 호출 쪽이다.
+        self.assertEqual(usable, [CURRENT, "gemini"])
         self.assertNotIn(
             CURRENT,
             [p.name for p in reg.available(stages.SCRIPT, source_modes.IMPORT)],

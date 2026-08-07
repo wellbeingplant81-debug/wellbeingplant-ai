@@ -10,16 +10,24 @@ def _generate_script(topic: str, provider: str = None):
     Sprint128 - 대본을 만드는 유일한 지점. 다른 Provider가 붙는다면
     여기 붙는다.
 
-    지금 붙어 있는 것은 현재 엔진 하나뿐이다. current(=고르지 않음)는
-    None으로 오고 예전 경로를 그대로 탄다 - Writer, Duration Gate,
-    Topic Fidelity, QA, Retry 전부.
+    current(=고르지 않음)는 None으로 오고 예전 경로를 그대로 탄다 -
+    Writer, Duration Gate, Topic Fidelity, QA, Retry 전부.
 
-    "gemini"는 그 파이프라인 없이 모델을 직접 부르는 장래의 자리이고
-    아직 비어 있다. 현재 엔진과 같게 취급하면 지어내는 것이 되므로
-    정직하게 거절한다.
+    Sprint133 - "gemini"는 그 파이프라인 없이 모델을 직접 부르는
+    쪽이다. 같은 gemini-2.5-pro를 부르더라도 거치는 것이 다르므로
+    결과가 같지 않다. 둘을 같게 취급하면 지어내는 것이 된다.
+
+    나머지 이름(claude·openai·deepseek)은 아직 비어 있어 거절한다.
     """
 
     provider_selection.require_wired("script", provider)
+
+    if provider == provider_selection.GEMINI:
+        # 늦게 부른다 - current로 만드는 사람이 이 모듈을 짊어질
+        # 이유가 없다.
+        from app.providers import gemini_script_provider
+
+        return gemini_script_provider.script_outcome(topic)
 
     # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
     # 길이가 43~47초 범위인지 먼저 확인하고, 벗어나면 Writer를 다시
@@ -51,8 +59,12 @@ def run(
     print("STEP01 RESULT")
     print("=" * 80)
     print(json.dumps(data, ensure_ascii=False, indent=2))
+    # Sprint133 - 어느 자리가 이 판정을 냈는가. 직접 호출 Provider는
+    # 게이트를 거치지 않으므로 "Duration Gate"라고 적으면 로그가 사실이
+    # 아닌 말을 한다. 기본값은 예전 그대로다.
     print(
-        f"Duration Gate: passed={gate_outcome['passed']} "
+        f"{gate_outcome.get('gate', 'Duration Gate')}: "
+        f"passed={gate_outcome['passed']} "
         f"attempts={gate_outcome['attempts']} "
         f"estimated_seconds={gate_outcome['estimated_seconds']:.2f}"
     )
