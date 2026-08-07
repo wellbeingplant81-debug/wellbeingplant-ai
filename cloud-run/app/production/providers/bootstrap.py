@@ -17,6 +17,7 @@ from typing import List
 
 from app.production.providers.chat_import import ChatImportScriptProvider
 from app.production.providers.coming_soon import coming_soon_providers
+from app.production.providers.elevenlabs_voice import ElevenLabsVoiceProvider
 from app.production.providers.image_import import ImageImportProvider
 from app.production.providers.voice_import import VoiceImportProvider
 from app.production.providers.current_engine import CURRENT_PROVIDER_CLASSES
@@ -42,6 +43,9 @@ def register_current_providers(
     # 일은 없다 - registry.select()가 source_mode로 먼저 거른다.
     for provider_class in CURRENT_PROVIDER_CLASSES + (
         ChatImportScriptProvider, ImageImportProvider, VoiceImportProvider,
+        # Sprint125 - 엔진이 이미 있어서 실제로 부를 수 있다. 설정이
+        # 없으면 generate()가 ProviderUnavailable을 던진다.
+        ElevenLabsVoiceProvider,
     ):
         provider = provider_class()
 

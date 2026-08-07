@@ -156,7 +156,13 @@ class TestTheyRefuseHonestly(unittest.TestCase):
         return found
 
     def test_there_are_some(self):
-        self.assertGreaterEqual(len(self._coming_soon()), 11)
+        """Sprint125 - ElevenLabs는 빠졌다. 엔진이 이미 있어서 실제
+        Provider가 됐다."""
+
+        self.assertGreaterEqual(len(self._coming_soon()), 10)
+
+        names = {p.name for p in self._coming_soon()}
+        self.assertNotIn("elevenlabs", names)
 
     def test_generate_raises_provider_unavailable(self):
         for provider in self._coming_soon():
@@ -223,15 +229,25 @@ class TestTheCurrentProviderIsUntouched(unittest.TestCase):
                 self.assertTrue(registry.get(stage, "current"))
 
     def test_current_is_the_only_selectable_generate_provider(self):
+        """Sprint125 - 음성만 예외가 됐다. ElevenLabs는 엔진이 이미
+        있어서 실제로 부를 수 있고, 설정이 없으면 스스로 거절한다."""
+
         registry = _registry()
 
-        for stage in (stages.SCRIPT, stages.IMAGE, stages.VOICE):
+        for stage in (stages.SCRIPT, stages.IMAGE):
             usable = [
                 p.name for p in registry.available(stage, source_modes.GENERATE)
                 if not getattr(p, "coming_soon", False)
             ]
             with self.subTest(stage=stage):
                 self.assertEqual(usable, ["current"])
+
+        voice = sorted(
+            p.name for p in registry.available(stages.VOICE,
+                                               source_modes.GENERATE)
+            if not getattr(p, "coming_soon", False)
+        )
+        self.assertEqual(voice, ["current", "elevenlabs"])
 
     def test_the_current_engine_file_did_not_change(self):
         from app.production.providers import current_engine

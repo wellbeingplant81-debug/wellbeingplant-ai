@@ -136,13 +136,15 @@ class TestTheAbstractWordingIsGone(unittest.TestCase):
         """Sprint124 - Provider 목록에 있고, 거기 있는 것은 전부
         coming_soon이라 고를 수 없다."""
 
+        # Sprint125 - 엔진이 붙어서 Coming Soon이 아니다. 설정이
+        # 없으면 화면이 "설정 필요"로 적는다.
         served = client.get("/studio/api/production/stages").json()["stages"]
         voice = [r for r in served if r["stage"] == "voice"][0]
         eleven = [p for p in voice["provider_list"]
                   if p["display_name"] == "ElevenLabs"][0]
 
-        self.assertTrue(eleven["coming_soon"])
-        self.assertIn("coming_soon", _page())
+        self.assertFalse(eleven["coming_soon"])
+        self.assertIn("설정 필요", _page())
 
 
 class TestTheProviderCard(unittest.TestCase):

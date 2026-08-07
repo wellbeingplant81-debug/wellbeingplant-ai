@@ -10,6 +10,12 @@ ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 VOICES_URL = "https://api.elevenlabs.io/v1/voices"
 
 DEFAULT_MODEL_ID = "eleven_multilingual_v2"
+
+
+def model_id() -> str:
+    """Sprint125 - ELEVENLABS_MODEL로 바꿀 수 있다. 없으면 기본값."""
+
+    return os.getenv("ELEVENLABS_MODEL") or DEFAULT_MODEL_ID
 REQUEST_TIMEOUT_SECONDS = 10
 TTS_TIMEOUT_SECONDS = 30
 
@@ -96,7 +102,7 @@ def generate_voice(text: str, output_file: str):
         },
         json={
             "text": text,
-            "model_id": DEFAULT_MODEL_ID,
+            "model_id": model_id(),
         },
         timeout=TTS_TIMEOUT_SECONDS,
     )

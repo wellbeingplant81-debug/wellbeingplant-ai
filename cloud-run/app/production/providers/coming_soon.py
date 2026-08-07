@@ -18,6 +18,9 @@ Sprint117부터 이 저장소는 모르면 "단가 미상"으로 적어 왔고, 
 ★★★★★로 매기는 것은 지어내는 일이라 전부 STANDARD로 둔다 - 등급을
 매길 근거가 아직 없다는 뜻이고, 화면은 별 대신 "미측정"을 적는다.
 
+Sprint125 - ElevenLabs는 여기서 빠졌다. 엔진이 이미 있어서 실제
+Provider(elevenlabs_voice.py)로 올라갔다.
+
 겹치는 이름에 대해
 ------------------
 현재 엔진은 이미 gemini-2.5-pro / imagen-4.0-generate-001 /
@@ -101,8 +104,6 @@ COMING_SOON = (
     ("google_tts", stages.VOICE, "Google TTS", "Google",
      ("GOOGLE_APPLICATION_CREDENTIALS",),
      _ALREADY.format(model="ko-KR-Chirp3-HD-Aoede")),
-    ("elevenlabs", stages.VOICE, "ElevenLabs", "ElevenLabs",
-     ("ELEVENLABS_API_KEY",), ""),
     ("openai_voice", stages.VOICE, "OpenAI Voice", "OpenAI",
      ("OPENAI_API_KEY",), ""),
 )

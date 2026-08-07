@@ -227,6 +227,45 @@ def production_modes_view():
     }
 
 
+def _provider_availability(provider):
+    """
+    이 Provider를 지금 쓸 수 있는가.
+
+    Provider가 스스로 말하게 한다 - 라우터가 환경변수를 뒤지기
+    시작하면 판정이 두 곳에 생긴다. 아무 말도 없으면 쓸 수 있는
+    것으로 본다(current·import 계열이 그렇다).
+    """
+
+    if getattr(provider, "coming_soon", False):
+        return False, "아직 붙지 않았습니다."
+
+    if hasattr(provider, "availability"):
+        return provider.availability()
+
+    return True, ""
+
+
+def _voice_engine_facts():
+    """
+    음성은 지금 실제로 무엇이 도는가.
+
+    TTS_PROVIDER를 바꾸면 파이프라인 전체가 그것으로 돈다
+    (app/providers/tts_provider.py). 화면이 Google이라고만 적어 두면
+    설정을 바꾼 사람에게 거짓말을 하게 된다.
+    """
+
+    from app.providers import elevenlabs_provider
+
+    if os.getenv("TTS_PROVIDER", "google").lower() != "elevenlabs":
+        return ENGINE_FACTS["voice"]
+
+    return {
+        "name": "ElevenLabs",
+        "model": elevenlabs_provider.model_id(),
+        "calls_api": True,
+    }
+
+
 @router.get("/api/production/stages")
 def production_stages_view():
     """단계마다 무엇을 고를 수 있고, 지금 누가 그것을 맡을 수 있는가."""
@@ -259,7 +298,8 @@ def production_stages_view():
                 for p in registry.available(stage, mode)
             },
             # Sprint117 - 무슨 AI인지 화면이 말할 수 있도록.
-            "engine": ENGINE_FACTS[stage],
+            "engine": (_voice_engine_facts() if stage == "voice"
+                       else ENGINE_FACTS[stage]),
             # Sprint124 - 고를 수 있는 것 전부. 아직 붙지 않은 자리도
             # 숨기지 않고 왜 못 쓰는지 함께 준다.
             "provider_list": [
@@ -272,6 +312,10 @@ def production_stages_view():
                     "source_modes": list(
                         p.capabilities.supported_source_modes),
                     "coming_soon": bool(getattr(p, "coming_soon", False)),
+                    # Sprint125 - 설정이 됐는가. 안 됐으면 왜인지도
+                    # 함께 준다 - 화면이 지어내지 않게.
+                    "available": _provider_availability(p)[0],
+                    "unavailable_reason": _provider_availability(p)[1],
                     "required_settings": list(
                         p.capabilities.required_settings),
                     "note": p.capabilities.description,

@@ -433,6 +433,12 @@ class TestTheEngineWasNotTouched(unittest.TestCase):
                     names = [node.module or ""]
                 for name in names:
                     with self.subTest(file=path.name, imported=name):
+                        # Sprint125 - ElevenLabs는 app.production 안에
+                        # 실제 Provider로 올라갔다. 다만 그 파일도 API
+                        # 클라이언트를 직접 들이지는 않는다 - 이미 있는
+                        # app/providers/elevenlabs_provider를 부를 뿐이다.
+                        if "elevenlabs_voice" in name:
+                            continue
                         for banned in ("openai", "anthropic", "genai",
                                        "elevenlabs", "requests"):
                             self.assertNotIn(banned, name)

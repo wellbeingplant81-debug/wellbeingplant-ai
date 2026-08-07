@@ -1581,20 +1581,32 @@ function providerCard(stage, option, spec){
 // 품질은 재 본 것에만 의미가 있다. 부르지도 않은 것에 별을 매기지
 // 않고 "미측정"이라고 적는다. 단가도 모르면 모른다고 적는다.
 function providerCatalog(spec){
-  const rows = (spec.provider_list || []).filter(p => p.coming_soon);
+  // current와 가져오기 계열은 위 카드가 이미 보여 준다. 여기는
+  // 아직 못 쓰거나 설정이 필요한 것들이다.
+  const rows = (spec.provider_list || []).filter(
+    p => p.coming_soon || !p.available);
   if(!rows.length) return "";
 
+  const soon = rows.filter(p => p.coming_soon).length;
+  const needs = rows.length - soon;
+
   return `<details class="pcat">
-    <summary>다른 Provider ${rows.length}개 · 아직 못 씀</summary>
-    ${rows.map(p => `<div class="pcrow" title="향후 지원 예정">
+    <summary>다른 Provider ${rows.length}개 · ${
+      [soon ? `${soon}개 아직 못 씀` : "",
+       needs ? `${needs}개 설정 필요` : ""].filter(Boolean).join(" · ")
+    }</summary>
+    ${rows.map(p => `<div class="pcrow" title="${
+      p.coming_soon ? "향후 지원 예정" : p.unavailable_reason}">
       <span class="n">${p.display_name}</span>
       <span class="v">${p.vendor}</span>
       <span class="q">미측정</span>
       <span class="c">${p.estimated_cost == null
         ? "단가 미상" : "$" + p.estimated_cost.toFixed(2)}</span>
-      <span class="soon">Coming Soon</span>
+      <span class="soon">${p.coming_soon ? "Coming Soon" : "설정 필요"}</span>
       ${p.note ? `<span class="note">${p.note}</span>` : ""}
-      <span class="need">필요: ${p.required_settings.join(" · ")}</span>
+      <span class="need">${p.coming_soon
+        ? `필요: ${p.required_settings.join(" · ")}`
+        : p.unavailable_reason}</span>
     </div>`).join("")}
   </details>`;
 }

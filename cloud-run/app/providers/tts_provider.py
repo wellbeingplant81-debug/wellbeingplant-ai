@@ -6,9 +6,19 @@ from app.services.speech_normalizer import normalize_for_speech
 from app.services.voice_quality_engine import optimize_for_tts
 
 
-def generate_voice(text: str, output_file: str):
+def generate_voice(text: str, output_file: str, provider: str = None):
+    """
+    Sprint125 - 어느 Provider를 쓸지 인자로도 받는다.
 
-    provider = os.getenv("TTS_PROVIDER", "google").lower()
+    주지 않으면 예전 그대로 TTS_PROVIDER를 읽는다 - 기존 호출자
+    (scene_tts_service, studio_review)는 한 글자도 바뀌지 않는다.
+
+    인자를 더한 이유는 StageProvider가 환경변수를 잠깐 바꿔 쓰면 안
+    되기 때문이다. studio_jobs는 파이프라인을 스레드로 돌리므로 두
+    작업이 겹치면 서로의 설정을 덮어쓴다.
+    """
+
+    provider = (provider or os.getenv("TTS_PROVIDER", "google")).lower()
 
     print(f"Using TTS Provider: {'ElevenLabs' if provider == 'elevenlabs' else 'Google'}")
 
