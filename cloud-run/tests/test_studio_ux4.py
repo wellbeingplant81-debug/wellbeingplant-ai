@@ -48,58 +48,32 @@ def _block(page, start, end="\nfunction "):
     return cut[:cut.index(end)]
 
 
-class TestTheStrategyPanel(unittest.TestCase):
+class TestTheStrategyPanelWasReplaced(unittest.TestCase):
+    """Sprint119 - 전략 카드가 결과 카드로 바뀌었다.
 
-    def test_the_four_strategies_are_offered(self):
+    "위에서 고르면 아래 기본값만 바뀐다"는 계약은 그대로이고, 그것은
+    이제 test_studio_ux5가 본다. 여기서는 갈아탄 사실과, 그 계약이
+    새 이름으로도 지켜지는지만 남긴다."""
+
+    def test_the_result_presets_took_its_place(self):
         page = _page()
 
-        for label in ("완전 자동", "균형", "비용 절약", "내가 직접 제작"):
-            with self.subTest(label=label):
-                self.assertIn(label, page)
+        self.assertNotIn("const STRATEGIES", page)
+        self.assertIn("const PRESETS", page)
+        self.assertIn("이번 영상은 어떻게 만들까요?", page)
 
-    def test_one_of_them_is_recommended(self):
+    def test_one_of_them_is_still_recommended(self):
         self.assertIn("추천", _page())
 
-    def test_each_strategy_only_sets_defaults(self):
-        """고른 뒤에도 단계마다 다시 바꿀 수 있어야 한다."""
-
+    def test_it_still_only_sets_defaults(self):
         page = _page()
-        block = _block(page, "function pickStrategy")
+        block = _block(page, "async function pickPreset")
 
-        # 전략은 기본값을 채우고 다시 그린다 - 잠그지 않는다.
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
 
-    def test_every_strategy_covers_the_four_stages(self):
-        page = _page()
-        block = _block(page, "const STRATEGIES", "\n];")
-
-        for stage in ("script", "image", "voice", "metadata"):
-            with self.subTest(stage=stage):
-                self.assertGreaterEqual(block.count(stage + ":"), 4)
-
-    def test_the_strategy_keys_are_real_option_keys(self):
-        """전략이 없는 선택지를 가리키면 조용히 아무 일도 안 일어난다."""
-
-        page = _page()
-        ui = re.search(r"const STAGE_UI = \{(.*?)\n\};", page, re.S).group(1)
-        keys = set(re.findall(r'\{key:"(\w+)"', ui))
-
-        block = _block(page, "const STRATEGIES", "\n];")
-        used = set(re.findall(r'(?:script|image|voice|metadata):\s*"(\w+)"',
-                              block))
-
-        self.assertTrue(used)
-        for key in used:
-            with self.subTest(key=key):
-                self.assertIn(key, keys)
-
-    def test_the_automation_share_of_each_strategy_is_declared(self):
-        """100 / 75 / 50 / 25 / 0 이 아니라 실제 선택에서 계산한다."""
-
-        page = _page()
-
-        self.assertIn("function automationShare", page)
+    def test_the_automation_share_is_still_computed_not_declared(self):
+        self.assertIn("function automationShare", _page())
 
 
 class TestTheCostWording(unittest.TestCase):
@@ -153,8 +127,9 @@ class TestTheCostWording(unittest.TestCase):
 class TestTheStageHeader(unittest.TestCase):
 
     def test_each_stage_carries_a_one_line_summary(self):
+        # Sprint119 - 한 단계를 그리는 일이 renderStageBlock으로 나뉘었다.
         page = _page()
-        block = _block(page, "function renderStagePicks", "\nfunction ")
+        block = _block(page, "function renderStageBlock")
 
         self.assertIn("stageSummary", page)
         self.assertIn("stageSummary", block)
@@ -190,18 +165,23 @@ class TestTheCardColours(unittest.TestCase):
         page = _page()
         block = _block(page, "function cardKind")
 
-        for mode in ("generate", "import", "manual", "none"):
+        # generate 와 none 은 이름으로 갈리고, 사용자가 주는 둘
+        # (import·manual)은 같은 색이라 기본값으로 떨어진다.
+        for mode in ("generate", "none"):
             with self.subTest(mode=mode):
                 self.assertIn(mode, block)
+
+        self.assertIn("k-given", block)
 
 
 class TestTheSummaryHasFiveCards(unittest.TestCase):
 
     def test_the_five_labels(self):
+        # Sprint119 - 품질과 자동화는 예상 결과 카드로 옮겼다.
         page = _page()
-        block = _block(page, "function summaryCards", "\nasync function ")
+        block = _block(page, "function expectedResult", "\nasync function ")
 
-        for label in ("품질", "예상 시간", "예상 비용", "자동 생성 비율",
+        for label in ("품질", "예상 시간", "예상 비용", "자동화",
                       "API"):
             with self.subTest(label=label):
                 self.assertIn(label, block)

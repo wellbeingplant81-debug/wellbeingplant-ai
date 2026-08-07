@@ -149,7 +149,9 @@ class TestTheProviderCard(unittest.TestCase):
         block = page[page.index("function providerCard"):]
         block = block[:block.index("\nfunction ")]
 
-        for piece in ("name", "current", "starText", "cost", "soon"):
+        # Sprint119 - 이름은 평이한 말이 되고(plainLabel) 현재 엔진은
+        # 고른 뒤 한 줄로 붙는다. 다섯 가지는 그대로다.
+        for piece in ("plainLabel", "현재 엔진", "starText", "cost", "soon"):
             with self.subTest(piece=piece):
                 self.assertIn(piece, block)
 
@@ -184,18 +186,27 @@ class TestTheProviderCard(unittest.TestCase):
         self.assertIn("quality", _page())
 
     def test_a_free_option_says_free(self):
+        """Sprint118이 "Unknown"을 사람의 말로 바꿨다.
+
+        이 단언은 Sprint118 이후에도 통과했는데, 그 단어를 왜 뺐는지
+        적어 둔 주석에 걸려 있었을 뿐이다. Sprint119에서 그 주석이
+        사라지며 드러났다 - 화면에 보이는 글로 다시 세운다."""
+
         page = _page()
 
         self.assertIn("무료", page)
-        self.assertIn("Unknown", page)
+        self.assertIn("단가 미상", page)
 
 
 class TestTheSummaryIsCards(unittest.TestCase):
 
     def test_the_four_cards_are_there(self):
+        """Sprint119 - 품질과 자동화는 예상 결과 카드로 옮겼다.
+        요약 전체(예상 결과 + 카드)에서 본다."""
+
         page = _page()
 
-        block = page[page.index("function summaryCards"):]
+        block = page[page.index("function expectedResult"):]
         block = block[:block.index("\nasync function ")]
 
         for label in ("예상 비용", "예상 시간", "품질", "API"):
@@ -251,8 +262,8 @@ class TestTheCurrentProviderCard(unittest.TestCase):
         block = block[:block.index("\nfunction ")]
 
         # Sprint118 - 엔진 이름이 아니라 "지금 고른 방식"을 적는다.
-        # 이미지를 직접 업로드로 바꾸면 그렇게 보여야 한다.
-        self.assertIn("optionName", block)
+        # Sprint119 - 그 방식을 평이한 말로 적는다(plainLabel).
+        self.assertIn("plainLabel", block)
         self.assertIn("uiPick", block)
 
 
