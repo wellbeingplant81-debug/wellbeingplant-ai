@@ -245,25 +245,31 @@ class TestTheOtherThreeAreInterfaceOnly(_Case):
         self.assertEqual(
             provider_selection.selected(self.project, "image"), "flux")
 
-    def test_nobody_reads_them_yet(self):
-        """엔진 쪽에서 script_provider/image_provider를 읽는 자리가
-        아직 없다는 것을 적어 둔다."""
+    def test_the_fields_are_never_read_by_name(self):
+        """Sprint127~130이 셋 다 이었지만, 읽는 것은 언제나
+        provider_selection.selected(stage)를 거친다 - 칸 이름을 여기저기
+        적어 두면 이름이 바뀔 때 한쪽만 바뀐다."""
 
         import pathlib
 
+        # 설명문에 이름이 나오는 것은 상관없다. 코드가 그 문자열을
+        # 값으로 쓰는지만 본다 - 산문을 뒤지면 설명을 지워야 통과하는
+        # 테스트가 된다.
+        fields = set(provider_selection.FIELDS.values())
         root = pathlib.Path(provider_selection.__file__).parent.parent
         readers = []
 
         for path in root.rglob("*.py"):
             if "__pycache__" in str(path) or path.name == "provider_selection.py":
                 continue
-            source = path.read_text(encoding="utf-8")
-            for field in ("script_provider", "image_provider",
-                          "metadata_provider"):
-                if field in source:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Constant)
+                        and isinstance(node.value, str)
+                        and node.value in fields):
                     readers.append(path.name)
 
-        self.assertEqual(readers, [])
+        self.assertEqual(sorted(set(readers)), [])
 
 
 class TestNothingGlobalWasTouched(unittest.TestCase):

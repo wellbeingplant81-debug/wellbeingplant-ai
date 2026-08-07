@@ -48,6 +48,9 @@ CURRENT = "current"
 # 사람이 직접 쓴다. 엔진이 만들지 않는다는 뜻이다.
 MANUAL = "manual"
 
+# Sprint130 - 실제로 붙은 이미지 Provider.
+FLUX = "flux"
+
 
 class ProviderNotWired(RuntimeError):
     """고른 Provider가 아직 연결되지 않았다.
@@ -77,6 +80,11 @@ def _wired_for(stage):
     # 만들 필요가 없으므로 처음부터 연결된 것으로 둔다.
     if stage == "metadata":
         return (MANUAL,)
+
+    # Sprint130 - FLUX가 실제로 붙었다. 나머지 이미지 자리들
+    # (imagen·gpt_image·ideogram)은 여전히 비어 있다.
+    if stage == "image":
+        return (FLUX,)
 
     return ()
 

@@ -108,14 +108,16 @@ class TestTheSelectionIsStored(_Case):
 class TestWhatIsActuallyWired(unittest.TestCase):
     """되는 척하지 않는다."""
 
-    def test_nothing_is_wired_for_images_yet(self):
-        self.assertEqual(provider_selection.WIRED["image"], ())
+    def test_only_flux_is_wired_for_images(self):
+        """Sprint130 - FLUX가 실제로 붙었다. 나머지 자리는 그대로다."""
+
+        self.assertEqual(provider_selection.WIRED["image"], ("flux",))
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("image", None)
 
     def test_choosing_anything_else_is_refused(self):
-        for name in ("imagen", "gpt_image", "flux", "ideogram"):
+        for name in ("imagen", "gpt_image", "ideogram"):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired) as caught:
                     provider_selection.require_wired("image", name)
@@ -182,6 +184,7 @@ class TestTheNameReachesTheGenerator(_Case):
 
     def test_each_chosen_name_arrives_at_every_scene(self):
         for name in ("imagen", "gpt_image", "flux", "ideogram"):
+            # _ai_result를 세워 두므로 flux도 이름만 확인한다.
             with self.subTest(name=name):
                 provider_selection.save(self.project, {"image": name})
                 self.assertEqual(self._run(), [name] * 3)
@@ -191,9 +194,11 @@ class TestTheFallbackDoesNotSwallowIt(_Case):
     """FLUX를 골랐는데 스톡 사진이 나오면 안 된다."""
 
     def test_a_not_wired_provider_escapes_the_pexels_fallback(self):
+        """Sprint130 - flux는 이제 붙었으므로 아직 빈 자리로 확인한다."""
+
         from app.services import asset_integration_service
 
-        provider_selection.save(self.project, {"image": "flux"})
+        provider_selection.save(self.project, {"image": "ideogram"})
 
         with patch.object(asset_integration_service,
                           "get_candidates") as candidates:

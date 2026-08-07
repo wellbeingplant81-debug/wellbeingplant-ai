@@ -43,6 +43,10 @@ def resolve_image_style(scene: dict) -> str:
     return image_service.IMAGE_STYLE_DEFAULT
 
 
+# 프롬프트로 만든 이미지들. 스톡과 confidence·outcome 판정이 다르다.
+AI_SOURCES = ("ai_image", provider_selection.FLUX)
+
+
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
                image_style=image_service.IMAGE_STYLE_DEFAULT,
                candidate_count=1, scene=None, provider=None):
@@ -64,6 +68,24 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
 
     # 고른 것이 없으면(None) 예전 경로 그대로다.
     provider_selection.require_wired("image", provider)
+
+    if provider == provider_selection.FLUX:
+        # Sprint130 - FLUX는 이미지 한 장을 만드는 Provider다. current의
+        # Best-of-N·품질 게이트를 대신하지 않는다 - 그 둘은 후보를
+        # 여럿 뽑아 고르는 일이고 여기는 한 장이다. 뒤 단계가 차이를
+        # 모르도록 같은 모양으로 돌려준다.
+        from app.providers import flux_provider
+
+        flux_provider.generate_image(image_prompt, staging_path)
+
+        return {
+            "source": provider_selection.FLUX,
+            "local_path": staging_path,
+            "metadata": {"query": extract_search_query(image_prompt)},
+            "candidate_count": 1,
+            "selected_candidate": 0,
+            "selection": None,
+        }
 
     candidate_paths = best_of_n_service.generate_candidates(
         image_prompt,
@@ -151,12 +173,14 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
             ),
             True,
         )
-    except provider_selection.ProviderNotWired:
-        # Sprint127 - 이것은 폴백 대상이 아니다. 엔진이 실패한 것과
-        # 고른 Provider가 없는 것은 다른 일이고, 여기서 삼키면
-        # FLUX를 고른 사람이 스톡 사진을 받게 된다.
-        raise
     except Exception as exc:
+        # Sprint127/130 - 폴백은 current 엔진의 성질이다(Imagen이
+        # 안 되면 Pexels). 사용자가 Provider를 골랐는데 실패했다고
+        # 스톡 사진을 주면 조용히 틀린 결과가 된다 - 고른 것이
+        # 있으면 대체하지 않고 그대로 내보낸다.
+        if provider:
+            raise
+
         print(
             f"[AssetIntegration] visual_type=ai, Imagen 생성 실패, "
             f"Pexels로 폴백: {exc}"
@@ -312,6 +336,10 @@ def integrate_asset(
     source = result["source"]
     asset_type = "video" if "video" in source else "image"
 
+    # Sprint130 - 프롬프트로 만든 것들. 스톡(검색으로 찾은 것)과
+    # 구분한다. current 경로(ai_image)의 판정은 그대로다.
+    generated_by_ai = source in AI_SOURCES
+
     if asset_type == "video":
         try:
             _extract_first_frame(result["local_path"], final_image_path)
@@ -321,9 +349,9 @@ def integrate_asset(
     else:
         os.replace(result["local_path"], final_image_path)
 
-    confidence = 1.0 if source == "ai_image" else 0.8
+    confidence = 1.0 if generated_by_ai else 0.8
 
-    if source != "ai_image":
+    if not generated_by_ai:
         outcome = "success"
     elif ai_priority_choice:
         # AI가 의도적으로 선택된 경우 - (a) 기존 prefer_ai 품질 게이트가
