@@ -175,8 +175,38 @@ a{color:var(--accent)}
 .pick .pcard .q + .c{margin-left:0}
 .pick .pcard .c:first-of-type{margin-left:auto}
 
+/* Sprint118 - 제작 전략. 아래 기본값만 정하고 잠그지 않는다. */
+.strat{margin-bottom:12px}
+.strat .h{font-size:12px;color:var(--dim);text-transform:uppercase;
+  letter-spacing:.8px;font-weight:600;margin-bottom:8px}
+.scards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.scard{display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:9px 11px;cursor:pointer}
+.scard:hover{border-color:#3b4757}
+.scard.on{border-color:var(--accent);background:#12243d}
+.scard input{width:auto;flex:none;margin:0;accent-color:var(--accent)}
+.scard .n{font-weight:600;font-size:12.5px}
+.scard .rec{font-size:10px;color:var(--ok);border:1px solid #1d4429;
+  border-radius:99px;padding:0 6px}
+.scard .d{flex-basis:100%;color:var(--dim);font-size:11px}
+
+/* 단계 한 줄 요약 */
+.pick .sub{color:var(--dim);font-size:11px;margin-bottom:6px}
+
+/* 색이 곧 상태다 - 고른 카드에만 칠한다. */
+.pcard.k-auto.on{border-color:var(--ok);background:#122b19}
+.pcard.k-given.on{border-color:var(--accent);background:#12243d}
+.pcard.k-off.on{border-color:#3b4757;background:#1a2029}
+.pcard.k-off.on .n{color:var(--dim)}
+.pcard.k-soon{background:#151a21}
+.cp.k-auto b{color:var(--ok)}
+.cp.k-given b{color:var(--accent)}
+.cp.k-off b{color:var(--dim)}
+
 /* 요약 카드 */
 .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cards .card:nth-child(5){grid-column:1 / -1}
 .card{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
   padding:9px 10px;display:flex;flex-direction:column;gap:2px}
 .card .k{font-size:10.5px;color:var(--dim);text-transform:uppercase;
@@ -231,6 +261,12 @@ a{color:var(--accent)}
         <label>Language</label>
         <select id="lang"><option>한국어</option></select>
       </div>
+    </div>
+
+    <!-- Sprint118 - 제작 전략. 아래 기본값만 정하고 잠그지 않는다. -->
+    <div class="strat">
+      <div class="h">제작 전략</div>
+      <div id="strategies" class="scards"></div>
     </div>
 
     <div id="stagePicks" class="picks muted">불러오는 중…</div>
@@ -726,10 +762,11 @@ async function createFromImport(sourceId, source){
 
 let stageSpec = null;
 let stagePick = {};
-// 화면에서 고른 항목. 대본의 붙여넣기 셋은 서버에는 똑같은 import로
-// 가고, 다른 것은 안내 문구뿐이다 - 파서는 셋을 구분하지 않는다
+// 화면에서 고른 항목. 대본의 붙여넣기 넷은 서버에는 똑같은 import로
+// 가고, 다른 것은 안내 문구뿐이다 - 파서는 넷을 구분하지 않는다
 // (Sprint104). 구분하는 척하지 않으려고 여기 적어 둔다.
 let uiPick = {};
+let strategyPick = "full";
 
 // 품질은 Provider가 신고한 등급이다. 별은 그 등급을 그리는 것일 뿐,
 // 화면이 점수를 매기지 않는다.
@@ -763,6 +800,29 @@ const STAGE_UI = {
   ],
 };
 
+// 제작 전략. 여기가 정하는 것은 아래 기본값뿐이고, 고른 뒤에도 단계마다
+// 다시 바꿀 수 있다.
+//
+// 전략이 더 싼 Provider를 고르지는 못한다 - 단계마다 Provider가 하나뿐
+// (전부 current)이기 때문이다. 실제로 바꾸는 것은 "어느 단계를 AI에게
+// 맡기고 어느 단계를 직접 줄 것인가"뿐이고, 화면은 그 이상을 약속하지
+// 않는다. 순서는 직접 만들기 어려운 것을 마지막까지 AI에게 남기는
+// 쪽이다 - 대본이 가장 어렵고, 이미지와 음성은 준비하기 쉽다.
+const STRATEGIES = [
+  {key:"full", label:"완전 자동", note:"전부 AI가 만듭니다", recommend:true,
+   picks:{script:"generate", image:"generate", voice:"generate",
+          metadata:"generate"}},
+  {key:"balanced", label:"균형", note:"대본만 AI · 이미지와 음성은 직접",
+   picks:{script:"generate", image:"import", voice:"import",
+          metadata:"generate"}},
+  {key:"saving", label:"비용 절약", note:"돈이 드는 단계를 직접 채웁니다",
+   picks:{script:"manual", image:"import", voice:"import",
+          metadata:"generate"}},
+  {key:"diy", label:"내가 직접 제작", note:"대본 · 이미지 · 음성 직접 제공",
+   picks:{script:"manual", image:"import", voice:"import",
+          metadata:"manual"}},
+];
+
 // 배경음악은 고를 것이 없다 - 엔진이 렌더 중에 로컬 mp3를 섞고 별도
 // 산출물이 없다. 숨기지는 않고 요약에서 그 사실을 말한다.
 const HIDDEN_STAGES = ["music"];
@@ -781,6 +841,35 @@ function starText(tier){
   return n ? "★".repeat(n) + "☆".repeat(5 - n) : "";
 }
 
+function optionOf(stage, key){
+  return (STAGE_UI[stage] || []).find(o => o.key === key) || {};
+}
+
+function optionName(stage, option, spec){
+  return option.engine ? (spec || {}).engine.name : option.label;
+}
+
+// 색이 곧 상태다. AI가 만드는 것 / 직접 주는 것 / 안 쓰는 것 /
+// 아직 못 쓰는 것.
+function cardKind(option){
+  if(option.soon) return "k-soon";
+  if(option.mode === "generate") return "k-auto";
+  if(option.mode === "none") return "k-off";
+  // import 와 manual 은 둘 다 사용자가 준다.
+  return "k-given";
+}
+
+// 한 줄 요약은 선택지 자체에서 만든다 - 따로 적어 두면 선택지가
+// 늘어날 때 한쪽만 낡는다.
+function stageSummary(stage, spec){
+  const seen = [];
+  STAGE_UI[stage].forEach(o => {
+    const name = optionName(stage, o, spec);
+    if(name && seen.indexOf(name) === -1) seen.push(name);
+  });
+  return seen.join(" · ");
+}
+
 // 카드가 말하는 것은 다섯뿐이다 - 이름 · 현재 여부 · 품질 · 비용 ·
 // 지원 여부. 설명문은 넣지 않는다.
 function providerCard(stage, option, spec){
@@ -789,21 +878,22 @@ function providerCard(stage, option, spec){
   const missing = API_MODES.includes(option.mode) && providers.length === 0;
   const soon = !!option.soon;
   const off = soon || missing;
+  const on = uiPick[stage] === option.key;
 
-  const name = option.engine ? engine.name : option.label;
+  const name = optionName(stage, option, spec);
   const current = option.engine && !soon;
   // 돈이 나가는 것은 엔진이 API를 부르는 경우뿐이다. 붙여넣기·직접
   // 업로드·사용 안 함은 호출이 없다.
   const cost = option.engine
-    ? (engine.calls_api ? "Unknown" : "무료")
+    ? (engine.calls_api ? "단가 미상" : "무료")
     : (soon ? "—" : "무료");
   const tier = (option.engine && providers.length)
     ? spec.provider_quality[providers[0]] : "";
 
-  return `<label class="pcard ${uiPick[stage]===option.key?"on":""} ${off?"off":""}"
+  return `<label class="pcard ${cardKind(option)} ${on?"on":""} ${off?"off":""}"
       ${soon?'title="향후 지원 예정"':""}>
     <input type="radio" name="pick-${stage}" value="${option.key}"
-      ${uiPick[stage]===option.key?"checked":""} ${off?"disabled":""}
+      ${on?"checked":""} ${off?"disabled":""}
       onchange="pickStage('${stage}','${option.key}')">
     <span class="n">${name}</span>
     ${current?'<span class="cur">Current</span>':""}
@@ -812,6 +902,40 @@ function providerCard(stage, option, spec){
     ${tier?`<span class="q" title="${tier}">${starText(tier)}</span>`:""}
     <span class="c">${cost}</span>
   </label>`;
+}
+
+function renderStrategies(){
+  $("strategies").innerHTML = STRATEGIES.map(s => `
+    <label class="scard ${strategyPick===s.key?"on":""}">
+      <input type="radio" name="strategy" value="${s.key}"
+        ${strategyPick===s.key?"checked":""}
+        onchange="pickStrategy('${s.key}')">
+      <span class="n">${s.label}</span>
+      ${s.recommend?'<span class="rec">추천</span>':""}
+      <span class="d">${s.note}</span>
+    </label>`).join("");
+}
+
+async function pickStrategy(key){
+  const strategy = STRATEGIES.find(s => s.key === key);
+  if(!strategy) return;
+
+  strategyPick = key;
+
+  // 기본값만 채운다. 잠그지 않는다 - 이 뒤에도 단계마다 바꿀 수 있다.
+  Object.keys(strategy.picks).forEach(stage => {
+    const option = optionOf(stage, strategy.picks[stage]);
+    if(!option.key) return;
+    uiPick[stage] = option.key;
+    stagePick[stage] = option.mode;
+  });
+
+  renderStrategies();
+  renderStagePicks();
+  renderCurrentProviders();
+  renderScriptBox();
+  showImageImport();
+  await refreshPlan();
 }
 
 function renderStagePicks(){
@@ -824,24 +948,28 @@ function renderStagePicks(){
     if(!spec) return "";
     return `<div class="pick">
       <div class="h">${spec.label}</div>
+      <div class="sub">${stageSummary(stage, spec)}</div>
       ${STAGE_UI[stage].map(o => providerCard(stage, o, spec)).join("")}
     </div>`;
   }).join("");
 }
 
-// 우측 상단. 지금 무엇이 도는지는 무엇을 고르든 항상 보여야 한다.
+// 우측 상단. 지금 무엇으로 만들지는 무엇을 고르든 항상 보여야 한다 -
+// 엔진 이름이 아니라 고른 방식을 적는다.
 function renderCurrentProviders(){
   if(!stageSpec) return;
   $("currentProviders").innerHTML = Object.keys(STAGE_UI).map(stage => {
     const spec = stageSpec.stages.find(s => s.stage === stage);
     if(!spec) return "";
-    return `<span class="cp"><b>${spec.label}</b> ${spec.engine.name}</span>`;
+    const option = optionOf(stage, uiPick[stage]);
+    return `<span class="cp ${cardKind(option)}"><b>${spec.label}</b> ${
+      optionName(stage, option, spec)}</span>`;
   }).join("");
 }
 
 // 대본을 붙여넣기/직접 작성으로 고른 경우에만 입력 자리를 연다.
 function renderScriptBox(){
-  const chosen = STAGE_UI.script.find(o => o.key === uiPick.script) || {};
+  const chosen = optionOf("script", uiPick.script);
 
   if(chosen.mode === "import"){
     $("scriptBox").innerHTML = `<div class="modebox" style="display:block">
@@ -880,13 +1008,14 @@ function renderScriptBox(){
 }
 
 async function pickStage(stage, key){
-  const option = STAGE_UI[stage].find(o => o.key === key);
-  if(!option) return;
+  const option = optionOf(stage, key);
+  if(!option.key) return;
 
   uiPick[stage] = key;
   stagePick[stage] = option.mode;
 
   renderStagePicks();
+  renderCurrentProviders();
   if(stage === "script") renderScriptBox();
   showImageImport();
   await refreshPlan();
@@ -909,7 +1038,7 @@ function planQuality(d){
 }
 
 // 계획의 api_stages는 generate면 전부 센다 - 메타데이터는 규칙 기반이고
-// BGM은 로컬 파일인데도 들어간다. 카드는 실제로 나가는 것만 센다.
+// BGM은 로컬 파일인데도 들어간다. 여기서는 실제로 나가는 것만 센다.
 function payingStages(d){
   return Object.keys(d.stages).filter(stage => {
     if(d.stages[stage].source_mode !== "generate") return false;
@@ -918,23 +1047,62 @@ function payingStages(d){
   });
 }
 
+// 단가를 모르는 단계. 계획은 배경음악도 여기 넣는데(Provider 미등록),
+// 그것은 로컬 mp3라 돈이 나가지 않는다 - 그것 때문에 "무료"가 영영
+// 안 나오면 안 된다.
+function unpricedStages(d){
+  return (d.cost.unknown_stages || []).filter(stage => {
+    const spec = stageSpec.stages.find(s => s.stage === stage);
+    return spec && spec.engine.calls_api;
+  });
+}
+
+// "Unknown"은 개발 용어다. 사용자가 할 수 있는 판단이 없다.
+function costWording(d){
+  const known = d.cost.known_total || 0;
+  const unpriced = unpricedStages(d);
+
+  if(!unpriced.length){
+    return known === 0 ? "무료" : "약 $" + known.toFixed(2);
+  }
+  if(known > 0) return "약 $" + known.toFixed(2) + " 이상";
+
+  return "계산 불가";
+}
+
+// 사용자가 얼마나 직접 만드는지. 만들지 않는 단계(사용 안 함)는
+// 분모에서 뺀다 - 끄는 것은 자동도 수동도 아니다.
+function automationShare(d){
+  let auto = 0, made = 0;
+  Object.keys(STAGE_UI).forEach(stage => {
+    const row = d.stages[stage];
+    if(!row || row.source_mode === "none") return;
+    made += 1;
+    if(row.source_mode === "generate") auto += 1;
+  });
+  return {
+    percent: made ? Math.round(auto / made * 100) : 0,
+    auto: auto, made: made,
+  };
+}
+
 function summaryCards(d){
-  const c = d.cost;
-  const cost = c.complete
-    ? (c.known_total === 0 ? "무료" : "$" + c.known_total.toFixed(4))
-    : "Unknown";
   const q = planQuality(d);
   const paying = payingStages(d);
+  const unpriced = unpricedStages(d);
+  const share = automationShare(d);
 
   return `<div class="cards">
-    <div class="card"><span class="k">예상 비용</span><b>${cost}</b>
-      ${c.complete ? "" :
-        `<span class="s">예상 비용 계산 불가 · 단가 미상 ${
-          c.unknown_stages.length}단계</span>`}</div>
-    <div class="card"><span class="k">예상 시간</span><b>${d.estimated_seconds}초</b>
-      <span class="s">실측 ${stageSpec.sample_size}편 중앙값</span></div>
     <div class="card"><span class="k">품질</span><b>${q.stars || "—"}</b>
       <span class="s">${q.tier}</span></div>
+    <div class="card"><span class="k">예상 시간</span><b>${d.estimated_seconds}초</b>
+      <span class="s">실측 ${stageSpec.sample_size}편 중앙값</span></div>
+    <div class="card"><span class="k">예상 비용</span><b>${costWording(d)}</b>
+      <span class="s">${unpriced.length
+        ? "단가 미상 : " + unpriced.map(stageLabel).join(" · ")
+        : "모든 단계 확인 가능"}</span></div>
+    <div class="card"><span class="k">자동 생성 비율</span><b>${share.percent}%</b>
+      <span class="s">${share.made}단계 중 ${share.auto}단계 자동</span></div>
     <div class="card"><span class="k">API</span><b>${paying.length} Stages</b>
       <span class="s">${paying.map(stageLabel).join(" · ") || "없음"}</span></div>
   </div>`;
@@ -960,17 +1128,10 @@ async function refreshPlan(){
 async function loadStages(){
   try{
     stageSpec = await (await fetch("/studio/api/production/stages")).json();
-    // 지금 파이프라인이 하는 일이 기본값이다.
-    Object.keys(STAGE_UI).forEach(stage => {
-      uiPick[stage] = "generate";
-      stagePick[stage] = "generate";
-    });
     HIDDEN_STAGES.forEach(stage => { stagePick[stage] = "generate"; });
-    renderCurrentProviders();
-    renderStagePicks();
-    renderScriptBox();
-    showImageImport();
-    await refreshPlan();
+    renderStrategies();
+    // 기본 전략이 단계별 기본값을 채운다 - 기본값을 두 곳에 적지 않는다.
+    await pickStrategy(strategyPick);
   }catch(e){ $("stagePicks").innerHTML =
     '<span class="muted">단계 정보를 불러오지 못했습니다.</span>'; }
 }

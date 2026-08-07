@@ -244,7 +244,9 @@ class TestTheSummary(unittest.TestCase):
 
         page = _page()
 
-        self.assertIn("예상 비용 계산 불가", page)
+        # Sprint118 - 라벨과 값이 카드에서 나뉘었다. 세 경우는 그대로다.
+        self.assertIn("예상 비용", page)
+        self.assertIn("계산 불가", page)
         self.assertIn("무료", page)
 
     def test_the_quality_comes_from_the_providers_not_from_a_guess(self):

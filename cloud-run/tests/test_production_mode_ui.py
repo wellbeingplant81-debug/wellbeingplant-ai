@@ -235,9 +235,11 @@ class TestTheScreen(unittest.TestCase):
 
         page = _page()
 
-        self.assertIn("예상 비용 계산 불가", page)
+        # Sprint118 - "Unknown"을 없애면서 문구가 사람의 말로 바뀌었다.
+        # 세 경우는 그대로다 - 무료 / 금액 / 계산 불가.
+        self.assertIn("계산 불가", page)
         self.assertIn('"무료"', page)
-        self.assertIn("known_total.toFixed(4)", page)
+        self.assertIn("known.toFixed(2)", page)
 
     def test_the_existing_generate_button_is_untouched(self):
         page = _page()

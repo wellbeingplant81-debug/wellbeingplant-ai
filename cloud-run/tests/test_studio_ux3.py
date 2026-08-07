@@ -250,7 +250,10 @@ class TestTheCurrentProviderCard(unittest.TestCase):
         block = page[page.index("function renderCurrentProviders"):]
         block = block[:block.index("\nfunction ")]
 
-        self.assertIn("engine.name", block)
+        # Sprint118 - 엔진 이름이 아니라 "지금 고른 방식"을 적는다.
+        # 이미지를 직접 업로드로 바꾸면 그렇게 보여야 한다.
+        self.assertIn("optionName", block)
+        self.assertIn("uiPick", block)
 
 
 class TestNothingBehindTheScreenMoved(unittest.TestCase):
