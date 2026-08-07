@@ -252,7 +252,10 @@ a{color:var(--accent)}
   overflow:hidden;color:var(--text)}
 .tl .card .foot{display:flex;align-items:center;gap:4px;margin-top:4px}
 .tl .card .foot .st{font-size:10px;color:var(--dim)}
-.tl .card .foot button{margin-left:auto;padding:0 5px;font-size:10px}
+.tl .card .foot button{padding:0 5px;font-size:10px}
+.tl .card .foot button:first-of-type{margin-left:auto}
+.tl .card .move{display:flex;gap:3px;margin-top:3px}
+.tl .card .move button{flex:1;padding:0;font-size:10px}
 .tl .panel{background:var(--panel);border:1px solid var(--line);
   border-radius:7px;padding:9px 10px}
 .tl .panel .h{font-size:11.5px;color:var(--dim);margin-bottom:5px}
@@ -1338,6 +1341,13 @@ let timelineDraft = null;
 // 서버는 모르는 일이다 - 화면이 방금 만든 것이므로 화면이 안다.
 let sceneOrigin = {};
 
+// Sprint145 - 지우기로 한 scene 번호. 파일은 지우지 않는다 - 표시만
+// 해 두고 렌더에서 뺀다. 되돌릴 수 있어야 한다.
+let sceneDeleted = [];
+
+// 끌고 있는 scene. 놓는 순간에만 쓴다.
+let sceneDragging = null;
+
 // 지금 고른 scene. 없으면 첫 scene을 본다.
 let scenePick = null;
 
@@ -1515,12 +1525,31 @@ function sceneCurrent(state){
 // Sprint144 - 지금 화면이 다루는 scene 목록. 손대지 않았으면 서버가
 // 준 것 그대로다. 목록이 두 곳에서 만들어지면 화면이 갈린다.
 function timelineScenes(state){
-  return timelineDraft || state.scenes;
+  if(timelineDraft) return timelineDraft;
+
+  // Sprint145 - 저장해 둔 차례가 있으면 그대로 보여 준다. 없으면
+  // 서버가 준 순서가 그대로 렌더 차례다.
+  const plan = state.timeline || {order: [], deleted: []};
+  if(!(plan.order || []).length && !(plan.deleted || []).length){
+    return state.scenes;
+  }
+
+  const gone = new Set(plan.deleted || []);
+  const alive = state.scenes.filter(s => !gone.has(s.scene));
+  const left = new Map(alive.map(s => [s.scene, s]));
+  const ordered = [];
+
+  (plan.order || []).forEach(n => {
+    if(left.has(n)){ ordered.push(left.get(n)); left.delete(n); }
+  });
+
+  return ordered.concat(alive.filter(s => left.has(s.scene)));
 }
 
 // 되돌릴 것이 있는가.
 function timelineDirty(){
   return timelineDraft !== null
+    || sceneDeleted.length > 0
     || Object.keys(sceneDraft).length > 0
     || Object.keys(promptDraft).length > 0;
 }
@@ -1530,6 +1559,55 @@ function timelineDirty(){
 // 가리키게 된다.
 function nextSceneNumber(scenes){
   return Math.max(0, ...scenes.map(s => s.scene)) + 1;
+}
+
+// Sprint145 - 차례를 바꾼다. 번호도 파일 이름도 그대로다 - 바뀌는
+// 것은 "몇 번째로 보여 주는가"뿐이다.
+function moveScene(number, delta){
+  if(!reviewState) return;
+
+  const scenes = timelineScenes(reviewState).slice();
+  const at = scenes.findIndex(s => s.scene === number);
+  const to = at + delta;
+
+  if(at < 0 || to < 0 || to >= scenes.length) return;
+
+  const [moved] = scenes.splice(at, 1);
+  scenes.splice(to, 0, moved);
+
+  timelineDraft = scenes;
+  scenePick = number;
+  renderReview(reviewState);
+}
+
+// 끌어다 놓기. 같은 moveScene을 쓴다 - 차례를 정하는 자리가 둘이면
+// 갈라진다.
+function dropScene(number){
+  if(sceneDragging == null || sceneDragging === number) return;
+
+  const scenes = timelineScenes(reviewState).slice();
+  const from = scenes.findIndex(s => s.scene === sceneDragging);
+  const to = scenes.findIndex(s => s.scene === number);
+
+  if(from < 0 || to < 0) return;
+
+  moveScene(sceneDragging, to - from);
+  sceneDragging = null;
+}
+
+// 지운다고 표시만 한다. 파일도 대본도 그대로 두고 렌더에서 뺀다.
+function deleteScene(number){
+  if(!reviewState) return;
+  if(!confirm(`Scene ${number}을 삭제하시겠습니까?`)) return;
+
+  const scenes = timelineScenes(reviewState).filter(
+    s => s.scene !== number);
+
+  if(!sceneDeleted.includes(number)) sceneDeleted.push(number);
+
+  timelineDraft = scenes;
+  if(scenePick === number) scenePick = scenes.length ? scenes[0].scene : null;
+  renderReview(reviewState);
 }
 
 // 빈 scene 하나. 대본과 image_prompt는 사람이 채워야 저장된다.
@@ -1584,6 +1662,7 @@ function revertTimeline(){
   sceneDraft = {};
   promptDraft = {};
   sceneOrigin = {};
+  sceneDeleted = [];
 
   if(reviewState) renderReview(reviewState);
 }
@@ -1669,7 +1748,11 @@ function sceneCard(s, picked, state){
   const secs = sceneSeconds(state, s.scene);
 
   return `<div class="card ${st.key} ${on?"on":""}"
-      data-scene="${s.scene}" onclick="pickScene(${s.scene})">
+      data-scene="${s.scene}" draggable="true"
+      ondragstart="sceneDragging=${s.scene}"
+      ondragover="event.preventDefault()"
+      ondrop="event.preventDefault();dropScene(${s.scene})"
+      onclick="pickScene(${s.scene})">
     <div class="no">${String(s.scene).padStart(2, "0")}
       ${secs != null
         ? `<span class="sec" title="${sceneLengthLabel(state)}">${
@@ -1683,6 +1766,14 @@ function sceneCard(s, picked, state){
         onclick="pickScene(${s.scene})">수정</button>
       <button class="sm ghost" title="대본을 복사해 새 scene을 만든다"
         onclick="event.stopPropagation();duplicateScene(${s.scene})">복제</button>
+    </div>
+    <div class="move">
+      <button class="sm ghost" title="앞으로"
+        onclick="event.stopPropagation();moveScene(${s.scene},-1)">◀</button>
+      <button class="sm ghost" title="뒤로"
+        onclick="event.stopPropagation();moveScene(${s.scene},1)">▶</button>
+      <button class="sm ghost" title="이 scene을 렌더에서 뺀다"
+        onclick="event.stopPropagation();deleteScene(${s.scene})">삭제</button>
     </div>
   </div>`;
 }
@@ -1965,8 +2056,13 @@ async function reviewSaveScript(){
   }));
 
   reviewNote("저장하는 중…");
+
+  // Sprint145 - 대본과 차례를 한 번에 보낸다. 서버에서 갈라져
+  // script.json과 timeline.json으로 따로 적힌다 - 한 파일에 섞이지
+  // 않는다.
   const d = await reviewCall("PUT", "/script", {
     data: {title: reviewState.title || "제목", scenes: scenes},
+    timeline: {order: scenes.map(s => s.scene), deleted: sceneDeleted},
   });
 
   if(d){
@@ -1975,6 +2071,7 @@ async function reviewSaveScript(){
     promptDraft = {};
     timelineDraft = null;
     sceneOrigin = {};
+    sceneDeleted = [];
     renderReview(d);
   }
 }

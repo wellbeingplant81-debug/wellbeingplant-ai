@@ -142,7 +142,16 @@ class TestBuildTimeline(unittest.TestCase):
             scene_timeline.timeline_total(timeline), sum(durations), places=9,
         )
 
-    def test_scenes_are_ordered_by_scene_number(self):
+    def test_scenes_keep_the_order_they_were_given(self):
+        """
+        Sprint64는 여기서 scene 번호로 정렬했다. Sprint145에서 걷었다 -
+        차례를 정하는 것은 부르는 쪽의 일이고, video_builder는 asset을
+        받은 목록 순서로 모으므로 여기서 다시 정렬하면 그림과 길이가
+        어긋난다.
+
+        빈틈도 겹침도 없다는 계약은 그대로다.
+        """
+
         durations = [3.0, 4.0, 5.0]
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -150,7 +159,11 @@ class TestBuildTimeline(unittest.TestCase):
             shuffled = [scenes[2], scenes[0], scenes[1]]
             timeline = self._build(tmp_dir, durations, shuffled)
 
-        self.assertEqual([s["scene"] for s in timeline], [1, 2, 3])
+        self.assertEqual([s["scene"] for s in timeline], [3, 1, 2])
+        self.assertEqual([s["duration"] for s in timeline], [5.0, 3.0, 4.0])
+
+        for before, after in zip(timeline, timeline[1:]):
+            self.assertEqual(before["end"], after["start"])
 
     def test_missing_audio_file_raises(self):
         durations = [3.0, 4.0]

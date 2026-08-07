@@ -70,7 +70,16 @@ def build_timeline(project_path: str, scenes: list) -> list:
     순간부터 화면과 소리가 어긋나기 때문이다.
     """
 
-    ordered = sorted(scenes, key=lambda scene: scene["scene"])
+    # Sprint145 - 받은 차례를 그대로 쓴다.
+    #
+    # 예전에는 여기서 scene 번호로 정렬했다. 그런데 video_builder는
+    # asset을 목록 순서로 모으고 길이만 여기서 받아 index로 짝짓는다 -
+    # 두 순서가 다르면 3번 그림에 2번 길이가 붙는다. 오늘까지는
+    # script.json이 늘 번호순이라 드러나지 않았을 뿐이다.
+    #
+    # 차례를 정하는 것은 부르는 쪽의 일이다. 여기서 다시 정하면
+    # 그쪽이 무엇을 정하든 소용이 없어진다.
+    ordered = list(scenes)
 
     timeline = []
     cursor = 0.0

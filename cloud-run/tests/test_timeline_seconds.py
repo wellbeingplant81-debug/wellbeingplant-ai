@@ -212,7 +212,8 @@ class TestThePayloadCarriesIt(unittest.TestCase):
             set(state),
             {"project_id", "step", "label", "title", "index", "total",
              "done", "scenes", "providers", "estimated_seconds",
-             "measured_seconds", "scene_seconds", "metadata"})
+             "measured_seconds", "scene_seconds", "timeline",
+             "metadata"})
 
 
 class TestTheCardShowsTheLength(unittest.TestCase):

@@ -8,6 +8,7 @@ from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
 from app.services.kenburns import build_kenburns_clip
+from app.services import scene_order
 from app.services.scene_timeline import build_timeline
 from app.services.transition_engine import annotate_scenes_with_transitions
 
@@ -137,7 +138,11 @@ def _effects_for_clip(index, last_index, scene, duration, overlap):
 
 def build_video(project_path: str):
 
-    scenes = annotate_scenes_with_transitions(_load_scenes(project_path))
+    # Sprint145 - 사람이 정한 차례가 있으면 그대로 따른다. 없으면
+    # script.json에 적힌 그대로다(예전과 같다).
+    scenes = annotate_scenes_with_transitions(
+        scene_order.for_render(project_path, _load_scenes(project_path)),
+    )
 
     if not scenes:
         raise Exception("Scene이 없습니다.")

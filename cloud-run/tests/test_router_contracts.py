@@ -147,9 +147,13 @@ ENDPOINTS = [
     ("POST", "/studio/api/review/{project_id}/voices/{scene}", None,
      ["app.services.studio_review.regenerate_voice"],
      f"/studio/api/review/{PROJECT_ID}/voices/1"),
+    # Sprint145 - 렌더 앞에 검사가 생겼다. 빈 임시 프로젝트는 당연히
+    # 걸리므로, 계약을 보려면 "걸릴 것이 없는" 상태를 흉내 내야 한다.
     ("POST", "/studio/api/review/{project_id}/render", None,
-     ["app.services.studio_review.render"],
-     f"/studio/api/review/{PROJECT_ID}/render"),
+     ["app.services.studio_review.render",
+      "app.services.scene_order.render_problems"],
+     f"/studio/api/review/{PROJECT_ID}/render",
+     {"app.services.scene_order.render_problems": []}),
     ("POST", "/studio/api/production/plan",
      {"selections": {"script": "generate"}}, []),
     ("POST", "/studio/api/production/project",
@@ -199,11 +203,20 @@ class RouterContractTestCase(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.addCleanup(shutil.rmtree, self.tmp_dir, True)
 
-    def call(self, method, path, payload, services):
-        """서비스를 autospec으로 패치한 채 엔드포인트를 호출한다."""
+    def call(self, method, path, payload, services, returns=None):
+        """서비스를 autospec으로 패치한 채 엔드포인트를 호출한다.
 
+        Sprint145 - 돌려줄 값을 정해야 하는 서비스가 생겼다. 검사
+        함수는 "문제 목록"을 돌려주는데, MagicMock은 그 자체로 참이라
+        아무 문제가 없는 프로젝트도 걸린 것처럼 보인다."""
+
+        returns = returns or {}
         patchers = [patch(target, autospec=True) for target in services]
         mocks = [p.start() for p in patchers]
+
+        for target, mock in zip(services, mocks):
+            if target in returns:
+                mock.return_value = returns[target]
 
         for p in patchers:
             self.addCleanup(p.stop)
@@ -267,10 +280,11 @@ class TestValidRequestsNeverRaiseTypeError(RouterContractTestCase):
 
             # 경로 파라미터가 있는 엔드포인트는 구체 경로로 호출한다.
             call_path = entry[4] if len(entry) > 4 else path
+            returns = entry[5] if len(entry) > 5 else None
 
             with self.subTest(endpoint=f"{method} {path}"):
                 response, mocks = self.call(
-                    method, call_path, payload, services,
+                    method, call_path, payload, services, returns,
                 )
 
                 self.assertEqual(

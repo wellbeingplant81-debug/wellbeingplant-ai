@@ -17,6 +17,7 @@ from app.steps import step05_video
 from app.steps import step06_thumbnail
 from app.steps import step07_quality
 from app.services import metadata_service
+from app.services import scene_order
 from app.services import studio_upload
 from app.services import prompt_effectiveness_service
 from app.services import prompt_enrichment_service
@@ -311,9 +312,19 @@ def run_pipeline(
     # 않는다(write 안에서 삼킨다).
     asset_observatory.write(project_path)
 
+    # Sprint145 - 사람이 정한 차례가 있으면 여기서부터 그대로 간다.
+    #
+    # voice.wav는 step03이 받은 목록 순서로 이어 붙는다. script.json은
+    # 위에서 이미 저장했으므로 원래 차례 그대로 남고(순서를 대본에
+    # 섞지 않는다), 이 아래로만 렌더용 차례가 흐른다.
+    #
+    # timeline.json이 없으면 받은 목록 그대로다 - 예전 파이프라인은
+    # 아무것도 달라지지 않는다.
+    render_scenes = scene_order.for_render(project_path, data["scenes"])
+
     t0 = time.perf_counter()
     step03_voice_resolve.run(
-        data["scenes"],
+        render_scenes,
         project_path,
     )
     timings["tts_generation"] = time.perf_counter() - t0

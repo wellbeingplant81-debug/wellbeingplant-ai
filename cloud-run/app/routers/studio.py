@@ -883,6 +883,11 @@ def job(job_id: str, console_from: int = 0):
 class ReviewScriptRequest(BaseModel):
     # 사람이 고친 대본 그대로. 우리가 손대지 않는다.
     data: dict
+    # Sprint145 - 보여 줄 차례. {"order": [...], "deleted": [...]}
+    #
+    # 대본과 한 번에 오지만 한 파일에 섞이지 않는다 - 대본은
+    # script.json, 차례는 timeline.json이다. 없으면 차례는 그대로 둔다.
+    timeline: dict = None
 
 
 class ReviewProviderRequest(BaseModel):
@@ -987,7 +992,7 @@ def _review_metadata(path):
 def review_state(project_id: str):
     """어디까지 왔는가. 순수 읽기다 - 산출물이 말한다."""
 
-    from app.services import provider_selection, studio_review
+    from app.services import provider_selection, scene_order, studio_review
 
     path = _project_path(project_id)
     state = studio_review.state(path)
@@ -1006,6 +1011,9 @@ def review_state(project_id: str):
         # Sprint143 - scene마다의 길이. 합이 위 총합과 같다 - 실측이
         # 있으면 실측, 없으면 예상이다.
         "scene_seconds": scene_seconds,
+        # Sprint145 - 사람이 정한 차례. 적은 적이 없으면 비어 있고,
+        # 그때는 위 scenes 순서가 그대로 렌더 차례다.
+        "timeline": scene_order.load(path),
         "metadata": _review_metadata(path),
         "scenes": [
             {
@@ -1094,7 +1102,7 @@ def review_generate_script(project_id: str):
 def review_save_script(project_id: str, request: ReviewScriptRequest):
     """사람이 고친 대본을 확정한다. 다시 만들지 않는다."""
 
-    from app.services import studio_review
+    from app.services import scene_order, studio_review
 
     path = _project_path(project_id)
 
@@ -1102,6 +1110,15 @@ def review_save_script(project_id: str, request: ReviewScriptRequest):
         studio_review.save_script(path, request.data)
     except studio_review.ReviewError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Sprint145 - 차례는 따로 적는다. 대본이 먼저 통과한 뒤에만 적는다 -
+    # 거절당한 대본의 차례를 남겨 두면 다음에 어긋난 것을 읽는다.
+    if request.timeline is not None:
+        scene_order.save(
+            path,
+            order=request.timeline.get("order"),
+            deleted=request.timeline.get("deleted"),
+        )
 
     return review_state(project_id)
 
@@ -1183,10 +1200,18 @@ def review_render(project_id: str):
     Resolver들이 확정된 대본·이미지·음성을 보고 01·02·03을 건너뛴다.
     """
 
-    from app.services import studio_review
+    from app.services import scene_order, studio_review
 
     path = _project_path(project_id)
     meta = studio_service._load(os.path.join(path, "project.json")) or {}
+
+    # Sprint145 - 걸기 전에 본다. 렌더 도중에 멈추면 이미 몇 분을 쓴
+    # 뒤이고, 그때의 실패 문구는 사람이 읽을 수 있는 말이 아니다.
+    state = studio_review.state(path)
+    problems = scene_order.render_problems(path, state.get("scenes") or [])
+
+    if problems:
+        raise HTTPException(status_code=400, detail=" · ".join(problems))
 
     job_id = studio_review.render(
         meta.get("topic") or "",

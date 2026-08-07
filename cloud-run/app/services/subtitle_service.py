@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from app.services.duration_optimizer import get_audio_duration
 from app.services import audio_policy
+from app.services import scene_order
 from app.services.scene_timeline import build_timeline
 from app.services.kenburns import VIDEO_WIDTH
 from app.services.subtitle_placement_service import (
@@ -501,7 +502,9 @@ def create_subtitle(project_path: str):
 
         data = json.load(f)
 
-    scenes = data["scenes"]
+    # Sprint145 - 사람이 정한 차례가 있으면 그대로 따른다. 없으면
+    # script.json에 적힌 그대로다(예전과 같다).
+    scenes = scene_order.for_render(project_path, data["scenes"])
 
     scene_audio_folder = os.path.join(
         project_path,
@@ -509,19 +512,25 @@ def create_subtitle(project_path: str):
         "scenes",
     )
 
-    scene_audios = sorted(
-        glob.glob(
-            os.path.join(
-                scene_audio_folder,
-                audio_policy.SCENE_AUDIO_GLOB,
-            )
-        )
-    )
+    # Sprint145 - 파일 개수를 세지 않고 scene마다 제 것이 있는지 본다.
+    #
+    # 개수 세기는 "scene마다 음성이 있다"의 대용이었는데, 지운 scene의
+    # wav가 남아 있으면 개수만 어긋나 렌더가 멈췄다. 파일을 지우지
+    # 않는 것이 이 저장소의 방침이므로(되돌릴 수 있어야 한다) 묻는
+    # 방식을 바꾼다 - 이쪽이 원래 묻고 싶던 것이기도 하다.
+    missing = [
+        scene["scene"] for scene in scenes
+        if not os.path.exists(os.path.join(
+            scene_audio_folder,
+            audio_policy.scene_audio_filename(scene["scene"]),
+        ))
+    ]
 
-    if len(scene_audios) != len(scenes):
+    if missing:
 
         raise Exception(
-            "Scene 오디오 개수와 Scene 개수가 다릅니다."
+            "Scene 음성이 없습니다: "
+            + ", ".join(str(number) for number in missing)
         )
 
     # Sprint64 - Scene Timeline 단일화. 자막 cue의 시각은 여기서 직접

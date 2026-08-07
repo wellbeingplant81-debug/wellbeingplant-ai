@@ -23,6 +23,9 @@ Sprint142가 Timeline을, Sprint143이 시간을 놓았다. 이번에는 편집�
 둘 다 Render 쪽을 고쳐야 풀린다. 이번 스프린트는 그것을 금지하므로
 넣지 않는다 - 되는 척하는 버튼을 두느니 없는 편이 낫다.
 
+(Sprint145에서 그 둘을 풀고 이동·삭제를 넣었다. 아래 시험 중 "없다"고
+말하던 것들은 "무엇이 풀렸는가"로 바뀌었다.)
+
 무엇을 하는가
 -------------
 추가와 복제, 그리고 저장 전 되돌리기. 셋 다 화면 안에서만 일어나고,
@@ -287,46 +290,67 @@ class TestTheValidatorStillDecides(unittest.TestCase):
             len(step01_script_resolve.validate(data)["scenes"]), 2)
 
 
-class TestMovingAndDeletingAreNotHere(unittest.TestCase):
+class TestMovingAndDeletingArrivedInSprint145(unittest.TestCase):
     """
-    되는 척하는 버튼을 두지 않는다. 왜 없는지는 이 시험이 근거를
-    들고 있다 - 다음에 붙일 사람이 같은 자리를 다시 확인하지 않도록.
+    Sprint144에는 둘 다 없었다. 화면만으로는 정직하게 만들 수 없었기
+    때문이다.
+
+        이동   build_timeline이 scene 번호로 다시 정렬해 목록 순서를
+               덮어썼다
+        삭제   subtitle_service가 wav 개수와 scene 개수를 맞췄다
+
+    Sprint145가 그 둘을 풀었으므로 이제 있다. 이 시험은 "왜 없었는가"의
+    자리를 "무엇이 풀렸는가"로 바꿔 든다.
     """
 
-    def test_no_move_handler_exists(self):
+    def test_moving_is_here_now(self):
         script = _script()
 
-        for name in ("moveScene", "dragScene", "reorderScene"):
-            with self.subTest(name=name):
-                self.assertNotIn(f"function {name}(", script)
+        self.assertIn("function moveScene(", script)
+        self.assertIn("function dropScene(", script)
 
-    def test_no_delete_handler_exists(self):
-        script = _script()
+    def test_deleting_is_here_now(self):
+        self.assertIn("function deleteScene(", _script())
 
-        for name in ("deleteScene", "removeScene"):
-            with self.subTest(name=name):
-                self.assertNotIn(f"function {name}(", script)
-
-    def test_the_render_still_orders_by_scene_number(self):
-        """이동이 왜 안 되는지의 근거."""
+    def test_the_render_no_longer_reorders_behind_our_back(self):
+        """이동이 막혀 있던 이유가 풀렸다."""
 
         from app.services import scene_timeline
 
         with open(scene_timeline.__file__, encoding="utf-8") as f:
             source = f.read()
 
-        self.assertIn('sorted(scenes, key=lambda scene: scene["scene"])',
-                      source)
+        self.assertNotIn('sorted(scenes, key=lambda scene: scene["scene"])',
+                         source)
 
-    def test_the_subtitles_still_count_the_audio_files(self):
-        """삭제가 왜 안 되는지의 근거."""
+    def test_the_subtitles_no_longer_count_the_files(self):
+        """삭제가 막혀 있던 이유가 풀렸다."""
 
         from app.services import subtitle_service
 
         with open(subtitle_service.__file__, encoding="utf-8") as f:
             source = f.read()
 
-        self.assertIn("len(scene_audios) != len(scenes)", source)
+        self.assertNotIn("len(scene_audios) != len(scenes)", source)
+
+    def test_deleting_asks_first(self):
+        block = _function("deleteScene")
+
+        self.assertIn("confirm(", block)
+
+    def test_deleting_removes_no_file(self):
+        """지우는 것은 표시만 한다 - 되돌릴 수 있어야 한다."""
+
+        block = _without_comments(_function("deleteScene"))
+
+        self.assertIn("sceneDeleted", block)
+        self.assertNotIn("fetch(", block)
+
+    def test_moving_keeps_the_number(self):
+        block = _without_comments(_function("moveScene"))
+
+        self.assertNotIn("nextSceneNumber", block)
+        self.assertIn("splice", block)
 
 
 class TestNothingBelowTheScreenMoved(unittest.TestCase):
