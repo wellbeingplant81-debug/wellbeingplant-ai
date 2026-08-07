@@ -161,12 +161,14 @@ class TestItIsWiredNow(unittest.TestCase):
                 provider_selection.require_wired("script", name)
 
     def test_all_three_are_listed(self):
-        self.assertEqual(set(provider_selection.WIRED["script"]),
-                         {"gemini", "claude", "openai"})
+        """Sprint141에서 DeepSeek가 넷째로 붙었다. 셋은 그대로다."""
 
-    def test_deepseek_is_still_refused(self):
+        self.assertLessEqual({"gemini", "claude", "openai"},
+                             set(provider_selection.WIRED["script"]))
+
+    def test_a_name_nobody_added_is_still_refused(self):
         with self.assertRaises(ProviderNotWired):
-            provider_selection.require_wired("script", "deepseek")
+            provider_selection.require_wired("script", "그런거없음")
 
     def test_current_still_passes(self):
         self.assertIsNone(provider_selection.require_wired("script", None))
@@ -587,9 +589,13 @@ class TestTheCatalogOffersIt(unittest.TestCase):
                 self.assertFalse(
                     getattr(self._provider(name), "coming_soon", False))
 
-    def test_deepseek_is_still_coming_soon(self):
-        self.assertTrue(
-            getattr(self._provider("deepseek"), "coming_soon", False))
+    def test_no_script_place_is_empty_anymore(self):
+        """Sprint141 - 대본 자리는 하나도 남지 않았다."""
+
+        for provider in self.registry.for_stage(stages.SCRIPT):
+            with self.subTest(name=provider.name):
+                self.assertFalse(
+                    getattr(provider, "coming_soon", False))
 
     def test_without_a_key_it_says_which(self):
         with patch.dict(os.environ, {}, clear=True):

@@ -5,7 +5,8 @@ import os
 from app.services import provider_selection
 from app.services.duration_gate import generate_script_within_duration
 
-# Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI.
+# Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI,
+# Sprint141 DeepSeek.
 # 이름 -> 모델을 직접 부르는 모듈.
 #
 # 여기 한 줄이 곧 새 Provider다. 분기를 늘리면 세 번째부터 서로
@@ -19,6 +20,7 @@ DIRECT_SCRIPT_PROVIDERS = {
     provider_selection.GEMINI: "app.providers.gemini_script_provider",
     provider_selection.CLAUDE: "app.providers.claude_script_provider",
     provider_selection.OPENAI: "app.providers.openai_script_provider",
+    provider_selection.DEEPSEEK: "app.providers.deepseek_script_provider",
 }
 
 

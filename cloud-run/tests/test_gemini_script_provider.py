@@ -159,8 +159,8 @@ class TestItIsWiredNow(unittest.TestCase):
 
         self.assertIn("gemini", provider_selection.WIRED["script"])
 
-    def test_the_others_are_still_refused(self):
-        for name in ("deepseek",):
+    def test_a_name_nobody_added_is_still_refused(self):
+        for name in ("그런거없음",):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired):
                     provider_selection.require_wired("script", name)
@@ -583,11 +583,11 @@ class TestTheCatalogOffersIt(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "0", result.stderr[-800:])
 
     def test_the_unwired_ones_are_still_coming_soon(self):
-        for name in ("deepseek",):
-            with self.subTest(name=name):
-                self.assertTrue(getattr(
-                    self.registry.get(stages.SCRIPT, name),
-                    "coming_soon", False))
+        # Sprint141 - 대본 자리는 하나도 남지 않았다.
+        for provider in self.registry.for_stage(stages.SCRIPT):
+            with self.subTest(name=provider.name):
+                self.assertFalse(
+                    getattr(provider, "coming_soon", False))
 
     def test_without_a_key_it_says_which(self):
         with patch.dict(os.environ, {}, clear=True):

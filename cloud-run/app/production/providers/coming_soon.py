@@ -81,11 +81,9 @@ _ALREADY = (
 
 COMING_SOON = (
     # --- 대본 ---
-    # Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI는 실제로
-    # 붙었다. generated_script.py로 옮겼다.
+    # Sprint133~141에 Gemini·Claude·OpenAI·DeepSeek가 모두 붙었다.
+    # generated_script.py로 옮겼다 - 대본 자리는 하나도 남지 않았다.
     # Sprint134 - Claude도 실제로 붙었다. generated_script.py로 옮겼다.
-    ("deepseek", stages.SCRIPT, "DeepSeek", "DeepSeek",
-     ("DEEPSEEK_API_KEY",), ""),
 
     # --- 이미지 ---
     ("imagen", stages.IMAGE, "Imagen", "Google",

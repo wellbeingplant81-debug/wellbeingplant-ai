@@ -57,6 +57,7 @@ GPT_IMAGE = "gpt_image"
 GEMINI = "gemini"
 CLAUDE = "claude"
 OPENAI = "openai"
+DEEPSEEK = "deepseek"
 
 
 class ProviderNotWired(RuntimeError):
@@ -93,10 +94,10 @@ def _wired_for(stage):
     if stage == "image":
         return (FLUX, GPT_IMAGE)
 
-    # Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI가 실제로
-    # 붙었다. deepseek 자리는 여전히 비어 있다.
+    # Sprint133~141에 넷이 모두 붙었다. 대본 단계에는 자리만 있는
+    # 것이 하나도 남지 않았다.
     if stage == "script":
-        return (GEMINI, CLAUDE, OPENAI)
+        return (GEMINI, CLAUDE, OPENAI, DEEPSEEK)
 
     return ()
 

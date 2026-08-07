@@ -182,7 +182,7 @@ class TestItIsWiredNow(unittest.TestCase):
         self.assertEqual(provider_selection.WIRED["metadata"], ("manual",))
 
         with self.assertRaises(ProviderNotWired):
-            provider_selection.require_wired("script", "deepseek")
+            provider_selection.require_wired("script", "그런거없음")
 
 
 class TestItRefusesWithoutSettings(_Case):

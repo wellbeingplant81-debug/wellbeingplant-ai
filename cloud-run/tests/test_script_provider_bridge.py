@@ -114,13 +114,18 @@ class TestWhatIsActuallyWired(_Case):
         """Sprint133 Gemini, Sprint134 Claude, Sprint135 OpenAI."""
 
         self.assertEqual(set(provider_selection.WIRED["script"]),
-                         {"gemini", "claude", "openai"})
+                         {"gemini", "claude", "openai", "deepseek"})
 
     def test_choosing_nothing_passes(self):
         provider_selection.require_wired("script", None)
 
     def test_choosing_anything_else_is_refused(self):
-        for name in ("deepseek",):
+        """
+        Sprint141 - 대본 자리는 넷 다 붙었다. 이제 거절당하는 것은
+        아무도 등록하지 않은 이름뿐이다.
+        """
+
+        for name in ("그런거없음",):
             with self.subTest(name=name):
                 with self.assertRaises(ProviderNotWired) as caught:
                     provider_selection.require_wired("script", name)
@@ -198,7 +203,7 @@ class TestTheNameReachesTheGenerator(_Case):
     def test_the_generator_refuses_what_is_not_wired(self):
         from app.steps import step01_script
 
-        provider_selection.save(self.project, {"script": "deepseek"})
+        provider_selection.save(self.project, {"script": "그런거없음"})
 
         with self.assertRaises(ProviderNotWired):
             step01_script.run("주제", self.project)
@@ -206,7 +211,7 @@ class TestTheNameReachesTheGenerator(_Case):
     def test_a_refusal_writes_no_script(self):
         from app.steps import step01_script
 
-        provider_selection.save(self.project, {"script": "deepseek"})
+        provider_selection.save(self.project, {"script": "그런거없음"})
 
         with self.assertRaises(ProviderNotWired):
             step01_script.run("주제", self.project)

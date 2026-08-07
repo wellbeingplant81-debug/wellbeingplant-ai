@@ -133,6 +133,9 @@ GENERATED_SCRIPT_PROVIDERS = (
      "app.providers.openai_script_provider",
      "OpenAI를 직접 불러 대본을 만듭니다. 이미지의 GPT Image와 같은 "
      "키를 씁니다. " + _BYPASSES),
+    ("deepseek", "DeepSeek", "DeepSeek", "DEEPSEEK_API_KEY",
+     "app.providers.deepseek_script_provider",
+     "DeepSeek를 직접 불러 대본을 만듭니다. " + _BYPASSES),
 )
 
 
