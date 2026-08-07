@@ -212,11 +212,17 @@ class TestThePanelReusesEverything(unittest.TestCase):
         self.assertIn("playVoice", _function("scenePanel"))
 
     def test_saving_still_sends_every_scene(self):
-        """한 scene만 열려 있어도 나머지 문장이 사라지면 안 된다."""
+        """
+        한 scene만 열려 있어도 나머지 문장이 사라지면 안 된다.
+
+        Sprint144에서 보낼 목록이 화면이 고치고 있는 그것
+        (timelineScenes)으로 바뀌었다 - 손대지 않았으면 서버가 준
+        목록과 같다.
+        """
 
         block = _function("reviewSaveScript")
 
-        self.assertIn("reviewState.scenes.map", block)
+        self.assertIn("timelineScenes(reviewState).map", block)
         self.assertIn("value: s.narration", block)
 
     def test_no_new_api_path_was_invented(self):

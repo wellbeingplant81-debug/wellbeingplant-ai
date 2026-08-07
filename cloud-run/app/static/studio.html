@@ -241,6 +241,8 @@ a{color:var(--accent)}
 .tl .card.fail{border-left-color:#f85149}
 .tl .card.edit{border-left-color:#a371f7}
 .tl .card.none{border-left-color:var(--line)}
+.tl .card.todo{border-left-color:#58a6ff;border-style:dashed}
+.tl .panel .sub{font-size:10.5px;color:var(--dim);margin:6px 0 3px}
 .tl .card .no{display:flex;align-items:center;gap:4px;font-size:10px;
   color:var(--dim);font-weight:600}
 .tl .card .no .sec{margin-left:auto;font-weight:400}
@@ -1320,6 +1322,22 @@ let sceneMark = {};
 // 여기 들고 있지 않으면 scene을 바꾸는 순간 고친 글이 조용히 사라진다.
 let sceneDraft = {};
 
+// Sprint144 - image_prompt도 저장에 실려 간다. 새 scene은 이 값이
+// 없으면 서버가 거절한다(validate의 필수 필드).
+let promptDraft = {};
+
+// 화면이 고치고 있는 scene 목록. 손대기 전에는 null - 그때는 서버가
+// 준 목록이 그대로 진실이다.
+//
+// 저장 전에는 프로젝트 파일을 건드리지 않는다. 되돌리면 아무 일도
+// 없었던 것이 된다.
+let timelineDraft = null;
+
+// 그 scene이 어디서 왔는가. {번호: "new" | "copy"}
+//
+// 서버는 모르는 일이다 - 화면이 방금 만든 것이므로 화면이 안다.
+let sceneOrigin = {};
+
 // 지금 고른 scene. 없으면 첫 scene을 본다.
 let scenePick = null;
 
@@ -1365,9 +1383,10 @@ function canvasStatus(state){
 // Sprint142 - Timeline에서 고른 scene을 그대로 보여 준다. 새로 재거나
 // 계산하지 않는다 - 서버가 준 그림과 글과 음성뿐이다.
 function canvasScene(state){
-  if(!state.scenes.length) return "";
+  if(!timelineScenes(state).length) return "";
 
-  const s = state.scenes.find(x => x.scene === sceneCurrent(state));
+  const s = timelineScenes(state).find(
+    x => x.scene === sceneCurrent(state));
   if(!s) return "";
 
   const secs = sceneSeconds(state, s.scene);
@@ -1465,22 +1484,108 @@ function reviewMetadataStep(state){
 // 어떤 상태인가"를 한눈에 볼 수 없다. 여기서는 한 줄이고, 고르면
 // 아래에서 그 하나만 고친다.
 function sceneTimeline(state){
-  if(!state.scenes.length) return "";
+  const scenes = timelineScenes(state);
+  if(!scenes.length) return "";
 
   const picked = sceneCurrent(state);
 
   return `<div class="tl">
-    <div class="strip">${state.scenes.map(
+    <div class="strip">${scenes.map(
       s => sceneCard(s, picked, state)).join(
         `<span class="rail"></span>`)}</div>
+    <div class="rowbtns">
+      <button class="sm ghost" onclick="addScene()">+ Scene 추가</button>
+      ${timelineDirty()
+        ? `<button class="sm ghost" onclick="revertTimeline()"
+             title="저장 전이므로 프로젝트 파일은 그대로다">되돌리기</button>
+           <span class="muted">저장 전입니다</span>`
+        : ""}
+    </div>
     ${scenePanel(state, picked)}
   </div>`;
 }
 
 // 고른 것이 없거나 사라졌으면 첫 scene을 본다.
 function sceneCurrent(state){
-  const has = state.scenes.some(s => s.scene === scenePick);
-  return has ? scenePick : state.scenes[0].scene;
+  const scenes = timelineScenes(state);
+  const has = scenes.some(s => s.scene === scenePick);
+  return has ? scenePick : (scenes.length ? scenes[0].scene : null);
+}
+
+// Sprint144 - 지금 화면이 다루는 scene 목록. 손대지 않았으면 서버가
+// 준 것 그대로다. 목록이 두 곳에서 만들어지면 화면이 갈린다.
+function timelineScenes(state){
+  return timelineDraft || state.scenes;
+}
+
+// 되돌릴 것이 있는가.
+function timelineDirty(){
+  return timelineDraft !== null
+    || Object.keys(sceneDraft).length > 0
+    || Object.keys(promptDraft).length > 0;
+}
+
+// 다음 번호. 쓰던 번호를 다시 쓰지 않는다 - 번호가 곧 파일 이름이라
+// (images/scene{N}.png, audio/scenes/scene{N}.wav) 되쓰면 남의 그림을
+// 가리키게 된다.
+function nextSceneNumber(scenes){
+  return Math.max(0, ...scenes.map(s => s.scene)) + 1;
+}
+
+// 빈 scene 하나. 대본과 image_prompt는 사람이 채워야 저장된다.
+function addScene(){
+  if(!reviewState) return;
+
+  const scenes = timelineScenes(reviewState).slice();
+  const number = nextSceneNumber(scenes);
+
+  scenes.push({scene: number, narration: "", image_prompt: "",
+               has_image: false, has_voice: false,
+               image_url: null, voice_url: null});
+
+  sceneOrigin[number] = "new";
+  timelineDraft = scenes;
+  scenePick = number;
+  renderReview(reviewState);
+}
+
+// 대본과 image_prompt만 가져온다.
+//
+// 그림과 음성은 scene 번호로 된 파일이고 복제본은 새 번호를 받으므로
+// 그 파일이 없다. 있다고 말하지 않는다 - 기존 생성 버튼을 누르면
+// 채워진다. 여기서 자동으로 만들지 않는다.
+function duplicateScene(number){
+  if(!reviewState) return;
+
+  const scenes = timelineScenes(reviewState).slice();
+  const source = scenes.find(s => s.scene === number);
+  if(!source) return;
+
+  const copy = nextSceneNumber(scenes);
+
+  scenes.push({scene: copy,
+               narration: sceneDraft[number] !== undefined
+                 ? sceneDraft[number] : source.narration,
+               image_prompt: promptDraft[number] !== undefined
+                 ? promptDraft[number] : source.image_prompt,
+               has_image: false, has_voice: false,
+               image_url: null, voice_url: null});
+
+  sceneOrigin[copy] = "copy";
+  timelineDraft = scenes;
+  scenePick = copy;
+  renderReview(reviewState);
+}
+
+// 저장 전으로 되돌린다. 서버는 아무것도 모르는 상태였으므로 화면이
+// 들고 있던 것만 놓으면 된다.
+function revertTimeline(){
+  timelineDraft = null;
+  sceneDraft = {};
+  promptDraft = {};
+  sceneOrigin = {};
+
+  if(reviewState) renderReview(reviewState);
 }
 
 // Sprint143 - scene 하나의 길이. 서버가 준 것을 그대로 읽는다 -
@@ -1538,6 +1643,16 @@ function sceneStatus(s){
   if(sceneMark[s.scene] === "busy") return {key:"busy", label:"생성 중"};
   if(sceneMark[s.scene] === "failed") return {key:"fail", label:"실패"};
 
+  // Sprint144 - 방금 화면이 만든 것. 저장하기 전까지는 서버가 모른다.
+  const origin = sceneOrigin[s.scene];
+  const words = sceneDraft[s.scene] !== undefined
+    ? sceneDraft[s.scene] : s.narration;
+
+  if(origin === "new" && !(words || "").trim()){
+    return {key:"todo", label:"작성 필요"};
+  }
+  if(origin) return {key:"edit", label:"수정 필요"};
+
   const draft = sceneDraft[s.scene];
   if(draft !== undefined && draft !== s.narration){
     return {key:"edit", label:"수정됨"};
@@ -1564,7 +1679,10 @@ function sceneCard(s, picked, state){
       : `<div class="noimg"></div>`}
     <div class="line">${sceneFirstLine(s.narration)}</div>
     <div class="foot"><span class="st">${st.label}</span>
-      <button class="sm ghost" onclick="pickScene(${s.scene})">수정</button>
+      <button class="sm ghost" title="이 scene 고치기"
+        onclick="pickScene(${s.scene})">수정</button>
+      <button class="sm ghost" title="대본을 복사해 새 scene을 만든다"
+        onclick="event.stopPropagation();duplicateScene(${s.scene})">복제</button>
     </div>
   </div>`;
 }
@@ -1572,7 +1690,7 @@ function sceneCard(s, picked, state){
 // 고른 scene 하나만 고친다. 부르는 것은 전부 Sprint121이 만들어 둔
 // 그대로다 - 새 API도 새 동작도 없다.
 function scenePanel(state, picked){
-  const s = state.scenes.find(x => x.scene === picked);
+  const s = timelineScenes(state).find(x => x.scene === picked);
   if(!s) return "";
 
   return `<div class="panel">
@@ -1581,6 +1699,11 @@ function scenePanel(state, picked){
       oninput="noteEdit(${s.scene}, this.value)">${
         sceneDraft[s.scene] !== undefined
           ? sceneDraft[s.scene] : s.narration}</textarea>
+    <div class="sub">이미지 프롬프트</div>
+    <textarea id="rimg${s.scene}" rows="2"
+      oninput="notePrompt(${s.scene}, this.value)">${
+        promptDraft[s.scene] !== undefined
+          ? promptDraft[s.scene] : (s.image_prompt || "")}</textarea>
     <div class="rowbtns">
       <button class="sm ghost" onclick="reviewSaveScript()">수정 저장</button>
       <button class="sm ghost"
@@ -1630,7 +1753,7 @@ function paintTimeline(){
 
   const picked = sceneCurrent(reviewState);
 
-  reviewState.scenes.forEach(s => {
+  timelineScenes(reviewState).forEach(s => {
     const card = document.querySelector(`.tl .card[data-scene="${s.scene}"]`);
     if(!card) return;
 
@@ -1656,6 +1779,13 @@ function paintTimeline(){
 // 사라진다. 고친 글만 들고 있다가 카드의 상태 글자와 색을 바꾼다.
 function noteEdit(number, value){
   sceneDraft[number] = value;
+  paintTimeline();
+}
+
+// image_prompt도 저장에 실려 간다. 새 scene은 이 값이 없으면 서버가
+// 거절한다 - 그래서 화면이 들고 있는다.
+function notePrompt(number, value){
+  promptDraft[number] = value;
   paintTimeline();
 }
 
@@ -1824,12 +1954,14 @@ async function reviewSaveScript(){
   // 사람이 고친 문장만 바꾼다. 나머지는 서버가 들고 있던 그대로다.
   // Sprint142 - 열려 있지 않은 scene의 글도 함께 보낸다. 화면이
   // 들고 있던 것이 먼저이고, 없으면 서버가 준 그대로다.
-  const scenes = reviewState.scenes.map(s => ({
+  // Sprint144 - 보낼 목록은 화면이 고치고 있던 그것이다.
+  const scenes = timelineScenes(reviewState).map(s => ({
     scene: s.scene,
     narration: sceneDraft[s.scene] !== undefined
       ? sceneDraft[s.scene]
       : ($(`rnar${s.scene}`) || {value: s.narration}).value,
-    image_prompt: s.image_prompt,
+    image_prompt: promptDraft[s.scene] !== undefined
+      ? promptDraft[s.scene] : (s.image_prompt || ""),
   }));
 
   reviewNote("저장하는 중…");
@@ -1838,8 +1970,11 @@ async function reviewSaveScript(){
   });
 
   if(d){
-    // 저장됐으니 들고 있을 이유가 없다.
+    // 저장됐으니 들고 있을 이유가 없다. 이제 서버가 준 것이 진실이다.
     sceneDraft = {};
+    promptDraft = {};
+    timelineDraft = null;
+    sceneOrigin = {};
     renderReview(d);
   }
 }
