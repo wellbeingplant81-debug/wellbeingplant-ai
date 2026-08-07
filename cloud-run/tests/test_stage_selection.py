@@ -277,10 +277,14 @@ class TestNothingWasExecuted(unittest.TestCase):
         registry = StageProviderRegistry()
         bootstrap.register_current_providers(registry)
 
-        self.assertEqual(
-            sorted(p.name for p in registry.for_stage(stages.SCRIPT)),
-            ["chat_import", "current"],
+        # Sprint124 - 아직 붙지 않은 자리들이 등록됐다. 실행되는 것은
+        # 여전히 current뿐이고, 나머지는 부르면 ProviderUnavailable이다.
+        usable = sorted(
+            p.name for p in registry.for_stage(stages.SCRIPT)
+            if not getattr(p, "coming_soon", False)
         )
+
+        self.assertEqual(usable, ["chat_import", "current"])
         self.assertEqual(registry.for_stage(stages.MUSIC), [])
 
 

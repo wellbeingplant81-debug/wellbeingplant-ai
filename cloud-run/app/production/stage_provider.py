@@ -57,12 +57,54 @@ class ProviderCapabilities:
     required_settings: Tuple[str, ...] = field(default_factory=tuple)
     description: str = ""
 
+    # Sprint124 - 화면이 Provider를 고르게 하려면 이름만으로는 부족하다.
+    #
+    # display_name은 사람에게 보일 이름, vendor는 누가 만든 것인가다.
+    # name은 코드가 쓰는 열쇠라 그대로 둔다.
+    display_name: str = ""
+    vendor: str = ""
+    # 한 편에 얼마나 드는가. 모르면 None이다 - 0.0과 다르다. 0.0은
+    # 무료임을 안다는 뜻이고, None은 아직 모른다는 뜻이다. 지어내지
+    # 않는다.
+    estimated_cost: Optional[float] = None
+    # 만드는 중간을 흘려 보낼 수 있는가. 지원 방식에서 유도할 수 없어
+    # 따로 둔다.
+    supports_streaming: bool = False
+
     def supports(self, source_mode: str) -> bool:
         return source_mode in self.supported_source_modes
+
+    # 아래 셋은 supported_source_modes에서 유도한다. 따로 적어 두면
+    # 한쪽만 바뀌는 날이 온다 - 이 저장소에서 한 슬롯을 두 곳에서
+    # 쓰는 구조는 이미 여러 번 사고를 냈다.
+    @property
+    def supports_generate(self) -> bool:
+        return self.supports(source_modes.GENERATE)
+
+    @property
+    def supports_import(self) -> bool:
+        return self.supports(source_modes.IMPORT)
+
+    @property
+    def supports_manual(self) -> bool:
+        return self.supports(source_modes.MANUAL)
+
+    @property
+    def label(self) -> str:
+        """사람에게 보일 이름. 없으면 코드가 쓰는 이름을 그대로."""
+
+        return self.display_name or self.name
 
 
 class StageProviderError(RuntimeError):
     """Provider가 할 수 없는 것을 요구받았다."""
+
+
+class ProviderUnavailable(StageProviderError):
+    """자리는 있지만 아직 붙지 않았다.
+
+    "지원하지 않는다"와 다르다 - 그것은 영영 안 되는 것이고, 이것은
+    아직 안 된 것이다. 되는 척하지 않으려고 이름을 나눈다."""
 
 
 class StageProvider(ABC):

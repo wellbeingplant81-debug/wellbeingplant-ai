@@ -133,11 +133,16 @@ class TestTheAbstractWordingIsGone(unittest.TestCase):
         self.assertIn("향후 지원 예정", page)
 
     def test_elevenlabs_cannot_be_clicked(self):
-        page = _page()
+        """Sprint124 - Provider 목록에 있고, 거기 있는 것은 전부
+        coming_soon이라 고를 수 없다."""
 
-        card = page[page.index("ElevenLabs") - 200:page.index("ElevenLabs") + 200]
+        served = client.get("/studio/api/production/stages").json()["stages"]
+        voice = [r for r in served if r["stage"] == "voice"][0]
+        eleven = [p for p in voice["provider_list"]
+                  if p["display_name"] == "ElevenLabs"][0]
 
-        self.assertIn("soon", card)
+        self.assertTrue(eleven["coming_soon"])
+        self.assertIn("coming_soon", _page())
 
 
 class TestTheProviderCard(unittest.TestCase):

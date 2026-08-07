@@ -260,6 +260,24 @@ def production_stages_view():
             },
             # Sprint117 - 무슨 AI인지 화면이 말할 수 있도록.
             "engine": ENGINE_FACTS[stage],
+            # Sprint124 - 고를 수 있는 것 전부. 아직 붙지 않은 자리도
+            # 숨기지 않고 왜 못 쓰는지 함께 준다.
+            "provider_list": [
+                {
+                    "name": p.name,
+                    "display_name": p.capabilities.label,
+                    "vendor": p.capabilities.vendor,
+                    "quality_tier": p.capabilities.quality_tier,
+                    "estimated_cost": p.capabilities.estimated_cost,
+                    "source_modes": list(
+                        p.capabilities.supported_source_modes),
+                    "coming_soon": bool(getattr(p, "coming_soon", False)),
+                    "required_settings": list(
+                        p.capabilities.required_settings),
+                    "note": p.capabilities.description,
+                }
+                for p in registry.for_stage(stage)
+            ],
             "seconds_if_generated": stage_timing.seconds_for(stage),
             "note": stages.NOTES.get(stage, ""),
         })

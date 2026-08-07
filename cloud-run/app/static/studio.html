@@ -199,6 +199,18 @@ a{color:var(--accent)}
 .pcard .model{flex-basis:100%;color:var(--dim);font-size:10.5px;
   padding-left:23px}
 
+/* Sprint124 - 아직 붙지 않은 Provider 목록. */
+.pcat{margin-top:8px;font-size:11px}
+.pcat summary{color:var(--dim);cursor:pointer;font-size:11.5px}
+.pcrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;
+  padding:6px 8px;margin-top:5px;background:var(--panel);
+  border:1px solid var(--line);border-radius:6px;opacity:.7}
+.pcrow .n{font-weight:600;color:var(--text)}
+.pcrow .v,.pcrow .q,.pcrow .c{color:var(--dim)}
+.pcrow .soon{margin-left:auto;color:var(--dim);border:1px solid var(--line);
+  border-radius:99px;padding:0 6px;font-size:10px}
+.pcrow .note,.pcrow .need{flex-basis:100%;color:var(--dim);font-size:10.5px}
+
 /* Sprint123 - 영상 카드. 스크롤해도 따라온다. */
 .canvas{position:sticky;top:0;z-index:3;background:var(--panel2);
   padding-bottom:10px;margin-bottom:6px;
@@ -936,7 +948,6 @@ const STAGE_UI = {
   ],
   voice: [
     {key:"generate", mode:"generate", engine:true},
-    {key:"eleven",   mode:"generate", label:"ElevenLabs", soon:true},
     {key:"import",   mode:"import",   label:"직접 업로드"},
     {key:"none",     mode:"none",     label:"사용 안 함"},
   ],
@@ -1563,6 +1574,31 @@ function providerCard(stage, option, spec){
   </label>`;
 }
 
+// Sprint124 - 이 단계에 어떤 Provider가 있는가. 고를 수 있는 것은
+// 아직 현재 엔진뿐이고, 나머지는 자리만 있다 - 숨기지 않고 왜 못
+// 쓰는지 함께 적는다.
+//
+// 품질은 재 본 것에만 의미가 있다. 부르지도 않은 것에 별을 매기지
+// 않고 "미측정"이라고 적는다. 단가도 모르면 모른다고 적는다.
+function providerCatalog(spec){
+  const rows = (spec.provider_list || []).filter(p => p.coming_soon);
+  if(!rows.length) return "";
+
+  return `<details class="pcat">
+    <summary>다른 Provider ${rows.length}개 · 아직 못 씀</summary>
+    ${rows.map(p => `<div class="pcrow" title="향후 지원 예정">
+      <span class="n">${p.display_name}</span>
+      <span class="v">${p.vendor}</span>
+      <span class="q">미측정</span>
+      <span class="c">${p.estimated_cost == null
+        ? "단가 미상" : "$" + p.estimated_cost.toFixed(2)}</span>
+      <span class="soon">Coming Soon</span>
+      ${p.note ? `<span class="note">${p.note}</span>` : ""}
+      <span class="need">필요: ${p.required_settings.join(" · ")}</span>
+    </div>`).join("")}
+  </details>`;
+}
+
 function renderStageBlock(stage){
   const spec = stageSpec.stages.find(s => s.stage === stage);
   if(!spec) return "";
@@ -1570,6 +1606,7 @@ function renderStageBlock(stage){
     <div class="h">${spec.label}</div>
     <div class="sub">${stageSummary(stage)}</div>
     ${STAGE_UI[stage].map(o => providerCard(stage, o, spec)).join("")}
+    ${providerCatalog(spec)}
   </div>`;
 }
 

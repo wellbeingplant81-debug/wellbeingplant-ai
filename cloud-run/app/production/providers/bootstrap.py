@@ -16,6 +16,7 @@ Music 단계는 등록하지 않는다. 지금 BGM은 bgm_service가 영상 렌�
 from typing import List
 
 from app.production.providers.chat_import import ChatImportScriptProvider
+from app.production.providers.coming_soon import coming_soon_providers
 from app.production.providers.image_import import ImageImportProvider
 from app.production.providers.voice_import import VoiceImportProvider
 from app.production.providers.current_engine import CURRENT_PROVIDER_CLASSES
@@ -44,6 +45,16 @@ def register_current_providers(
     ):
         provider = provider_class()
 
+        try:
+            registry.get(provider.stage, provider.name)
+        except ValueError:
+            registry.register(provider)
+            registered.append(provider)
+
+    # Sprint124 - 아직 붙지 않은 자리들. 부르면 ProviderUnavailable을
+    # 던지므로 Auto가 골라도 조용히 실패하지 않는다. 화면은 Coming
+    # Soon으로 그린다.
+    for provider in coming_soon_providers():
         try:
             registry.get(provider.stage, provider.name)
         except ValueError:

@@ -329,10 +329,14 @@ class TestProductionModeSelection(unittest.TestCase):
 
         reg = _registry()
 
-        self.assertEqual(
-            [p.name for p in reg.available(stages.SCRIPT, source_modes.GENERATE)],
-            [CURRENT],
-        )
+        # Sprint124 - 자리는 여럿이 됐지만 실제로 쓸 수 있는 것은
+        # 여전히 current 하나다. 나머지는 부르면 거절한다.
+        usable = [
+            p.name for p in reg.available(stages.SCRIPT, source_modes.GENERATE)
+            if not getattr(p, "coming_soon", False)
+        ]
+
+        self.assertEqual(usable, [CURRENT])
         self.assertNotIn(
             CURRENT,
             [p.name for p in reg.available(stages.SCRIPT, source_modes.IMPORT)],

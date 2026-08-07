@@ -175,10 +175,17 @@ class TestTheStageChoices(unittest.TestCase):
         self.assertIn("engine.name", _page())
 
     def test_elevenlabs_is_shown_but_not_selectable(self):
-        page = _page()
+        """Sprint124 - 고르는 목록에서 빼고 Provider 목록으로 옮겼다.
+        같은 사실을 두 곳에 적지 않는다."""
 
-        self.assertIn("ElevenLabs", page)
-        self.assertIn("예정", page)
+        served = client.get("/studio/api/production/stages").json()["stages"]
+        voice = [r for r in served if r["stage"] == "voice"][0]
+        eleven = [p for p in voice["provider_list"]
+                  if p["display_name"] == "ElevenLabs"]
+
+        self.assertEqual(len(eleven), 1)
+        self.assertTrue(eleven[0]["coming_soon"])
+        self.assertIn("향후 지원 예정", _page())
 
     def test_every_offered_mode_is_a_real_source_mode(self):
         """화면이 서버가 모르는 값을 보내면 400이 난다."""
