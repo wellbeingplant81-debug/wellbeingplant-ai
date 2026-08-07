@@ -324,14 +324,17 @@ class TestUploadButtonDoesNotDirectUpload(unittest.TestCase):
     def test_the_upload_path_is_still_the_only_one(self):
         from app.main import app
 
-        upload_paths = [
+        upload_paths = sorted(
             path for path in app.openapi()["paths"] if "upload" in path
-        ]
+        )
 
-        self.assertEqual(
-            sorted(upload_paths),
-            ["/studio/api/projects/{project_id}/request-upload",
-             "/studio/api/projects/{project_id}/upload"])
+        # Sprint149 - 다시 시도하는 자리가 늘었다. 실제로 올리는 자리는
+        # 여전히 /upload 하나뿐이다.
+        self.assertEqual(upload_paths, [
+            "/studio/api/projects/{project_id}/request-upload",
+            "/studio/api/projects/{project_id}/retry-upload",
+            "/studio/api/projects/{project_id}/upload",
+        ])
 
     def test_the_gate_still_decides(self):
         from app.services import studio_upload

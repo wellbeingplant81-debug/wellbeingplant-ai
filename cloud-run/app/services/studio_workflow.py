@@ -172,6 +172,37 @@ def request_upload(project_id: str, store_path: str) -> dict:
     return stored[key]
 
 
+def retry_upload(project_id: str, store_path: str) -> dict:
+    """
+    Sprint149 - 실패한 것을 다시 올려 달라고 한다.
+
+    새 승인 체계를 만들지 않는다. 승인은 이미 받아 둔 것을 그대로 쓰고,
+    "언제 다시 하라고 했는지"만 적는다 - 그 시각보다 오래된 실패는
+    지난 일이 되므로 상태가 Approved로 돌아간다.
+
+    결과 파일은 지우지 않는다. 무엇이 왜 실패했는지는 남아 있어야
+    다음 사람이 읽는다.
+
+    승인한 적이 없으면 아무것도 하지 않는다 - 다시 시도는 승인
+    다음의 일이지 승인을 대신하는 것이 아니다.
+    """
+
+    key = _valid_id(project_id)
+    stored = load_store(store_path)
+    current = stored.get(key) or {}
+
+    if current.get("status") != APPROVED:
+        raise ValueError(
+            "승인된 프로젝트만 다시 시도할 수 있습니다."
+        )
+
+    current["retried_at"] = datetime.now(timezone.utc).isoformat()
+    stored[key] = current
+    _save_store(store_path, stored)
+
+    return current
+
+
 def reject(project_id: str, store_path: str, reason: str = "") -> dict:
     """
     거절한다. 요청을 거두고 사유를 남긴다.
@@ -219,6 +250,43 @@ def _failed_scenes(project_path: str) -> list:
     ]
 
 
+def _result_mtime(project_path: str):
+    """결과 파일이 언제 쓰였나. 없으면 None."""
+
+    try:
+        return datetime.fromtimestamp(
+            os.path.getmtime(
+                os.path.join(project_path, _UPLOAD_RESULT_FILENAME)),
+            timezone.utc,
+        )
+    except OSError:
+        return None
+
+
+def _is_stale(project_path: str, stored: dict) -> bool:
+    """
+    다시 시도하라고 한 뒤에 쓰인 결과가 아니면 지난 일이다.
+
+    결과 파일을 지우는 대신 이렇게 본다 - 무엇이 왜 실패했는지는
+    남아 있어야 다음 사람이 읽는다.
+    """
+
+    retried = (stored or {}).get("retried_at")
+
+    if not retried:
+        return False
+
+    written = _result_mtime(project_path)
+
+    if written is None:
+        return True
+
+    try:
+        return written <= datetime.fromisoformat(retried)
+    except ValueError:
+        return False
+
+
 def _upload_outcome(project_path: str):
     """업로드가 남긴 사실. 시도한 적이 없으면 None.
 
@@ -244,12 +312,17 @@ def _upload_row(project_path: str):
     if not isinstance(result, dict):
         return None
 
+    finished = _result_mtime(project_path)
+
     return {
         "outcome": result.get("outcome"),
         "url": result.get("url"),
         "error": result.get("error"),
         "thumbnail_error": result.get("thumbnail_error"),
         "playlist_error": result.get("playlist_error"),
+        # Sprint149 - 언제 끝났나. 결과 파일이 쓰인 때가 곧 그때다 -
+        # 따로 적지 않는다.
+        "finished_at": finished.isoformat() if finished else None,
     }
 
 
@@ -271,7 +344,11 @@ def status_for(project_path: str, stored: dict = None,
         return GENERATING
 
     # Sprint92 - 승인보다 뒤에 일어난 일이므로 승인보다 먼저 본다.
-    outcome = _upload_outcome(project_path)
+    # Sprint149 - 다만 다시 시도하라고 한 뒤라면 지난 일이다.
+    outcome = (
+        None if _is_stale(project_path, stored)
+        else _upload_outcome(project_path)
+    )
 
     if outcome == _UPLOADED:
         return PUBLISHED
@@ -313,8 +390,24 @@ def _created_at(project_id: str):
     return stamp.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def can_retry(status: str, stored: dict = None,
+              has_video: bool = False) -> bool:
+    """
+    지금 다시 시도할 수 있는가.
+
+    실패했고, 승인이 남아 있고, 올릴 영상이 있어야 한다 - 셋 중
+    하나라도 없으면 눌러도 아무 일이 일어나지 않는다.
+    """
+
+    return (
+        status == UPLOAD_FAILED
+        and (stored or {}).get("status") == APPROVED
+        and bool(has_video)
+    )
+
+
 def queue(root: str, store_path: str, running=None,
-          uploading=None) -> list:
+          uploading=None, started=None) -> list:
     """
     프로젝트 목록과 각각의 상태. 순수 읽기입니다.
 
@@ -376,10 +469,18 @@ def queue(root: str, store_path: str, running=None,
             "rejection_reason": (
                 (stored.get(name) or {}).get("rejection_reason")
             ),
+            "retried_at": (stored.get(name) or {}).get("retried_at"),
+            # Sprint149 - 지금 도는 업로드 작업이 언제 시작했나.
+            # 작업이 곧 실행이므로 작업에게 묻는다.
+            "started_at": (started or {}).get(name),
             # Sprint92 - 업로드가 실패했으면 왜인지 화면이 그대로
             # 보여줄 수 있어야 한다. 시도한 적이 없으면 None이다.
             "upload": _upload_row(path),
         })
+
+        rows[-1]["can_retry"] = can_retry(
+            rows[-1]["status"], stored.get(name), rows[-1]["has_video"],
+        )
 
     return rows
 

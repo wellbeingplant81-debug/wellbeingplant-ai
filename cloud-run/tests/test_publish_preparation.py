@@ -359,6 +359,7 @@ class TestPublishButtonNeverUploadsDirectly(unittest.TestCase):
 
         self.assertEqual(upload_paths, [
             "/studio/api/projects/{project_id}/request-upload",
+            "/studio/api/projects/{project_id}/retry-upload",
             "/studio/api/projects/{project_id}/upload",
         ])
 

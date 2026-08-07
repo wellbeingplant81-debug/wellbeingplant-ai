@@ -132,6 +132,10 @@ function renderTable(d){
             ? `<div class="muted">scene ${r.failed_scenes.join(", ")}</div>`:""}
           ${r.status==="waiting_approval"
             ? `<div class="muted">요청 ${r.requested_at || ""}</div>`:""}
+          ${r.status==="uploading"
+            ? `<div class="muted">시작 ${r.started_at || "방금"}</div>`:""}
+          ${r.upload && r.upload.finished_at
+            ? `<div class="muted">완료 ${r.upload.finished_at}</div>`:""}
           ${r.status==="approved"
             ? `<div class="ready">Ready for Upload</div>`:""}
           ${r.rejection_reason
@@ -140,10 +144,21 @@ function renderTable(d){
             ? `<div class="upok"><a href="${r.upload.url}" target="_blank"
                  rel="noopener">${r.upload.url}</a></div>`:""}
           ${r.upload && r.upload.outcome==="failed"
-            ? `<div class="uperr">${r.upload.error || "업로드 실패"}</div>`:""}</td>
+            ? `<div class="uperr">${r.upload.error || "업로드 실패"}</div>`:""}
+          ${r.status==="upload_failed" && !r.can_retry
+            ? `<div class="muted">다시 시도할 수 없습니다${
+                r.has_video ? " · 승인이 필요합니다" : " · 영상이 없습니다"}</div>`
+            :""}</td>
         <td><div class="acts">
           <button class="ghost" onclick="open_('${r.project_id}')">열기</button>
-          ${r.status==="approved" || r.status==="upload_failed"
+          ${r.status==="upload_failed"
+            ? (r.can_retry
+                ? `<button onclick="retry('${r.project_id}')">다시 시도</button>
+                   <button class="ghost"
+                     onclick="unapprove('${r.project_id}')">승인 취소</button>`
+                : `<button class="ghost"
+                     onclick="unapprove('${r.project_id}')">승인 취소</button>`)
+            : r.status==="approved"
             ? `<button onclick="upload('${r.project_id}')">업로드</button>
                <button class="ghost" onclick="unapprove('${r.project_id}')">승인 취소</button>`
             : (r.status==="waiting_approval"
@@ -185,6 +200,21 @@ async function upload(id){
       load();
     }
   }, 1500);
+}
+
+// Sprint149 - 다시 시도한다. 새 승인을 받지 않는다 - 이미 받아 둔
+// 것을 그대로 쓰고, 지난 실패를 지난 일로 넘긴 뒤 다시 건다.
+async function retry(id){
+  const r = await fetch(`/studio/api/projects/${id}/retry-upload`,
+                        {method:"POST"});
+
+  if(!r.ok){
+    const d = await r.json();
+    alert(d.detail || "다시 시도할 수 없습니다.");
+    return;
+  }
+
+  await upload(id);
 }
 
 // Sprint148 - 거절은 요청을 거두고 사유를 남긴다. 사유는 사람이 쓴

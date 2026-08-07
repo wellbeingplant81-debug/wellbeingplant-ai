@@ -167,15 +167,25 @@ ENDPOINTS = [
     ("POST", "/studio/api/production/import",
      {"raw": "{\"title\":\"t\",\"scenes\":[{\"narration\":\"n\"}]}"},
      []),
+        # Sprint149 - 올리기 전 검사가 생겼다. 계약을 보려면 "걸릴 것이
+    # 없는" 상태를 흉내 내야 한다.
     ("POST", "/studio/api/projects/{project_id}/upload", None,
-     ["app.routers.studio.studio_jobs.start_upload"],
-     f"/studio/api/projects/{PROJECT_ID}/upload"),
+     ["app.services.studio_jobs.start_upload",
+      "app.services.studio_upload.is_approved",
+      "app.services.publish_gate.problems"],
+     f"/studio/api/projects/{PROJECT_ID}/upload",
+     {"app.services.studio_upload.is_approved": True,
+      "app.services.publish_gate.problems": []}),
     # Sprint148 - 올리겠다는 요청과 거절. 둘 다 사람의 결정이다.
     ("POST", "/studio/api/projects/{project_id}/request-upload", None,
      ["app.services.studio_workflow.request_upload",
       "app.services.publish_gate.problems"],
      f"/studio/api/projects/{PROJECT_ID}/request-upload",
      {"app.services.publish_gate.problems": []}),
+    # Sprint149 - 다시 시도. 새 승인을 만들지 않는다.
+    ("POST", "/studio/api/projects/{project_id}/retry-upload", None,
+     ["app.services.studio_workflow.retry_upload"],
+     f"/studio/api/projects/{PROJECT_ID}/retry-upload"),
     ("POST", "/studio/api/projects/{project_id}/reject",
      {"reason": "다시 보십시오"},
      ["app.services.studio_workflow.reject"],
@@ -233,8 +243,13 @@ class RouterContractTestCase(unittest.TestCase):
             if target in returns:
                 mock.return_value = returns[target]
 
-        for p in patchers:
-            self.addCleanup(p.stop)
+        # Sprint149 - 요청이 끝나면 바로 푼다.
+        #
+        # addCleanup은 시험이 끝날 때 돈다. 그런데 이 시험은 subTest로
+        # 엔드포인트를 줄줄이 부르므로, 같은 함수를 두 항목이 함께
+        # 쓰면 두 번째가 이미 Mock이 된 것을 다시 autospec하려다 죽는다.
+        #
+        # 호출 기록은 stop 뒤에도 남으므로 뒤에서 확인하는 데 지장이 없다.
 
         # Sprint121 - PUT이 생겼다. 메서드를 그대로 보내지 않으면 405가
         # 나고, 서비스가 안 불린 것을 계약 위반으로 잘못 읽는다.
@@ -244,6 +259,9 @@ class RouterContractTestCase(unittest.TestCase):
             response = self.client.put(path, json=payload)
         else:
             response = self.client.post(path, json=payload)
+
+        for p in patchers:
+            p.stop()
 
         return response, mocks
 

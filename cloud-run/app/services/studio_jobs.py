@@ -90,10 +90,19 @@ def _append_line(job_id: str, line: str) -> None:
             del job["console"][:-MAX_CONSOLE_LINES]
 
 
+def _started_now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _new_job(job_id, topic, channel, project_id=None, project_path=None):
     return {
         "job_id": job_id,
         "kind": "generate",
+        # Sprint149 - 언제 시작했나. 큐 화면이 "업로드 중"인 작업의
+        # 시작 시각을 보여 준다.
+        "started_at": _started_now(),
         "topic": topic,
         "channel": channel,
         "state": "running",
@@ -406,6 +415,9 @@ def recent(limit: int = 10) -> list:
             # Sprint148 - 무슨 작업인가. 업로드 중인 프로젝트를
             # 생성 중으로 읽지 않으려면 종류를 알아야 한다.
             "kind": job.get("kind", "generate"),
+            # Sprint149 - 언제 시작했나. 작업이 곧 실행이므로 작업이
+            # 안다. 끝난 시각은 산출물이 말한다.
+            "started_at": job.get("started_at"),
         }
         for job in jobs[-limit:][::-1]
     ]

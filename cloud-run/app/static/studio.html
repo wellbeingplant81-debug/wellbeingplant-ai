@@ -1620,7 +1620,12 @@ function publishButtonState(state){
             why:"이미 올라갔습니다."};
   }
 
-  if(at === "approved" || at === "upload_failed"){
+  if(at === "upload_failed"){
+    return {ready:true, action:"retry", label:"다시 시도",
+            why:"지난번에 실패했습니다. 승인은 그대로 두고 다시 겁니다."};
+  }
+
+  if(at === "approved"){
     return {ready:true, action:"upload", label:"업로드 가능",
             why:"승인됐습니다. 누르면 올리는 작업을 겁니다."};
   }
@@ -1698,6 +1703,21 @@ function publishPanel(state){
 //   upload   승인된 것을 올리는 작업을 건다(예전 그 자리)
 async function publishAction(action){
   if(action === "upload"){ await reviewUpload(); return; }
+
+  // Sprint149 - 다시 시도. 새 승인을 받지 않는다.
+  if(action === "retry"){
+    const r = await fetch(
+      `/studio/api/projects/${reviewProject}/retry-upload`, {method:"POST"});
+
+    if(!r.ok){
+      const d = await r.json();
+      alert(d.detail || "다시 시도할 수 없습니다.");
+      return;
+    }
+
+    await reviewUpload();
+    return;
+  }
   if(action !== "request") return;
 
   reviewNote("업로드를 요청하는 중…");

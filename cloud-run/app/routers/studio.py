@@ -115,6 +115,17 @@ def _running_projects() -> set:
     }
 
 
+def _upload_started() -> dict:
+    """지금 도는 업로드 작업이 언제 시작했나. {project_id: 시각}"""
+
+    return {
+        job["project_id"]: job.get("started_at")
+        for job in studio_jobs.recent(50)
+        if job.get("state") == "running" and job.get("project_id")
+        and job.get("kind") == "upload"
+    }
+
+
 def _uploading_projects() -> set:
     """지금 올리고 있는 프로젝트. 저장하지 않고 도는 작업에서 읽는다."""
 
@@ -141,7 +152,7 @@ def queue_page():
 def queue(status: str = "all"):
     rows = studio_workflow.queue(
         project_service.OUTPUT_ROOT, _workflow_store(), _running_projects(),
-        _uploading_projects(),
+        _uploading_projects(), _upload_started(),
     )
 
     try:
@@ -769,7 +780,26 @@ def upload(project_id: str):
     승인되지 않았으면 작업은 정상으로 끝나고 outcome이 skipped로 온다.
     """
 
+    from app.services import publish_gate
+
     path = _project_path(project_id)
+
+    # Sprint149 - 올리기 전에 본다. 앞 관문에서 막히면 뒤쪽은 아예
+    # 실행되지 않는다 - studio_upload가 플래그와 승인을 보는 것과
+    # 같은 방식이고, 여기서는 그보다 앞선 사실을 본다.
+    #
+    # studio_upload도 승인을 다시 본다. 두 번 보는 것이 맞다 - 이
+    # 자리는 화면이 부르는 입구일 뿐이고, 실제 안전장치는 그쪽이다.
+    if not studio_upload.is_approved(project_id, _workflow_store()):
+        raise HTTPException(
+            status_code=400,
+            detail="승인된 프로젝트만 올릴 수 있습니다.",
+        )
+
+    problems = publish_gate.problems(path)
+
+    if problems:
+        raise HTTPException(status_code=400, detail=" · ".join(problems))
 
     job_id = studio_jobs.start_upload(project_id, path)
 
@@ -795,6 +825,23 @@ def request_upload(project_id: str):
 
     try:
         return studio_workflow.request_upload(project_id, _workflow_store())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/projects/{project_id}/retry-upload")
+def retry_upload(project_id: str):
+    """
+    Sprint149 - 실패한 것을 다시 올려 달라고 한다.
+
+    새 승인 체계를 만들지 않는다 - 이미 받아 둔 승인을 그대로 쓰고,
+    지난 실패를 지난 일로 넘긴다. 결과 파일은 지우지 않는다.
+    """
+
+    _project_path(project_id)
+
+    try:
+        return studio_workflow.retry_upload(project_id, _workflow_store())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
