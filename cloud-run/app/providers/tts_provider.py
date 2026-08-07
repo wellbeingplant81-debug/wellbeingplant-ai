@@ -12,7 +12,13 @@ from app.services.voice_quality_engine import optimize_for_tts
 # app.production 등록소의 이름과는 다른 층이다. 거기 있는 "google_tts"는
 # 파이프라인을 거치지 않고 모델을 직접 부르는 자리(아직 비어 있음)이고,
 # 여기 "google"은 지금 엔진이 실제로 쓰는 그 경로다.
-PROVIDERS = ("google", "elevenlabs")
+#
+# Sprint151 - local_voice가 셋째다. 앞의 둘과 성질이 다르다: 모델을
+# 부르지 않고 사람이 녹음해 둔 파일을 고른다. 그래서 아래에서 글을
+# 다듬는 단계를 거치지 않는다 - 다듬을 대상이 없다.
+PROVIDERS = ("google", "elevenlabs", "local_voice")
+
+LOCAL_VOICE = "local_voice"
 
 
 def generate_voice(text: str, output_file: str, provider: str = None):
@@ -28,6 +34,21 @@ def generate_voice(text: str, output_file: str, provider: str = None):
     """
 
     provider = (provider or os.getenv("TTS_PROVIDER", "google")).lower()
+
+    # Sprint151 - 내 PC 음성. 아래 두 갈래보다 먼저 본다.
+    #
+    # 여기서 늦게 import한다 - 이 모듈은 파이프라인이 언제나 켜는
+    # 자리라, 고르지 않은 사람에게까지 남의 Provider를 지우지 않는다.
+    #
+    # 글을 다듬지 않고 넘긴다. normalize_for_speech도 optimize_for_tts도
+    # 부르지 않는다 - 둘 다 "이 글을 어떻게 읽어 줄까"를 모델에게 말하는
+    # 것이고, 이미 녹음된 파일에는 말할 상대가 없다.
+    if provider == LOCAL_VOICE:
+        from app.providers import local_voice_provider
+
+        print("Using TTS Provider: 내 PC 음성 (API 호출 없음)")
+
+        return local_voice_provider.generate_voice(text, output_file)
 
     print(f"Using TTS Provider: {'ElevenLabs' if provider == 'elevenlabs' else 'Google'}")
 

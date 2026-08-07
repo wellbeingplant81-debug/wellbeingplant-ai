@@ -252,7 +252,9 @@ class TestTheCurrentProviderIsUntouched(unittest.TestCase):
             # Sprint150 - local_stock은 키가 아니라 훑어 둔 폴더가
             # 조건이라 여기 목록에 함께 뜬다.
             stages.IMAGE: ["current", "flux", "gpt_image", "local_stock"],
-            stages.VOICE: ["current", "elevenlabs"],
+            # Sprint151 - local_voice도 키가 아니라 훑어 둔 폴더가
+            # 조건이라 목록에 함께 뜬다.
+            stages.VOICE: ["current", "elevenlabs", "local_voice"],
         }
 
         for stage, names in expected.items():

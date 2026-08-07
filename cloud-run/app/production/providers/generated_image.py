@@ -48,7 +48,7 @@ class GeneratedImageProvider(StageProvider):
     coming_soon = False
 
     def __init__(self, name, display_name, vendor, key_setting, module_path,
-                 description=""):
+                 description="", estimated_cost=None):
         self._key_setting = key_setting
         self._module_path = module_path
 
@@ -63,7 +63,11 @@ class GeneratedImageProvider(StageProvider):
             display_name=display_name,
             vendor=vendor,
             # 실측 금액 계산은 아직이다. 모르는 것은 비워 둔다.
-            estimated_cost=None,
+            #
+            # Sprint151 - 다만 모르는 것과 0인 것은 다르다. 내 PC
+            # 자료는 파일을 복사할 뿐이라 정말로 0이고, 화면이
+            # "API 비용 없음"이라고 말할 근거가 여기다.
+            estimated_cost=estimated_cost,
             supports_streaming=False,
         )
 
@@ -138,7 +142,7 @@ GENERATED_IMAGE_PROVIDERS = (
      "app.providers.local_stock_provider",
      "내 PC 폴더에서 scene에 맞는 그림이나 영상을 고릅니다. 모델을 "
      "부르지 않으므로 돈이 들지 않고, 맞는 자료가 없으면 만들지 않고 "
-     "그대로 멈춥니다."),
+     "그대로 멈춥니다.", 0.0),
     ("gpt_image", "GPT Image", "OpenAI", "OPENAI_API_KEY",
      "app.providers.gpt_image_provider",
      "GPT Image로 이미지를 만듭니다. 세로 크기가 1024x1536(2:3)이라 "

@@ -111,6 +111,57 @@ def _dimensions(path: str):
         return None, None
 
 
+def _sound(path: str) -> dict:
+    """
+    Sprint151 - 소리의 성질. 길이·샘플레이트·채널.
+
+    ffprobe에게 묻는다 - 이 저장소가 길이를 재는 방식이 그것이고,
+    여기서 다른 방법을 쓰면 같은 파일이 자리마다 다른 길이를 갖는다.
+
+    읽지 못하면 셋 다 None이다. 0으로 적으면 "길이가 0인 소리"가 되고,
+    그것은 우리가 아는 사실이 아니다.
+    """
+
+    import subprocess
+
+    unknown = {"duration": None, "sample_rate": None, "channels": None}
+
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error",
+             "-show_entries", "stream=sample_rate,channels:format=duration",
+             "-of", "default=noprint_wrappers=1", path],
+            capture_output=True, encoding="utf-8", errors="replace",
+        )
+    except Exception:
+        return unknown
+
+    if result.returncode != 0:
+        return unknown
+
+    found = dict(unknown)
+
+    for line in (result.stdout or "").splitlines():
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        value = value.strip()
+
+        if key == "duration":
+            try:
+                found["duration"] = round(float(value), 3)
+            except ValueError:
+                pass
+        elif key in ("sample_rate", "channels"):
+            try:
+                found[key] = int(value)
+            except ValueError:
+                pass
+
+    return found
+
+
 def scan(root: str) -> dict:
     """
     폴더를 훑어 목록을 만든다. 파일은 한 바이트도 건드리지 않는다.
@@ -146,6 +197,12 @@ def scan(root: str) -> dict:
                     width, height = _dimensions(path)
                     item["width"] = width
                     item["height"] = height
+
+                # Sprint151 - 목소리는 길이가 곧 자막 시각이라, 무엇이
+                # 들어 있는지 미리 재 둔다. 그림에는 적지 않는다 -
+                # 없는 사실이다.
+                if kind == VOICE:
+                    item.update(_sound(path))
 
                 items.append(item)
 

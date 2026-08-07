@@ -421,6 +421,7 @@ a{color:var(--accent)}
   border:1px solid #2a3346;border-radius:9px;cursor:pointer}
 .cmode .cm.on{border-color:#4a7dff;background:#141c2e}
 .cmode .cm em{font-style:normal;color:#8b97ad;font-size:12px}
+.sprov .row em.free{font-style:normal;color:#5fd08a;font-size:12px}
 </style>
 </head>
 <body>
@@ -1033,6 +1034,17 @@ const UNMEASURED = "미측정";
 // 없다는 말이지 인증이 없다는 말이 아니다 - current는 키를 쓰지
 // 않지만 Vertex ADC 자격이 필요하다.
 const NO_AUTH = "인증 없음";
+// Sprint151 - 돈이 안 든다고 말할 수 있는 자리.
+//
+// estimated_cost는 서버가 이미 이렇게 정해 두었다: 0은 무료임을
+// 안다는 뜻이고, null은 아직 모른다는 뜻이다. 그래서 0일 때만
+// 말하고, 모르는 것은 아무 말도 하지 않는다 - "저렴" 같은 말을
+// 지어내지 않는다.
+const NO_COST = "API 비용 없음";
+
+function providerIsFree(p){
+  return p && p.estimated_cost === 0;
+}
 
 // 기본 화면에 두는 단계. 메타데이터는 고를 일이 드물어 고급 설정으로
 // 내렸다 - 계획에는 그대로 들어간다.
@@ -2255,7 +2267,8 @@ function reviewProviders(state, stage, title){
   if(!spec) return "";
 
   const chosen = (state.providers || {})[stage] || "current";
-  const rows = [{name:"current", display_name:"현재 엔진", vendor:"",
+  const rows = [{name:"current", display_name:"현재 엔진",
+                 vendor: (spec.engine && spec.engine.name) || "",
                  available:true, unavailable_reason:""}]
     .concat(generateProviders(spec));
 
@@ -2267,6 +2280,7 @@ function reviewProviders(state, stage, title){
         ${p.available ? "" : "disabled"}
         onchange="reviewPickProvider('${stage}','${p.name}')">
       <span>${p.display_name}${p.vendor ? ` · ${p.vendor}` : ""}</span>
+      ${providerIsFree(p) ? `<em class="free">${NO_COST}</em>` : ""}
       ${p.available ? "" : `<span class="why">${p.unavailable_reason}</span>`}
     </label>`).join("")}
   </div>`;
@@ -2687,7 +2701,11 @@ function stageProviderPicker(stage, spec){
   if(!rows.length) return "";
 
   const chosen = uiProvider[stage] || "current";
-  const all = [{name:"current", display_name:"현재 엔진", vendor:"",
+  const all = [{name:"current", display_name:"현재 엔진",
+                // Sprint151 - 어느 엔진인지 말한다. ElevenLabs와 내 PC
+                // 음성 옆에 "현재 엔진"만 있으면 무엇과 견주는지 알 수
+                // 없다. 이름은 서버가 보낸 것을 그대로 쓴다.
+                vendor: (spec.engine && spec.engine.name) || "",
                 available:true, unavailable_reason:""}].concat(rows);
 
   return `<div class="sprov">
@@ -2698,6 +2716,7 @@ function stageProviderPicker(stage, spec){
         ${p.available ? "" : "disabled"}
         onchange="pickProvider('${stage}','${p.name}')">
       <span>${p.display_name}${p.vendor ? ` · ${p.vendor}` : ""}</span>
+      ${providerIsFree(p) ? `<em class="free">${NO_COST}</em>` : ""}
       ${p.available ? "" : `<span class="why">${p.unavailable_reason}</span>`}
     </label>`).join("")}
   </div>`;
@@ -2727,35 +2746,47 @@ function renderStagePicks(){
 // 무엇이 무료인가
 //   대본  Gemini 채팅에 붙여넣기   API를 부르지 않는다
 //   이미지 내 PC 자료에서 고르기    모델을 부르지 않는다
-//   음성  내가 만든 파일 올리기     TTS를 부르지 않는다
-const FREE_MODE = {script: "gemini", image: "generate", voice: "import"};
+//   음성  내 PC 녹음에서 고르기     TTS를 부르지 않는다
+//
+// Sprint151 - 음성이 "직접 업로드"에서 진짜 Provider로 바뀌었다.
+// 매번 파일을 올리는 대신, 한 번 훑어 둔 폴더에서 scene 번호에 맞는
+// 녹음을 고른다. 이미지와 같은 모양이 되었다.
+const FREE_MODE = {script: "gemini", image: "generate", voice: "generate"};
 const FREE_IMAGE_PROVIDER = "local_stock";
+const FREE_VOICE_PROVIDER = "local_voice";
 const API_MODE = {script: "generate", image: "generate", voice: "generate"};
 
 function isFreeMode(){
   return uiPick.script === FREE_MODE.script
     && uiPick.image === FREE_MODE.image
     && uiProvider.image === FREE_IMAGE_PROVIDER
-    && uiPick.voice === FREE_MODE.voice;
+    && uiPick.voice === FREE_MODE.voice
+    && uiProvider.voice === FREE_VOICE_PROVIDER;
 }
 
 function isApiMode(){
   return uiPick.script === API_MODE.script
     && uiPick.image === API_MODE.image
     && uiProvider.image !== FREE_IMAGE_PROVIDER
-    && uiPick.voice === API_MODE.voice;
+    && uiPick.voice === API_MODE.voice
+    && uiProvider.voice !== FREE_VOICE_PROVIDER;
 }
 
 // 내 PC 자료를 고를 수 있는가. 등록소가 그렇게 말할 때만이다 -
 // 화면이 있는 척하지 않는다.
+//
+// Sprint151 - 그림과 소리 둘 다 있어야 한다. 하나만 있으면 무료
+// 모드라고 부를 수 없다 - 나머지 하나에서 돈이 나간다.
 function freeModeAvailable(){
   if(!stageSpec) return false;
 
-  const image = stageSpec.stages.find(s => s.stage === "image");
-  if(!image) return false;
+  return [["image", FREE_IMAGE_PROVIDER], ["voice", FREE_VOICE_PROVIDER]]
+    .every(([stage, name]) => {
+      const spec = stageSpec.stages.find(s => s.stage === stage);
 
-  return generateProviders(image).some(
-    p => p.name === FREE_IMAGE_PROVIDER && p.available);
+      return spec && generateProviders(spec).some(
+        p => p.name === name && p.available);
+    });
 }
 
 async function pickCostMode(free){
@@ -2767,6 +2798,7 @@ async function pickCostMode(free){
   });
 
   uiProvider.image = free ? FREE_IMAGE_PROVIDER : "current";
+  uiProvider.voice = free ? FREE_VOICE_PROVIDER : "current";
 
   renderStagePicks();
   renderCostMode();
@@ -2800,7 +2832,7 @@ function renderCostMode(){
       <input type="radio" name="costmode" ${free ? "checked" : ""}
              onchange="pickCostMode(true)">
       <span>무료 제작 모드</span>
-      <em>Gemini 채팅 + 내 PC 자료 사용</em>
+      <em>Gemini 채팅 + 내 PC 자료 · 내 PC 음성 사용</em>
     </label>
     ${free || api ? "" : `<p class="muted" style="margin:6px 0 0">
       아래에서 단계별로 고른 상태입니다.</p>`}`;

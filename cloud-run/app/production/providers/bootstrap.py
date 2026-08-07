@@ -25,6 +25,7 @@ from app.production.providers.generated_image import (
     generated_image_providers,
 )
 from app.production.providers.image_import import ImageImportProvider
+from app.production.providers.local_voice import LocalVoiceProvider
 from app.production.providers.voice_import import VoiceImportProvider
 from app.production.providers.current_engine import CURRENT_PROVIDER_CLASSES
 from app.production.registry import StageProviderRegistry, default_registry
@@ -52,6 +53,9 @@ def register_current_providers(
         # Sprint125 - 엔진이 이미 있어서 실제로 부를 수 있다. 설정이
         # 없으면 generate()가 ProviderUnavailable을 던진다.
         ElevenLabsVoiceProvider,
+        # Sprint151 - 내 PC 음성. 키가 없어 늘 쓸 수 있다고 답하고,
+        # 자료가 없으면 generate()가 몇 번 scene인지 말하며 멈춘다.
+        LocalVoiceProvider,
     ):
         provider = provider_class()
 
