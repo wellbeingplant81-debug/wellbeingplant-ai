@@ -146,17 +146,21 @@ ENDPOINTS = [
     # Sprint152 - 정해 둔 내 자료 폴더. 읽기와 정하기 둘 다 파일을
     # 건드리지 않는다 - 경로를 적어 둘 뿐이다.
     ("GET", "/studio/api/workspace", None,
-     ["app.services.free_workspace.remembered",
-      "app.services.free_workspace.inventory"],
+     ["app.services.free_workspace.status"],
      "/studio/api/workspace",
-     {"app.services.free_workspace.remembered": {"root": None},
-      "app.services.free_workspace.inventory": {}}),
+     {"app.services.free_workspace.status": {"root": None}}),
     ("PUT", "/studio/api/workspace", {"root": REPO_ROOT},
      ["app.services.free_workspace.remember",
-      "app.services.free_workspace.inventory"],
+      "app.services.free_workspace.status"],
      "/studio/api/workspace",
      {"app.services.free_workspace.remember": {"root": REPO_ROOT},
-      "app.services.free_workspace.inventory": {}}),
+      "app.services.free_workspace.status": {"root": REPO_ROOT}}),
+    # Sprint153 - 무엇이 필요하고 어디에 두면 되는가. 순수 읽기다 -
+    # 만드는 함수는 하나도 부르지 않는다.
+    ("GET", "/studio/api/review/{project_id}/requirements", None,
+     ["app.services.free_workspace.requirements"],
+     f"/studio/api/review/{PROJECT_ID}/requirements",
+     {"app.services.free_workspace.requirements": {"requirements": []}}),
     # Sprint152 - Scene마다 무엇이 준비됐는가. 순수 읽기다.
     ("GET", "/studio/api/review/{project_id}/preparation", None,
      ["app.services.free_workspace.preparation"],

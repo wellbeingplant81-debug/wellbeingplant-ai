@@ -1315,12 +1315,9 @@ def workspace_state():
 
     from app.services import free_workspace
 
-    found = free_workspace.remembered(_workspace_store())
-
-    return {
-        "root": found["root"],
-        "counts": free_workspace.inventory(found["root"]),
-    }
+    # Sprint153 - 어떤 폴더를 만들어야 하는지도 함께 말한다. 처음
+    # 쓰는 사람은 images/videos/voices/music을 모른다.
+    return free_workspace.status(_workspace_store())
 
 
 @router.put("/api/workspace")
@@ -1330,14 +1327,11 @@ def workspace_choose(request: WorkspaceRequest):
     from app.services import free_workspace
 
     try:
-        found = free_workspace.remember(_workspace_store(), request.root)
+        free_workspace.remember(_workspace_store(), request.root)
     except free_workspace.WorkspaceError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    return {
-        "root": found["root"],
-        "counts": free_workspace.inventory(found["root"]),
-    }
+    return free_workspace.status(_workspace_store())
 
 
 @router.get("/api/review/{project_id}/preparation")
@@ -1355,6 +1349,23 @@ def review_preparation(project_id: str):
     scenes = studio_review.state(path).get("scenes") or []
 
     return free_workspace.preparation(path, scenes)
+
+
+@router.get("/api/review/{project_id}/requirements")
+def review_requirements(project_id: str):
+    """
+    Sprint153 - 무엇이 필요하고 어디에 두면 되는가. Scene마다 한 줄씩.
+
+    만들지 않는다. 고르지도 않는다 - 읽고 말하기만 한다. AI 이미지도
+    TTS도 스톡 검색도 이 경로에서는 불리지 않는다.
+    """
+
+    from app.services import free_workspace, studio_review
+
+    path = _project_path(project_id)
+    scenes = studio_review.state(path).get("scenes") or []
+
+    return free_workspace.requirements(path, scenes)
 
 
 @router.post("/api/review/{project_id}/library")

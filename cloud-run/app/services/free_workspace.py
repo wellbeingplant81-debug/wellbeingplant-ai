@@ -129,6 +129,24 @@ def forget(store_path: str) -> dict:
     return {"version": VERSION, "root": None}
 
 
+def status(store_path: str) -> dict:
+    """
+    Sprint153 - 지금 내 자료 폴더가 어떤 상태인가. 화면이 그대로 그린다.
+
+    folders를 함께 준다 - 처음 쓰는 사람은 어떤 폴더를 만들어야
+    하는지 모른다. 이름은 local_library가 아는 것을 그대로 옮긴다.
+    """
+
+    found = remembered(store_path)
+
+    return {
+        "root": found["root"],
+        "counts": inventory(found["root"]),
+        # 훑는 폴더 이름들. 별칭이 있으면 첫째(기준 이름)를 보여 준다.
+        "folders": [local_library._folders(kind)[-1] for kind in KINDS],
+    }
+
+
 def inventory(root: str) -> dict:
     """
     그 폴더에 종류마다 몇 개 있는가.
@@ -279,4 +297,200 @@ def preparation(project_path: str, scenes: list) -> dict:
         "ready": ready,
         "missing": missing,
         "scenes": rows,
+    }
+
+
+# ---- Sprint153 - 무엇을 어디에 넣으면 되는가 -------------------------
+#
+# "Scene 4 이미지 없음"까지가 Sprint152였다. 사람은 그 다음에 무엇을
+# 해야 하는지 알아야 한다 - 어느 폴더에, 어떤 이름으로.
+#
+# 경로를 지어내면 안 된다. local_stock은 파일 이름의 낱말이 프롬프트와
+# 겹치는 것을 고르므로, 그 규칙과 다른 이름을 알려 주면 사람이 시킨
+# 대로 넣어도 안 찾힌다.
+
+IMAGE_SUFFIX = ".png"
+
+# 사람이 읽는 이름. 코드가 쓰는 열쇠(required_asset)와 따로 둔다.
+ASSET_LABEL = {"script": "대본", "image": "이미지", "voice": "음성"}
+
+
+def _image_hint(root, scene) -> tuple:
+    """
+    이 scene의 그림을 어디에 어떤 이름으로 두면 되는가.
+
+    (어디, 상대경로)를 돌려준다. 어디는 "workspace" 또는 "project"다.
+
+    낱말을 뽑는 것은 local_stock_provider가 한다. 여기서 다시 정하면
+    두 규칙이 생기고, 그러면 알려 준 이름이 실제로는 안 찾히는 날이
+    온다.
+    """
+
+    number = scene.get("scene")
+    project_path = f"images/scene{number}{IMAGE_SUFFIX}"
+
+    if not root:
+        # 고를 폴더가 없다. 프로젝트에 직접 두는 길뿐이다.
+        return "project", project_path
+
+    from app.providers import local_stock_provider
+
+    words = local_stock_provider._keywords(scene.get("image_prompt") or "")
+
+    if not words:
+        # 낱말이 하나도 없으면 내 자료에서는 영영 못 찾는다 - 검색이
+        # 빈 목록을 돌려준다. 그때 내 자료 경로를 알려 주면 시킨 대로
+        # 해도 안 된다.
+        return "project", project_path
+
+    return "workspace", f"images/{' '.join(words)}{IMAGE_SUFFIX}"
+
+
+def _voice_hint(root, scene) -> tuple:
+    """
+    음성은 번호로 고른다(local_voice). 그러니 번호가 든 이름을 준다.
+
+    폴더 이름은 local_library가 아는 것 중 사양이 적은 쪽(voices)이다 -
+    voice/도 받지만, 새로 만드는 사람에게는 하나만 알려 주는 편이 낫다.
+    """
+
+    number = scene.get("scene")
+
+    if not root:
+        return "project", (
+            f"audio/scenes/{audio_policy.scene_audio_filename(number)}"
+        )
+
+    folder = local_library._folders(local_library.VOICE)[-1]
+
+    return "workspace", (
+        f"{folder}/scene{number}{audio_policy.NARRATION_EXTENSION}"
+    )
+
+
+def _found_path(default_folder: str, slot: dict) -> str:
+    """
+    이미 있는 것이 어디 있는가. 있는 그대로 옮긴다.
+
+    그림 자리라고 언제나 images/인 것은 아니다 - local_stock은 맞는
+    영상이 있으면 그것을 골라 첫 프레임을 쓴다(Sprint150). 그때 파일은
+    videos/에 있고, images/라고 적으면 사람이 그 폴더를 열어 봐도
+    없다. 고른 쪽이 말한 kind를 그대로 쓴다.
+    """
+
+    if not slot.get("name"):
+        return None
+
+    folder = slot.get("kind") or default_folder
+
+    return f"{folder}/{slot['name']}"
+
+
+def _message(asset: str, status_name: str, path, location) -> str:
+    """
+    사람이 읽을 한 줄.
+
+    만들어 주겠다고 하지 않는다 - 이 자리는 표시만 하는 곳이고,
+    권하는 순간 사람은 눌러 보고 그러면 돈이 든다.
+    """
+
+    label = ASSET_LABEL.get(asset, asset)
+
+    if status_name == "ready":
+        return f"{label} 준비됨"
+
+    if not path:
+        return f"{label}이(가) 없습니다"
+
+    where = "내 자료 폴더" if location == "workspace" else "프로젝트 폴더"
+
+    return f"{label} 없음 - {where}에 {path} 를 넣어 주십시오"
+
+
+def requirements(project_path: str, scenes: list) -> dict:
+    """
+    Sprint153 - 이 프로젝트에 무엇이 필요하고 어디에 두면 되는가.
+
+    만들지 않는다. 고르지도 않는다. 읽고 말하기만 한다.
+
+    판정은 preparation이 이미 낸 것을 그대로 쓴다 - 같은 사실을 두
+    곳에서 다시 재면 두 화면이 서로 다른 말을 하게 된다.
+    """
+
+    prepared = preparation(project_path, scenes)
+    root = prepared["root"]
+
+    by_number = {scene.get("scene"): scene for scene in (scenes or [])}
+
+    rows = []
+
+    for row in prepared["scenes"]:
+        number = row["scene"]
+        scene = by_number.get(number, {})
+
+        if not row["script"]:
+            rows.append({
+                "scene": number,
+                "required_asset": "script",
+                # 대본은 파일이 아니다. 둘 곳이 없다.
+                "expected_path": None,
+                "expected_root": None,
+                "location": None,
+                "status": "missing",
+                "found": None,
+                "message": _message("script", "missing", None, None),
+            })
+
+        for asset, slot, hint, folder in (
+            ("image", row["image"], _image_hint, "images"),
+            ("voice", row["voice"], _voice_hint,
+             local_library._folders(local_library.VOICE)[-1]),
+        ):
+            if slot["ready"]:
+                # 어디서 왔는지에 따라 사는 곳이 다르다.
+                in_project = slot["from"] == "made"
+                where = "project" if in_project else "workspace"
+                base = project_path if in_project else root
+
+                if asset == "voice" and in_project:
+                    path = (
+                        f"audio/scenes/"
+                        f"{audio_policy.scene_audio_filename(number)}"
+                    )
+                elif in_project:
+                    path = f"images/scene{number}{IMAGE_SUFFIX}"
+                else:
+                    path = _found_path(folder, slot)
+
+                rows.append({
+                    "scene": number,
+                    "required_asset": asset,
+                    "expected_path": path,
+                    "expected_root": base,
+                    "location": where,
+                    "status": "ready",
+                    "found": slot.get("name"),
+                    "message": _message(asset, "ready", path, where),
+                })
+                continue
+
+            where, path = hint(root, scene)
+
+            rows.append({
+                "scene": number,
+                "required_asset": asset,
+                "expected_path": path,
+                "expected_root": root if where == "workspace" else project_path,
+                "location": where,
+                "status": "missing",
+                "found": None,
+                "message": _message(asset, "missing", path, where),
+            })
+
+    return {
+        "scanned": prepared["scanned"],
+        "root": root,
+        "total": prepared["total"],
+        "ready": prepared["ready"],
+        "requirements": rows,
     }
