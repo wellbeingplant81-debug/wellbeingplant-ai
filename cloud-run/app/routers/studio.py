@@ -249,6 +249,15 @@ def production_stages_view():
                 mode: [p.name for p in registry.available(stage, mode)]
                 for mode in allowed if mode != source_modes.NONE
             },
+            # Sprint116 - 화면이 "품질 예상"을 지어내지 않도록 Provider가
+            # 스스로 신고한 등급을 그대로 내보낸다. 지금은 전부
+            # standard다 - 등급을 매길 상대가 아직 없기 때문이고,
+            # 그것이 사실이므로 화면도 그렇게 말해야 한다.
+            "provider_quality": {
+                p.name: p.capabilities.quality_tier
+                for mode in allowed if mode != source_modes.NONE
+                for p in registry.available(stage, mode)
+            },
             "seconds_if_generated": stage_timing.seconds_for(stage),
             "note": stages.NOTES.get(stage, ""),
         })

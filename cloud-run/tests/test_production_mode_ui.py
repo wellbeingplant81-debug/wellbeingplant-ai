@@ -197,11 +197,17 @@ class TestStep01StillOnlyGenerates(unittest.TestCase):
 
 class TestTheScreen(unittest.TestCase):
 
-    def test_the_mode_panel_is_present(self):
+    def test_the_maker_panel_replaced_the_mode_panel(self):
+        """Sprint116 - 등급을 먼저 고르게 하던 패널을 걷어냈다.
+
+        제작 방식 자체가 없어진 것이 아니라, 단계마다 고르는 것으로
+        옮겼다. 그 화면은 test_studio_ux2가 본다."""
+
         page = _page()
 
-        self.assertIn("제작 방식", page)
-        self.assertIn('id="modes"', page)
+        self.assertNotIn('id="modes"', page)
+        self.assertIn("새 영상 만들기", page)
+        self.assertIn('id="stagePicks"', page)
 
     def test_the_paste_area_and_button_exist(self):
         page = _page()
@@ -224,10 +230,14 @@ class TestTheScreen(unittest.TestCase):
                 self.assertIn(model, page)
 
     def test_the_cost_wording_matches_the_three_cases(self):
+        """Sprint116 - 등급 카드마다 붙던 비용 줄이 요약 한 곳으로
+        모였다. 세 경우(무료 / 금액 / 계산 불가)는 그대로다."""
+
         page = _page()
 
         self.assertIn("예상 비용 계산 불가", page)
-        self.assertIn("예상 비용 : 무료", page)
+        self.assertIn('"무료"', page)
+        self.assertIn("known_total.toFixed(4)", page)
 
     def test_the_existing_generate_button_is_untouched(self):
         page = _page()
