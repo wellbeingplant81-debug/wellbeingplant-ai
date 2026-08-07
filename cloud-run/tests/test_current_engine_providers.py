@@ -439,8 +439,9 @@ class TestTheEngineWasNotTouched(unittest.TestCase):
         문장은 더 이상 사실이 아니다.
 
         지켜야 할 경계는 그대로다 - 전부 영상 생성을 시작하지
-        않는다. project는 프로젝트만 만들고, 만드는 것은 여전히 기존
-        생성 엔드포인트다(Sprint107)."""
+        않는다. project는 프로젝트만 만들고(Sprint107), images는
+        사용자가 준 파일을 놓기만 하며(Sprint110), 만드는 것은 여전히
+        기존 생성 엔드포인트다."""
 
         from app.main import app
 
@@ -448,7 +449,8 @@ class TestTheEngineWasNotTouched(unittest.TestCase):
 
         self.assertEqual(
             sorted(paths),
-            ["/studio/api/production/import",
+            ["/studio/api/production/images",
+             "/studio/api/production/import",
              "/studio/api/production/modes",
              "/studio/api/production/plan",
              "/studio/api/production/project",

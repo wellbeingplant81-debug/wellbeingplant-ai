@@ -112,6 +112,8 @@ ENDPOINTS = [
     # 패치해 디스크에 남기지 않는다 - 계약만 확인한다.
     # Sprint109 - 단계별 선택. 계획만 만들고 실행하지 않는다.
     ("GET", "/studio/api/production/stages", None, []),
+    # Sprint110 - 이미지 업로드.
+    ("POST", "/studio/api/production/images", None, []),
     ("POST", "/studio/api/production/plan",
      {"selections": {"script": "generate"}}, []),
     ("POST", "/studio/api/production/project",
@@ -202,6 +204,15 @@ class TestEveryEndpointIsCovered(RouterContractTestCase):
         )
 
 
+# multipart/form-data를 받는 엔드포인트. 이 파일의 호출 루프는 JSON만
+# 보내므로 여기서 부르면 형식이 맞지 않는다 - 등록 여부는 위 표가
+# 덮고, 실제 호출은 tests/test_image_import_provider.py와 전용
+# smoke 검증이 한다.
+MULTIPART_ENDPOINTS = {
+    ("POST", "/studio/api/production/images"),
+}
+
+
 class TestValidRequestsNeverRaiseTypeError(RouterContractTestCase):
     """라우터가 서비스를 부를 때 인자 개수/이름이 맞는지 확인한다.
     autospec 덕분에 불일치는 곧바로 TypeError로 드러난다."""
@@ -209,6 +220,10 @@ class TestValidRequestsNeverRaiseTypeError(RouterContractTestCase):
     def test_all_endpoints_accept_a_valid_request(self):
         for entry in ENDPOINTS:
             method, path, payload, services = entry[:4]
+
+            if (method, path) in MULTIPART_ENDPOINTS:
+                continue
+
             # 경로 파라미터가 있는 엔드포인트는 구체 경로로 호출한다.
             call_path = entry[4] if len(entry) > 4 else path
 

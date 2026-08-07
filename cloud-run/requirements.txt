@@ -70,3 +70,10 @@ boto3==1.43.65
 botocore==1.43.65
 s3transfer==0.19.2
 jmespath==1.1.0
+
+# Sprint110 (Epic 54) - 이미지 직접 업로드.
+#
+# 브라우저에서 파일을 올리려면 multipart/form-data를 읽어야 하고,
+# FastAPI는 그것을 이 패키지에 맡긴다. 없으면 Form/UploadFile을 쓰는
+# 라우터가 등록되는 순간 app.main import 자체가 실패한다(실측).
+python-multipart==0.0.32

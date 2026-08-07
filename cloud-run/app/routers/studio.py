@@ -12,7 +12,7 @@ Sprint65에서 만든 것이고, 요청 하나로 output 밖을 가리키는 것
 
 import os
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -310,6 +310,76 @@ def production_plan_view(request: StagePlanRequest):
     ]
 
     return result
+
+
+@router.post("/api/production/images")
+async def production_images(
+    project_id: str = Form(...),
+    files: list[UploadFile] = File(...),
+):
+    """
+    직접 만든 이미지를 프로젝트에 놓는다.
+
+    받은 파일을 임시로 내려놓고 Provider에게 넘긴다 - 놓는 규칙과
+    scene 수 검증은 Provider가 한다. 화면 전용 경로를 따로 만들지
+    않는다.
+    """
+
+    import shutil
+    import tempfile
+
+    from app.production.providers.image_import import ImageImportError
+    from app.production.stage_request import StageRequest
+
+    path = _project_path(project_id)
+
+    # 대본은 Resolver가 읽고 검증한다(Sprint106) - 새 읽기 경로를
+    # 만들지 않는다. scene 수를 알아야 몇 장이 필요한지 판정할 수 있다.
+    from app.steps.step01_script_resolve import (
+        ScriptResolveError, load_prepared,
+    )
+
+    try:
+        scenes = load_prepared(path)["scenes"]
+    except ScriptResolveError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    staging = tempfile.mkdtemp()
+
+    try:
+        given = []
+        for upload in files:
+            target = os.path.join(staging, os.path.basename(upload.filename))
+            with open(target, "wb") as f:
+                shutil.copyfileobj(upload.file, f)
+            given.append(target)
+
+        provider = _registry().get("image", "image_import")
+
+        try:
+            result = provider.accept_manual(
+                given, StageRequest(project_path=path, scenes=scenes),
+            )
+        except ImageImportError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+    return {
+        "scene_count": result["scene_count"],
+        "image_count": result["image_count"],
+        "warnings": result["warnings"],
+        "scenes": [
+            {
+                "scene": scene["scene"],
+                "url": (
+                    f"/studio/api/projects/{project_id}"
+                    f"/media/scene?scene={scene['scene']}"
+                ),
+            }
+            for scene in result["scenes"]
+        ],
+    }
 
 
 @router.post("/api/production/import")
