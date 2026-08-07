@@ -93,10 +93,9 @@ COMING_SOON = (
     # --- 이미지 ---
     ("imagen", stages.IMAGE, "Imagen", "Google",
      ("GOOGLE_API_KEY",), _ALREADY.format(model="imagen-4.0-generate-001")),
-    ("gpt_image", stages.IMAGE, "GPT Image", "OpenAI",
-     ("OPENAI_API_KEY",), ""),
-    ("flux", stages.IMAGE, "FLUX", "Black Forest Labs",
-     ("FLUX_API_KEY",), ""),
+    # Sprint130 FLUX, Sprint131 GPT Image는 실제로 붙었다. Sprint132에
+    # 여기서 빼고 generated_image.py로 옮겼다 - 같은 이름을 두 곳에서
+    # 등록하면 나중 것이 앞의 것을 가린다.
     ("ideogram", stages.IMAGE, "Ideogram", "Ideogram",
      ("IDEOGRAM_API_KEY",), ""),
 

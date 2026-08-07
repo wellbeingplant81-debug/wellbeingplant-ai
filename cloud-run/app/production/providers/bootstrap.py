@@ -18,6 +18,9 @@ from typing import List
 from app.production.providers.chat_import import ChatImportScriptProvider
 from app.production.providers.coming_soon import coming_soon_providers
 from app.production.providers.elevenlabs_voice import ElevenLabsVoiceProvider
+from app.production.providers.generated_image import (
+    generated_image_providers,
+)
 from app.production.providers.image_import import ImageImportProvider
 from app.production.providers.voice_import import VoiceImportProvider
 from app.production.providers.current_engine import CURRENT_PROVIDER_CLASSES
@@ -49,6 +52,19 @@ def register_current_providers(
     ):
         provider = provider_class()
 
+        try:
+            registry.get(provider.stage, provider.name)
+        except ValueError:
+            registry.register(provider)
+            registered.append(provider)
+
+    # Sprint132 - 코드가 실제로 있는 이미지 Provider들(FLUX, GPT Image).
+    # 아래 Coming Soon보다 먼저 올린다 - 순서가 뒤집히면 같은 이름을
+    # 자리만 있는 쪽이 차지한다.
+    #
+    # 키가 없으면 availability()가 무엇이 없는지 말한다. Coming Soon과
+    # 달리 키만 넣으면 바로 쓸 수 있는 상태다.
+    for provider in generated_image_providers():
         try:
             registry.get(provider.stage, provider.name)
         except ValueError:

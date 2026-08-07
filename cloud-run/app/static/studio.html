@@ -200,14 +200,18 @@ a{color:var(--accent)}
   padding-left:23px}
 
 /* Sprint126 - 이 프로젝트의 Provider 선택. */
-.rprov{background:var(--panel);border:1px solid var(--line);border-radius:7px;
-  padding:9px 10px;margin-bottom:8px}
-.rprov .h{font-size:11.5px;color:var(--dim);margin-bottom:5px}
-.rprov .row{display:flex;align-items:center;gap:7px;font-size:12px;
-  padding:3px 0;cursor:pointer}
-.rprov .row.off{opacity:.45;cursor:not-allowed}
-.rprov .row input{width:auto;flex:none;margin:0;accent-color:var(--accent)}
-.rprov .why{margin-left:auto;color:var(--dim);font-size:10.5px}
+/* Sprint132 - maker(.sprov)와 Review(.rprov)가 같은 물음을 묻는다.
+   따로 칠하면 한쪽만 고치는 날이 온다. 특히 input width:auto가
+   빠지면 위의 input{width:100%}가 라디오를 늘려 버린다. */
+.rprov,.sprov{background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;padding:9px 10px;margin-bottom:8px}
+.rprov .h,.sprov .sh{font-size:11.5px;color:var(--dim);margin-bottom:5px}
+.rprov .row,.sprov .row{display:flex;align-items:center;gap:7px;
+  font-size:12px;padding:3px 0;cursor:pointer}
+.rprov .row.off,.sprov .row.off{opacity:.45;cursor:not-allowed}
+.rprov .row input,.sprov .row input{width:auto;flex:none;margin:0;
+  accent-color:var(--accent)}
+.rprov .why,.sprov .why{margin-left:auto;color:var(--dim);font-size:10.5px}
 
 /* Sprint124 - 아직 붙지 않은 Provider 목록. */
 .pcat{margin-top:8px;font-size:11px}
@@ -931,6 +935,9 @@ let stagePick = {};
 // 가고, 다른 것은 안내 문구뿐이다 - 파서는 넷을 구분하지 않는다
 // (Sprint104). 구분하는 척하지 않으려고 여기 적어 둔다.
 let uiPick = {};
+// Sprint132 - 어느 Provider로 만들지. uiPick("어떻게")와 다른 질문이다.
+// 프로젝트를 만들 때 함께 보내고, project.json의 *_provider가 된다.
+let uiProvider = {};
 
 
 // 품질은 Provider가 신고한 등급이다. 별은 그 등급을 그리는 것일 뿐,
@@ -1213,6 +1220,14 @@ async function startReview(){
 
   if(!r.ok){ alert("프로젝트를 만들지 못했습니다."); return; }
   const d = await r.json();
+
+  // Sprint132 - maker에서 고른 Provider를 이제야 적을 수 있다. 새 API를
+  // 만들지 않는다 - Sprint126이 만든 그 자리로 보낸다.
+  reviewProject = d.project_id;
+  if(Object.keys(uiProvider).length){
+    await reviewCall("PUT", "/providers", {providers: uiProvider});
+  }
+
   await openReview(d.project_id);
 }
 
@@ -1358,7 +1373,8 @@ function reviewScriptStep(state){
 function reviewImageStep(state){
   if(!state.scenes.length) return '<p class="muted">대본이 먼저 필요합니다.</p>';
 
-  return state.scenes.map(s => `<div class="rscene">
+  return reviewProviders(state, "image", "이미지")
+    + state.scenes.map(s => `<div class="rscene">
       <div class="h">Scene ${s.scene}</div>
       ${s.image_url
         ? `<img class="rimg" src="${s.image_url}&t=${Date.now()}">`
@@ -1376,33 +1392,44 @@ function reviewImageStep(state){
 // Sprint126 - 이 프로젝트를 어느 Provider로 만들지. 고른 것은
 // project.json에 적히고, 만들 때 그 프로젝트를 아는 자리가 읽는다 -
 // 환경변수를 바꾸지 않는다.
-function reviewVoiceProviders(state){
-  const spec = (stageSpec && stageSpec.stages.find(x => x.stage === "voice"));
+// Sprint132 - 음성 전용이던 것을 단계 공용으로 편다. 복제하면 두
+// 자리가 조금씩 갈라지고, 그것이 이 저장소가 반복해서 겪은 결함이다.
+function reviewProviders(state, stage, title){
+  const spec = (stageSpec && stageSpec.stages.find(x => x.stage === stage));
   if(!spec) return "";
 
-  const chosen = (state.providers || {}).voice || "current";
+  const chosen = (state.providers || {})[stage] || "current";
   const rows = [{name:"current", display_name:"현재 엔진", vendor:"",
                  available:true, unavailable_reason:""}]
-    .concat((spec.provider_list || []).filter(
-      p => p.source_modes.includes("generate") && p.name !== "current"));
+    .concat(generateProviders(spec));
 
   return `<div class="rprov">
-    <div class="h">이 프로젝트의 음성 Provider</div>
+    <div class="h">이 프로젝트의 ${title} Provider</div>
     ${rows.map(p => `<label class="row ${p.available?"":"off"}">
-      <input type="radio" name="voiceProvider" value="${p.name}"
+      <input type="radio" name="${stage}Provider" value="${p.name}"
         ${chosen === p.name ? "checked" : ""}
         ${p.available ? "" : "disabled"}
-        onchange="reviewPickVoiceProvider('${p.name}')">
+        onchange="reviewPickProvider('${stage}','${p.name}')">
       <span>${p.display_name}${p.vendor ? ` · ${p.vendor}` : ""}</span>
       ${p.available ? "" : `<span class="why">${p.unavailable_reason}</span>`}
     </label>`).join("")}
   </div>`;
 }
 
+// 이 단계에서 실제로 만들 수 있는 것들. 아직 코드가 없는 자리
+// (Coming Soon)는 빼고, 설정만 없는 것은 이유를 달아 남긴다 - 무엇을
+// 넣으면 되는지 그 자리에서 말해야 한다.
+function generateProviders(spec){
+  return (spec.provider_list || []).filter(
+    p => p.source_modes.includes("generate")
+      && p.name !== "current" && !p.coming_soon);
+}
+
 function reviewVoiceStep(state){
   if(!state.scenes.length) return '<p class="muted">대본이 먼저 필요합니다.</p>';
 
-  return reviewVoiceProviders(state) + state.scenes.map(s => `<div class="rscene">
+  return reviewProviders(state, "voice", "음성")
+    + state.scenes.map(s => `<div class="rscene">
       <div class="h">Scene ${s.scene}</div>
       <div class="rowbtns" style="margin-top:0">
         ${s.voice_url
@@ -1521,9 +1548,10 @@ async function reviewSaveScript(){
   if(d) renderReview(d);
 }
 
-async function reviewPickVoiceProvider(name){
+async function reviewPickProvider(stage, name){
   reviewNote("Provider를 적는 중…");
-  const d = await reviewCall("PUT", "/providers", {providers: {voice: name}});
+  const d = await reviewCall("PUT", "/providers",
+                             {providers: {[stage]: name}});
   if(d) renderReview(d);
 }
 
@@ -1660,8 +1688,46 @@ function renderStageBlock(stage){
     <div class="h">${spec.label}</div>
     <div class="sub">${stageSummary(stage)}</div>
     ${STAGE_UI[stage].map(o => providerCard(stage, o, spec)).join("")}
+    ${stageProviderPicker(stage, spec)}
     ${providerCatalog(spec)}
   </div>`;
+}
+
+// Sprint132 - 위 카드는 "어떻게"(AI가 만든다 / 직접 준다 / 안 쓴다)를
+// 고르는 자리다. 여기는 "누가"를 고르는 자리다 - 둘은 다른 질문이고,
+// project.json도 *_source와 *_provider로 나눠 적는다.
+//
+// AI가 만드는 쪽을 골랐을 때만 뜬다. 고를 것이 현재 엔진 하나뿐이면
+// 뜨지 않는다 - 선택지가 하나인 물음은 물음이 아니다.
+function stageProviderPicker(stage, spec){
+  const option = optionOf(stage, uiPick[stage]);
+  if(!option.engine) return "";
+
+  const rows = generateProviders(spec);
+  if(!rows.length) return "";
+
+  const chosen = uiProvider[stage] || "current";
+  const all = [{name:"current", display_name:"현재 엔진", vendor:"",
+                available:true, unavailable_reason:""}].concat(rows);
+
+  return `<div class="sprov">
+    <div class="sh">어느 Provider로 만들까요?</div>
+    ${all.map(p => `<label class="row ${p.available?"":"off"}">
+      <input type="radio" name="prov-${stage}" value="${p.name}"
+        ${chosen === p.name ? "checked" : ""}
+        ${p.available ? "" : "disabled"}
+        onchange="pickProvider('${stage}','${p.name}')">
+      <span>${p.display_name}${p.vendor ? ` · ${p.vendor}` : ""}</span>
+      ${p.available ? "" : `<span class="why">${p.unavailable_reason}</span>`}
+    </label>`).join("")}
+  </div>`;
+}
+
+// 고른 것은 프로젝트를 만들 때 함께 보낸다. 여기서는 기억만 한다 -
+// 아직 적을 프로젝트가 없다.
+function pickProvider(stage, name){
+  uiProvider[stage] = name;
+  renderStagePicks();
 }
 
 function renderStagePicks(){
