@@ -349,7 +349,8 @@ class TestNothingBelowTheScreenMoved(unittest.TestCase):
             {"project_id", "step", "label", "title", "index", "total",
              "done", "scenes", "providers", "estimated_seconds",
              "measured_seconds", "scene_seconds", "timeline",
-             "metadata", "publish_problems", "thumbnail_url"})
+             "metadata", "publish_problems", "thumbnail_url",
+             "queue_status"})
 
     def test_the_pipeline_and_steps_did_not_change(self):
         import app.pipeline.pipeline as pipeline

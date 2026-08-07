@@ -261,11 +261,16 @@ class TestStatusIsDerivedFromTheUploadArtifact(_Case):
 class TestTheQueueReflectsUpload(_Case):
 
     def test_upload_failed_is_a_real_queue_status(self):
+        """
+        Sprint148에서 화면 글자가 사양의 말로 바뀌었다
+        (Upload Failed -> Failed). 키는 그대로이므로 저장된 기록과
+        거르개는 영향이 없다.
+        """
+
         self.assertIn(studio_workflow.UPLOAD_FAILED, studio_workflow.STATUSES)
+        self.assertEqual(studio_workflow.UPLOAD_FAILED, "upload_failed")
         self.assertEqual(
-            studio_workflow.LABELS[studio_workflow.UPLOAD_FAILED],
-            "Upload Failed",
-        )
+            studio_workflow.LABELS[studio_workflow.UPLOAD_FAILED], "Failed")
 
     def test_a_published_project_appears_in_the_published_filter(self):
         path = _project(self.root, "20260101_000001", self.store)

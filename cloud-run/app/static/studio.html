@@ -1485,7 +1485,8 @@ function canvasVideo(state){
         <a class="rbtn" href="${base}" download>다운로드</a>
         <button class="sm ghost" ${publishButtonState(state).ready
           ? "" : "disabled"} title="${publishButtonState(state).why}"
-          onclick="reviewUpload()">${publishButtonState(state).label}</button>
+          onclick="publishAction('${publishButtonState(state).action || ""}')">${
+            publishButtonState(state).label}</button>
         <button class="sm ghost" disabled
           title="Meta App 자격증명과 저장소 설정이 아직 없습니다">
           Instagram</button>
@@ -1596,12 +1597,36 @@ function publishButtonState(state){
   const problems = state.publish_problems || [];
 
   if(problems.length){
-    return {ready:false, label:"YouTube 업로드 준비 필요",
+    return {ready:false, action:null, label:"YouTube 업로드 준비 필요",
             why: problems.join(" · ")};
   }
 
-  return {ready:true, label:"업로드 요청",
-          why:"Production Queue에서 승인해야 실제로 올라갑니다."};
+  // Sprint148 - 큐에서 지금 어디쯤인가. 서버가 준 값을 그대로 읽는다 -
+  // 화면이 따로 판정하지 않는다.
+  const at = state.queue_status;
+
+  if(at === "waiting_approval"){
+    return {ready:false, action:null, label:"승인 대기",
+            why:"Production Queue에서 승인하면 올릴 수 있습니다."};
+  }
+
+  if(at === "uploading"){
+    return {ready:false, action:null, label:"업로드 중",
+            why:"올리는 중입니다."};
+  }
+
+  if(at === "published"){
+    return {ready:false, action:null, label:"게시 완료",
+            why:"이미 올라갔습니다."};
+  }
+
+  if(at === "approved" || at === "upload_failed"){
+    return {ready:true, action:"upload", label:"업로드 가능",
+            why:"승인됐습니다. 누르면 올리는 작업을 겁니다."};
+  }
+
+  return {ready:true, action:"request", label:"업로드 요청",
+          why:"요청만 합니다. Production Queue에서 승인해야 올라갑니다."};
 }
 
 function publishPanel(state){
@@ -1660,10 +1685,31 @@ function publishPanel(state){
         : ""}
       <button class="sm ghost" ${button.ready ? "" : "disabled"}
         title="${button.why}"
-        onclick="reviewUpload()">${button.label}</button>
+        onclick="publishAction('${button.action || ""}')">${
+          button.label}</button>
     </div>
     <p class="muted">${button.why}</p>
   </div>`;
+}
+
+// Sprint148 - 무엇을 할지는 버튼 상태가 정한다.
+//
+//   request  큐에 올려 달라고 요청한다. 올리지 않는다
+//   upload   승인된 것을 올리는 작업을 건다(예전 그 자리)
+async function publishAction(action){
+  if(action === "upload"){ await reviewUpload(); return; }
+  if(action !== "request") return;
+
+  reviewNote("업로드를 요청하는 중…");
+
+  const r = await fetch(
+    `/studio/api/projects/${reviewProject}/request-upload`, {method:"POST"});
+  const d = await r.json();
+
+  if(!r.ok){ alert(d.detail || "요청하지 못했습니다."); return; }
+
+  const state = await reviewCall("GET", "");
+  if(state) renderReview(state);
 }
 
 async function savePublish(){

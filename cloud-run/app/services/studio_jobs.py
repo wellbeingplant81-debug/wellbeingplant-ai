@@ -403,6 +403,9 @@ def recent(limit: int = 10) -> list:
             "topic": job["topic"],
             "project_id": job["project_id"],
             "title": job["title"],
+            # Sprint148 - 무슨 작업인가. 업로드 중인 프로젝트를
+            # 생성 중으로 읽지 않으려면 종류를 알아야 한다.
+            "kind": job.get("kind", "generate"),
         }
         for job in jobs[-limit:][::-1]
     ]

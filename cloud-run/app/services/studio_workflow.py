@@ -30,23 +30,31 @@ DRAFT = "draft"
 GENERATING = "generating"
 INSPECTION = "inspection"
 NEEDS_REGENERATION = "needs_regeneration"
+# Sprint148 - 사람이 "올리겠다"고 한 것. 유도할 수 없는 결정이므로
+# 저장한다 - 승인과 같은 부류다.
+WAITING_APPROVAL = "waiting_approval"
 APPROVED = "approved"
+# Sprint148 - 지금 올리고 있다. 저장하지 않는다 - 도는 작업이 곧
+# 사실이므로 그것에서 유도한다.
+UPLOADING = "uploading"
 UPLOAD_FAILED = "upload_failed"
 PUBLISHED = "published"
 
 STATUSES = (
-    DRAFT, GENERATING, INSPECTION, NEEDS_REGENERATION, APPROVED,
-    UPLOAD_FAILED, PUBLISHED,
+    DRAFT, GENERATING, INSPECTION, NEEDS_REGENERATION, WAITING_APPROVAL,
+    APPROVED, UPLOADING, UPLOAD_FAILED, PUBLISHED,
 )
 
 LABELS = {
     DRAFT: "Draft",
     GENERATING: "Generating",
-    INSPECTION: "Inspection",
+    INSPECTION: "Ready",
     NEEDS_REGENERATION: "Needs Regeneration",
+    WAITING_APPROVAL: "Waiting Approval",
     APPROVED: "Approved",
-    UPLOAD_FAILED: "Upload Failed",
-    PUBLISHED: "Published",
+    UPLOADING: "Uploading",
+    UPLOAD_FAILED: "Failed",
+    PUBLISHED: "Done",
 }
 
 # 사람이 내린 결정만 저장한다. 나머지는 유도한다.
@@ -55,7 +63,7 @@ LABELS = {
 # (youtube_upload_result.json)에서 유도한다 - script.json이 있으면
 # 대본이 끝난 것이라고 판정하는 것과 같은 방식이다. 사람이 내린 결정은
 # 승인 하나뿐이고, 업로드 성공은 사실이지 판단이 아니다.
-STORED_STATUSES = (APPROVED,)
+STORED_STATUSES = (WAITING_APPROVAL, APPROVED)
 
 STORE_FILENAME = "workflow.json"
 
@@ -136,6 +144,55 @@ def approve(project_id: str, store_path: str) -> dict:
     return stored[key]
 
 
+def request_upload(project_id: str, store_path: str) -> dict:
+    """
+    사람이 올리겠다고 한다. 올리지는 않는다.
+
+    승인과 같은 부류의 결정이라 저장한다 - 파일에서 유도할 수 없고,
+    새로고침을 넘어 살아남아야 한다.
+
+    이미 승인된 것은 되돌리지 않는다. 요청은 승인 앞의 단계이므로
+    뒤로 끌어내리면 사람이 내린 판단을 지우는 것이 된다.
+    """
+
+    key = _valid_id(project_id)
+    stored = load_store(store_path)
+    current = stored.get(key, {})
+
+    if current.get("status") == APPROVED:
+        return current
+
+    if current.get("status") != WAITING_APPROVAL:
+        stored[key] = {
+            "status": WAITING_APPROVAL,
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+        }
+        _save_store(store_path, stored)
+
+    return stored[key]
+
+
+def reject(project_id: str, store_path: str, reason: str = "") -> dict:
+    """
+    거절한다. 요청을 거두고 사유를 남긴다.
+
+    사유는 사람이 쓴 것이므로 저장한다. 상태는 저장하지 않는다 -
+    거절하면 요청 이전으로 돌아가고, 그때의 상태는 산출물이 말한다.
+    """
+
+    key = _valid_id(project_id)
+    stored = load_store(store_path)
+
+    stored[key] = {
+        "rejected_at": datetime.now(timezone.utc).isoformat(),
+        "rejection_reason": (reason or "").strip(),
+    }
+
+    _save_store(store_path, stored)
+
+    return stored[key]
+
+
 def unapprove(project_id: str, store_path: str) -> None:
     """승인을 거둔다. 유도 상태로 돌아간다."""
 
@@ -197,7 +254,7 @@ def _upload_row(project_path: str):
 
 
 def status_for(project_path: str, stored: dict = None,
-               running: bool = False) -> str:
+               running: bool = False, uploading: bool = False) -> str:
     """
     지금의 상태. 순수 읽기입니다.
 
@@ -205,6 +262,10 @@ def status_for(project_path: str, stored: dict = None,
     업로드 결과가 있으면 그것이 승인보다 나중의 사실이며, 사람이
     승인했으면 그것이 유도보다 우선한다.
     """
+
+    # Sprint148 - 지금 올리고 있으면 그것이 가장 최신 사실이다.
+    if uploading:
+        return UPLOADING
 
     if running:
         return GENERATING
@@ -252,7 +313,8 @@ def _created_at(project_id: str):
     return stamp.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def queue(root: str, store_path: str, running=None) -> list:
+def queue(root: str, store_path: str, running=None,
+          uploading=None) -> list:
     """
     프로젝트 목록과 각각의 상태. 순수 읽기입니다.
 
@@ -265,6 +327,7 @@ def queue(root: str, store_path: str, running=None) -> list:
 
     stored = load_store(store_path)
     running = set(running or ())
+    uploading = set(uploading or ())
 
     rows = []
 
@@ -303,8 +366,16 @@ def queue(root: str, store_path: str, running=None) -> list:
             ),
             "status": status_for(
                 path, stored.get(name), name in running,
+                name in uploading,
             ),
             "approved_at": (stored.get(name) or {}).get("approved_at"),
+            # Sprint148 - 사람이 내린 결정들. 유도할 수 없으므로 저장한
+            # 것을 그대로 나른다.
+            "requested_at": (stored.get(name) or {}).get("requested_at"),
+            "rejected_at": (stored.get(name) or {}).get("rejected_at"),
+            "rejection_reason": (
+                (stored.get(name) or {}).get("rejection_reason")
+            ),
             # Sprint92 - 업로드가 실패했으면 왜인지 화면이 그대로
             # 보여줄 수 있어야 한다. 시도한 적이 없으면 None이다.
             "upload": _upload_row(path),

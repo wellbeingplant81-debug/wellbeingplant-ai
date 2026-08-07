@@ -345,16 +345,22 @@ class TestPublishButtonNeverUploadsDirectly(unittest.TestCase):
         self.assertEqual(script.count("/upload"), 1)
         self.assertIn("reviewUpload", _function("publishPanel"))
 
-    def test_no_new_upload_endpoint_was_added(self):
+    def test_no_new_upload_engine_was_added(self):
+        """
+        Sprint148이 "올려 달라고 요청하는" 자리를 더했다. 실제로 올리는
+        자리는 여전히 하나뿐이다 - 요청은 큐에 적을 뿐 올리지 않는다.
+        """
+
         from app.main import app
 
-        upload_paths = [
-            path for path in app.openapi()["paths"]
-            if "upload" in path
-        ]
+        upload_paths = sorted(
+            path for path in app.openapi()["paths"] if "upload" in path
+        )
 
-        self.assertEqual(upload_paths,
-                         ["/studio/api/projects/{project_id}/upload"])
+        self.assertEqual(upload_paths, [
+            "/studio/api/projects/{project_id}/request-upload",
+            "/studio/api/projects/{project_id}/upload",
+        ])
 
     def test_the_button_is_off_until_the_checks_pass(self):
         block = _function("publishPanel")

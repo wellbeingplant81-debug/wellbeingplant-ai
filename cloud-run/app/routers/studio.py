@@ -111,6 +111,18 @@ def _running_projects() -> set:
         job["project_id"]
         for job in studio_jobs.recent(50)
         if job.get("state") == "running" and job.get("project_id")
+        and job.get("kind") != "upload"
+    }
+
+
+def _uploading_projects() -> set:
+    """지금 올리고 있는 프로젝트. 저장하지 않고 도는 작업에서 읽는다."""
+
+    return {
+        job["project_id"]
+        for job in studio_jobs.recent(50)
+        if job.get("state") == "running" and job.get("project_id")
+        and job.get("kind") == "upload"
     }
 
 
@@ -129,6 +141,7 @@ def queue_page():
 def queue(status: str = "all"):
     rows = studio_workflow.queue(
         project_service.OUTPUT_ROOT, _workflow_store(), _running_projects(),
+        _uploading_projects(),
     )
 
     try:
@@ -763,6 +776,44 @@ def upload(project_id: str):
     return {"job_id": job_id}
 
 
+@router.post("/api/projects/{project_id}/request-upload")
+def request_upload(project_id: str):
+    """
+    Sprint148 - 올리겠다고 요청한다. 올리지는 않는다.
+
+    Sprint147의 검사를 먼저 통과해야 한다 - 제목도 영상도 없는 것을
+    큐에 올려 두면 승인하는 사람이 무엇을 승인하는지 알 수 없다.
+    """
+
+    from app.services import publish_gate
+
+    path = _project_path(project_id)
+    problems = publish_gate.problems(path)
+
+    if problems:
+        raise HTTPException(status_code=400, detail=" · ".join(problems))
+
+    try:
+        return studio_workflow.request_upload(project_id, _workflow_store())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/projects/{project_id}/reject")
+def reject(project_id: str, request: RejectRequest = None):
+    """거절한다. 요청을 거두고 사유를 남긴다."""
+
+    _project_path(project_id)
+
+    try:
+        return studio_workflow.reject(
+            project_id, _workflow_store(),
+            (request.reason if request else "") or "",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/api/projects/{project_id}/unapprove")
 def unapprove(project_id: str):
     _project_path(project_id)
@@ -888,6 +939,11 @@ class ReviewScriptRequest(BaseModel):
     # 대본과 한 번에 오지만 한 파일에 섞이지 않는다 - 대본은
     # script.json, 차례는 timeline.json이다. 없으면 차례는 그대로 둔다.
     timeline: dict = None
+
+
+class RejectRequest(BaseModel):
+    # Sprint148 - 사람이 쓴 거절 사유. 비어 있어도 거절은 된다.
+    reason: str = ""
 
 
 class ReviewMetadataRequest(BaseModel):
@@ -1041,6 +1097,14 @@ def review_state(project_id: str):
         # Sprint147 - 지금 올리면 무엇이 걸리는가. 화면이 짐작하지
         # 않고 이 목록을 그대로 보여 준다.
         "publish_problems": publish_gate.problems(path),
+        # Sprint148 - 큐에서 지금 어디쯤인가. 화면이 버튼 글자를
+        # 지어내지 않고 이 값을 그대로 읽는다.
+        "queue_status": studio_workflow.status_for(
+            path,
+            studio_workflow.load_store(_workflow_store()).get(project_id),
+            project_id in _running_projects(),
+            project_id in _uploading_projects(),
+        ),
         # 썸네일이 실제로 있는가. 없으면 화면이 있는 척하지 않는다.
         "thumbnail_url": (
             f"/studio/api/projects/{project_id}/media/thumbnail"

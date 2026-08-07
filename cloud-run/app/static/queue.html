@@ -41,6 +41,8 @@ tr:hover td{background:#1a212c}
 .st.inspection{color:var(--text)}
 .st.needs_regeneration{color:var(--warn);border-color:#4a3a1a}
 .st.approved{color:var(--ok);border-color:#1d4429}
+.st.waiting_approval{color:#d29922;border-color:#5c3d0a}
+.st.uploading{color:#58a6ff;border-color:#1c3a5e}
 .st.published{color:var(--purple);border-color:#3a2a5c}
 .st.upload_failed{color:var(--bad);border-color:#5c2320}
 .uperr{color:var(--bad);font-size:11px;margin-top:3px}
@@ -91,7 +93,8 @@ const $ = (id) => document.getElementById(id);
 let current = "all", data = null;
 
 const ORDER = ["all","draft","generating","inspection",
-               "needs_regeneration","approved","upload_failed","published"];
+               "needs_regeneration","waiting_approval","approved",
+               "uploading","upload_failed","published"];
 
 function unknown(v, fmt){
   return (v===null || v===undefined) ? '<span class="unknown">Unknown</span>'
@@ -127,8 +130,12 @@ function renderTable(d){
         <td><span class="st ${r.status}">${d.labels[r.status]}</span>
           ${r.status==="needs_regeneration"
             ? `<div class="muted">scene ${r.failed_scenes.join(", ")}</div>`:""}
+          ${r.status==="waiting_approval"
+            ? `<div class="muted">요청 ${r.requested_at || ""}</div>`:""}
           ${r.status==="approved"
             ? `<div class="ready">Ready for Upload</div>`:""}
+          ${r.rejection_reason
+            ? `<div class="uperr">거절 사유 · ${r.rejection_reason}</div>`:""}
           ${r.upload && r.upload.outcome==="uploaded" && r.upload.url
             ? `<div class="upok"><a href="${r.upload.url}" target="_blank"
                  rel="noopener">${r.upload.url}</a></div>`:""}
@@ -139,9 +146,14 @@ function renderTable(d){
           ${r.status==="approved" || r.status==="upload_failed"
             ? `<button onclick="upload('${r.project_id}')">업로드</button>
                <button class="ghost" onclick="unapprove('${r.project_id}')">승인 취소</button>`
-            : (r.has_video && r.status!=="published"
-                ? `<button onclick="approve('${r.project_id}')">승인</button>`
-                : "")}
+            : (r.status==="waiting_approval"
+                ? `<button onclick="approve('${r.project_id}')">승인</button>
+                   <button class="ghost"
+                     onclick="reject('${r.project_id}')">거절</button>`
+                : (r.has_video && r.status!=="published"
+                    && r.status!=="uploading"
+                    ? `<button onclick="approve('${r.project_id}')">승인</button>`
+                    : ""))}
         </div></td>
       </tr>`).join("")}
   </table>`;
@@ -173,6 +185,19 @@ async function upload(id){
       load();
     }
   }, 1500);
+}
+
+// Sprint148 - 거절은 요청을 거두고 사유를 남긴다. 사유는 사람이 쓴
+// 것이므로 저장되고, 상태는 산출물이 말하는 곳으로 돌아간다.
+async function reject(id){
+  const reason = prompt("거절 사유를 적어 주십시오. 비워 두어도 됩니다.");
+  if(reason === null) return;
+
+  await fetch(`/studio/api/projects/${id}/reject`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({reason: reason})});
+
+  await load();
 }
 
 async function unapprove(id){
