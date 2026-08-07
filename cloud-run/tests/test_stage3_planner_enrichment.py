@@ -102,7 +102,7 @@ class PipelineHarness(unittest.TestCase):
              patch.object(config, "ENABLE_VIRAL_WRITER", False), \
              patch.object(pipeline.step01_script_resolve, "run", fake_step01), \
              patch.object(
-                 pipeline.step02_assets, "collect_assets", fake_collect_assets,
+                 pipeline.step02_asset_resolve, "run", fake_collect_assets,
              ), \
              patch.object(pipeline.step03_tts, "run", fake_tts), \
              patch.object(pipeline.step04_subtitle, "run", lambda p: None), \

@@ -73,7 +73,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -86,14 +86,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
 
         result = pipeline.run_pipeline(
             topic="주제",
@@ -104,7 +104,7 @@ class TestPipeline(unittest.TestCase):
         mock_visual_consistency.apply_visual_consistency.assert_called_once_with(
             SAMPLE_DATA["scenes"], "wellbeing",
         )
-        mock_step02_assets.collect_assets.assert_called_once_with(
+        mock_step02.run.assert_called_once_with(
             VISUAL_TYPED_SCENES, self.project_path, "wellbeing",
         )
         self.assertEqual(result["scenes"], ENRICHED_SCENES)
@@ -125,7 +125,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -138,14 +138,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
 
         pipeline.run_pipeline(
             topic="주제",
@@ -178,7 +178,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -191,14 +191,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
 
         pipeline.run_pipeline(
             topic="주제",
@@ -231,7 +231,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -244,14 +244,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
 
         pipeline.run_pipeline(
             topic="주제",
@@ -277,7 +277,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -290,14 +290,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
         mock_step07.run.side_effect = Exception("boom")
 
         pipeline.run_pipeline(
@@ -324,7 +324,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -337,14 +337,14 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
     ):
         mock_step01.run.return_value = dict(SAMPLE_DATA)
         mock_visual_consistency.apply_visual_consistency.return_value = STYLED_SCENES
-        mock_step02_assets.collect_assets.return_value = ENRICHED_SCENES
+        mock_step02.run.return_value = ENRICHED_SCENES
         mock_regeneration_service.run.side_effect = Exception("regen boom")
 
         result = pipeline.run_pipeline(
@@ -371,7 +371,7 @@ class TestPipeline(unittest.TestCase):
     @patch("app.pipeline.pipeline.regeneration_service")
     @patch("app.pipeline.pipeline.visual_consistency_engine")
     @patch("app.pipeline.pipeline.step01_script_resolve")
-    @patch("app.pipeline.pipeline.step02_assets")
+    @patch("app.pipeline.pipeline.step02_asset_resolve")
     @patch("app.pipeline.pipeline.step03_tts")
     @patch("app.pipeline.pipeline.step04_subtitle")
     @patch("app.pipeline.pipeline.step05_video")
@@ -384,7 +384,7 @@ class TestPipeline(unittest.TestCase):
         mock_step05,
         mock_step04,
         mock_step03,
-        mock_step02_assets,
+        mock_step02,
         mock_step01,
         mock_visual_consistency,
         mock_regeneration_service,
@@ -394,7 +394,7 @@ class TestPipeline(unittest.TestCase):
         mock_visual_consistency.apply_visual_consistency.side_effect = (
             lambda scenes, channel: call_order.append("style") or STYLED_SCENES
         )
-        mock_step02_assets.collect_assets.side_effect = (
+        mock_step02.run.side_effect = (
             lambda scenes, path, channel: call_order.append("assets") or ENRICHED_SCENES
         )
 

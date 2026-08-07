@@ -82,7 +82,7 @@ def patched_pipeline():
         ENABLE_VIRAL_WRITER=False,
     ), \
          patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
-         patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
+         patch("app.pipeline.pipeline.step02_asset_resolve") as step02, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
          patch("app.pipeline.pipeline.step05_video") as step05, \
@@ -97,7 +97,7 @@ def patched_pipeline():
 
         yield {
             "step01": step01,
-            "step02_assets": step02_assets,
+            "step02": step02,
             "step03": step03,
             "step04": step04,
             "step05": step05,
@@ -119,7 +119,7 @@ def _wire_defaults(mocks):
     # 통과), collect_assets 호출 인자를 검증하는 기존 테스트들이
     # visual_type 분기 도입과 무관하게 그대로 성립하도록 한다.
     mocks["scene_planner"].apply_visual_type.side_effect = lambda scenes: scenes
-    mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
+    mocks["step02"].run.return_value = ENRICHED_SCENES
 
 
 class TestPromptOptimizationFeatureFlag(unittest.TestCase):
@@ -164,7 +164,7 @@ class TestPromptOptimizationFeatureFlag(unittest.TestCase):
             m["prompt_optimization"].optimize_scenes.assert_called_once_with(
                 STYLED_SCENES, ENRICHED_PROMPT_SCENES, FAKE_PROMPT_METRICS, FAKE_SCENE_PLAN,
             )
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 OPTIMIZED_PROMPT_SCENES, self.project_path, "wellbeing",
             )
 
@@ -193,7 +193,7 @@ class TestPromptOptimizationFeatureFlag(unittest.TestCase):
             result = self._run_pipeline()
 
             self.assertEqual(result["scenes"], ENRICHED_SCENES)
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 STYLED_SCENES, self.project_path, "wellbeing",
             )
             m["regeneration_service"].run.assert_called_once_with(self.project_path)
@@ -218,7 +218,7 @@ class TestPromptOptimizationFeatureFlag(unittest.TestCase):
                     "scenes": ENRICHED_SCENES,
                 },
             )
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 STYLED_SCENES, self.project_path, "wellbeing",
             )
 

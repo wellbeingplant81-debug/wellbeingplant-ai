@@ -67,7 +67,7 @@ def patched_pipeline():
         ENABLE_VIRAL_WRITER=False,
     ), \
          patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
-         patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
+         patch("app.pipeline.pipeline.step02_asset_resolve") as step02, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
          patch("app.pipeline.pipeline.step05_video") as step05, \
@@ -79,7 +79,7 @@ def patched_pipeline():
 
         yield {
             "step01": step01,
-            "step02_assets": step02_assets,
+            "step02": step02,
             "step03": step03,
             "step04": step04,
             "step05": step05,
@@ -99,7 +99,7 @@ def _wire_defaults(mocks):
     mocks["step01"].run.return_value = dict(SAMPLE_DATA)
     mocks["visual_consistency"].apply_visual_consistency.return_value = STYLED_SCENES
     mocks["scene_planner"].apply_visual_type.return_value = VISUAL_TYPED_SCENES
-    mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
+    mocks["step02"].run.return_value = ENRICHED_SCENES
     # Sprint68 (Stage 3) - Scene Planner가 기본 활성이므로, planner를
     # 통째로 mock한 이 하네스에서도 plan_scenes()가 직렬화 가능한 값을
     # 돌려줘야 한다. MagicMock을 그대로 두면 script.json 저장에서 깨진다.
@@ -136,7 +136,7 @@ class TestPipelineAppliesVisualType(unittest.TestCase):
 
             self._run_pipeline()
 
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 VISUAL_TYPED_SCENES, self.project_path, "wellbeing",
             )
 

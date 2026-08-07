@@ -74,7 +74,7 @@ def patched_pipeline():
         ENABLE_VIRAL_WRITER=False,
     ), \
          patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
-         patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
+         patch("app.pipeline.pipeline.step02_asset_resolve") as step02, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
          patch("app.pipeline.pipeline.step05_video") as step05, \
@@ -86,7 +86,7 @@ def patched_pipeline():
 
         yield {
             "step01": step01,
-            "step02_assets": step02_assets,
+            "step02": step02,
             "step03": step03,
             "step04": step04,
             "step05": step05,
@@ -101,7 +101,7 @@ def patched_pipeline():
 def _wire_defaults(mocks):
     mocks["step01"].run.return_value = dict(SAMPLE_DATA)
     mocks["visual_consistency"].apply_visual_consistency.return_value = STYLED_SCENES
-    mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
+    mocks["step02"].run.return_value = ENRICHED_SCENES
 
 
 class TestScenePlannerFeatureFlag(unittest.TestCase):

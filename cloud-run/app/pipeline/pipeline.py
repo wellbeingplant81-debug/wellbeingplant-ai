@@ -10,7 +10,7 @@ from app.services import asset_observatory
 from app.tools import asset_dataset
 from app.services import scene_prompt_service
 from app.services import search_cache
-from app.steps import step02_assets
+from app.steps import step02_asset_resolve
 from app.steps import step03_tts
 from app.steps import step04_subtitle
 from app.steps import step05_video
@@ -299,7 +299,7 @@ def run_pipeline(
     )
 
     t0 = time.perf_counter()
-    data["scenes"] = step02_assets.collect_assets(
+    data["scenes"] = step02_asset_resolve.run(
         data["scenes"],
         project_path,
         channel,

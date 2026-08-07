@@ -65,7 +65,7 @@ def patched_pipeline():
         ENABLE_VIRAL_WRITER=False,
     ), \
          patch("app.pipeline.pipeline.step01_script_resolve") as step01, \
-         patch("app.pipeline.pipeline.step02_assets") as step02_assets, \
+         patch("app.pipeline.pipeline.step02_asset_resolve") as step02, \
          patch("app.pipeline.pipeline.step03_tts") as step03, \
          patch("app.pipeline.pipeline.step04_subtitle") as step04, \
          patch("app.pipeline.pipeline.step05_video") as step05, \
@@ -81,7 +81,7 @@ def patched_pipeline():
 
         yield {
             "step01": step01,
-            "step02_assets": step02_assets,
+            "step02": step02,
             "step03": step03,
             "step04": step04,
             "step05": step05,
@@ -108,7 +108,7 @@ def _wire_defaults(mocks):
     # 통과), collect_assets 호출 인자를 검증하는 기존 테스트들이
     # visual_type 분기 도입과 무관하게 그대로 성립하도록 한다.
     mocks["scene_planner"].apply_visual_type.side_effect = lambda scenes: scenes
-    mocks["step02_assets"].collect_assets.return_value = ENRICHED_SCENES
+    mocks["step02"].run.return_value = ENRICHED_SCENES
     # Sprint68 (Stage 3) - Scene Planner가 기본 활성이므로, planner를
     # 통째로 mock한 이 하네스에서도 plan_scenes()가 직렬화 가능한 값을
     # 돌려줘야 한다. MagicMock을 그대로 두면 script.json 저장에서 깨진다.
@@ -183,7 +183,7 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
             self.assertNotIn("prompt_learning", result)
             self.assertNotIn("learning_summary", result)
             self.assertEqual(result["scenes"], ENRICHED_SCENES)
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 STYLED_SCENES, self.project_path, "wellbeing",
             )
 
@@ -221,7 +221,7 @@ class TestPromptLearningFeatureFlag(unittest.TestCase):
                     "scenes": ENRICHED_SCENES,
                 },
             )
-            m["step02_assets"].collect_assets.assert_called_once_with(
+            m["step02"].run.assert_called_once_with(
                 STYLED_SCENES, self.project_path, "wellbeing",
             )
 

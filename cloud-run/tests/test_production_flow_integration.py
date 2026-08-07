@@ -269,7 +269,7 @@ class TestNothingDownstreamChanged(unittest.TestCase):
 
         source = open(pipeline.__file__, encoding="utf-8").read()
 
-        for call in ("step02_assets.collect_assets(", "step03_tts.run(",
+        for call in ("step02_asset_resolve.run(", "step03_tts.run(",
                      "step04_subtitle.run(", "step05_video.run(",
                      "step06_thumbnail.run(", "step07_quality.run(",
                      "metadata_service.generate_publish_package(",
