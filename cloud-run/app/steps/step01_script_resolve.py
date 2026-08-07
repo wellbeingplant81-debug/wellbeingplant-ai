@@ -29,15 +29,18 @@ script.json 하나다. 다른 것은 그 파일이 어디서 왔는가(붙여넣
 import json
 import os
 
-# 대본을 어디서 얻는가.
-AUTO = "auto"
-IMPORT = "import"
-MANUAL = "manual"
+from app.steps import resolve_common
 
-SOURCES = (AUTO, IMPORT, MANUAL)
+# 대본을 어디서 얻는가. Sprint114 - 세 Resolver가 같은 말을 쓰도록
+# 어휘는 resolve_common이 소유한다. 값도 객체도 같다.
+AUTO = resolve_common.AUTO
+IMPORT = resolve_common.IMPORT
+MANUAL = resolve_common.MANUAL
+
+SOURCES = resolve_common.SOURCES
 
 # 미리 놓인 대본을 쓰는 출처들. 둘 다 step01을 부르지 않는다.
-PREPARED_SOURCES = (IMPORT, MANUAL)
+PREPARED_SOURCES = resolve_common.PREPARED_SOURCES
 
 SCRIPT_FILENAME = "script.json"
 
@@ -72,30 +75,23 @@ def source_from_metadata(project_path: str):
     적혀 있으면 그것이 가장 확실한 근거다 - 프로젝트를 만든 쪽이
     직접 남긴 것이므로 디스크 상태를 보고 추측할 필요가 없다."""
 
-    try:
-        with open(
-            os.path.join(project_path, "project.json"), "r", encoding="utf-8",
-        ) as f:
-            metadata = json.load(f)
-    except Exception:
-        return None
-
-    value = metadata.get(SOURCE_FIELD) if isinstance(metadata, dict) else None
-
-    return value if value in SOURCES else None
+    return resolve_common.source_from_metadata(project_path, SOURCE_FIELD)
 
 
 def detect_source(project_path: str) -> str:
     """무엇으로 볼 것인가. 순수 읽기입니다.
 
-    적혀 있으면 그것을 쓰고, 없으면 디스크 상태로 판단한다."""
+    적혀 있으면 그것을 쓰고, 없으면 디스크 상태로 판단한다.
 
-    recorded = source_from_metadata(project_path)
+    "놓였다"의 뜻은 여기서 정한다 - 대본은 파일 하나이므로 그것이
+    있느냐가 전부다.
+    """
 
-    if recorded is not None:
-        return recorded
-
-    return IMPORT if os.path.exists(script_path(project_path)) else AUTO
+    return resolve_common.resolve_source(
+        project_path,
+        SOURCE_FIELD,
+        lambda: os.path.exists(script_path(project_path)),
+    )
 
 
 def _load(path: str):

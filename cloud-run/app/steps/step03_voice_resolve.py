@@ -41,26 +41,25 @@ voice.wav만 있을 때 물러서는 이유는 subtitle_service가 scene 오디�
 멈추고 무엇이 없는지 말하는 편이 낫다.
 """
 
-import json
 import os
 
 from app.services import audio_policy
+from app.steps import resolve_common
 
-AUTO = "auto"
-IMPORT = "import"
-MANUAL = "manual"
+# Sprint114 - 어휘는 resolve_common이 소유한다. 값도 객체도 같다.
+AUTO = resolve_common.AUTO
+IMPORT = resolve_common.IMPORT
+MANUAL = resolve_common.MANUAL
 
-SOURCES = (AUTO, IMPORT, MANUAL)
+SOURCES = resolve_common.SOURCES
 
 # 사용자가 직접 넣은 음성을 쓰는 두 가지. 화면에서 폴더를 고르든
 # 파일을 끌어다 놓든 결과는 같은 자리의 같은 파일이라, 갈라야 할
 # 이유가 없다.
-PREPARED_SOURCES = (IMPORT, MANUAL)
+PREPARED_SOURCES = resolve_common.PREPARED_SOURCES
 
 # 단계마다 출처가 다를 수 있으므로(Sprint109) 음성은 음성의 칸을 쓴다.
 SOURCE_FIELD = "voice_source"
-
-PROJECT_FILENAME = "project.json"
 
 AUDIO_DIRNAME = "audio"
 SCENES_DIRNAME = "scenes"
@@ -92,43 +91,21 @@ def _voice_path(project_path):
 
 
 def _placed_numbers(project_path):
-    """놓여 있는 scene 번호들. 파일이 실제로 있는 것만 센다."""
+    """놓여 있는 scene 번호들. 파일이 실제로 있는 것만 센다.
 
-    scenes_dir = _scenes_dir(project_path)
+    파일명 규칙은 audio_policy가 소유한다 - 여기서 확장자를 적으면
+    정책이 두 곳에 생긴다."""
 
-    if not os.path.isdir(scenes_dir):
-        return []
-
-    stem, suffix = audio_policy.scene_audio_filename("\0").split("\0")
-    found = []
-
-    for name in os.listdir(scenes_dir):
-        if not (name.startswith(stem) and name.endswith(suffix)):
-            continue
-
-        digits = name[len(stem):len(name) - len(suffix)]
-        if digits.isdigit():
-            found.append(int(digits))
-
-    return sorted(found)
+    return resolve_common.numbered_files(
+        _scenes_dir(project_path),
+        audio_policy.scene_audio_filename("{number}"),
+    )
 
 
 def source_from_metadata(project_path):
     """사람이 고른 것이 적혀 있으면 그것. 없으면 None."""
 
-    path = os.path.join(project_path, PROJECT_FILENAME)
-
-    if not os.path.exists(path):
-        return None
-
-    try:
-        with open(path, encoding="utf-8") as f:
-            recorded = json.load(f).get(SOURCE_FIELD)
-    except (OSError, ValueError):
-        # 읽을 수 없는 project.json 때문에 제작이 멈추지는 않는다.
-        return None
-
-    return recorded if recorded in SOURCES else None
+    return resolve_common.source_from_metadata(project_path, SOURCE_FIELD)
 
 
 def detect_source(project_path):
@@ -143,17 +120,12 @@ def detect_source(project_path):
     갔는지 사용자에게 말해 줄 수 없다.
     """
 
-    recorded = source_from_metadata(project_path)
-
-    if recorded:
-        return recorded
-
-    if _placed_numbers(project_path) or os.path.exists(
-        _voice_path(project_path)
-    ):
-        return IMPORT
-
-    return AUTO
+    return resolve_common.resolve_source(
+        project_path,
+        SOURCE_FIELD,
+        lambda: bool(_placed_numbers(project_path))
+        or os.path.exists(_voice_path(project_path)),
+    )
 
 
 def validate(scenes, project_path):
@@ -229,8 +201,7 @@ def run(scenes, project_path, source=None):
 
     if resolved not in SOURCES:
         raise VoiceResolveError(
-            f"알 수 없는 음성 출처입니다: {resolved}. "
-            f"{', '.join(SOURCES)} 중 하나여야 합니다."
+            resolve_common.unknown_source_message("음성", resolved)
         )
 
     if resolved in PREPARED_SOURCES:

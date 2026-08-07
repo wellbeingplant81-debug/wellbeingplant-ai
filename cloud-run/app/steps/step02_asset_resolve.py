@@ -32,8 +32,9 @@ Sprint110의 ImageImportProvider가 이미 끝냈고, 여기는 그것이 남긴
 테스트로 잠근다.
 """
 
-import json
 import os
+
+from app.steps import resolve_common
 
 # 엔진이 이미지를 놓고 찾는 자리. asset_integration_service가 여기에
 # scene{N}.png로 만들고, video_builder가 같은 이름으로 읽는다.
@@ -49,23 +50,22 @@ IMAGE_IMPORT = "image_import"
 # 뜻이라 여기에 맞지 않는다.
 CONFIDENCE = 1.0
 
-AUTO = "auto"
-IMPORT = "import"
-MANUAL = "manual"
+# Sprint114 - 어휘는 resolve_common이 소유한다. 값도 객체도 같다.
+AUTO = resolve_common.AUTO
+IMPORT = resolve_common.IMPORT
+MANUAL = resolve_common.MANUAL
 
-SOURCES = (AUTO, IMPORT, MANUAL)
+SOURCES = resolve_common.SOURCES
 
 # 사용자가 직접 놓은 이미지를 쓰는 두 가지. 화면에서 폴더를 고르든
 # 파일을 끌어다 놓든 결과는 같은 자리의 같은 파일이라, 여기서
 # 갈라야 할 이유가 없다.
-PREPARED_SOURCES = (IMPORT, MANUAL)
+PREPARED_SOURCES = resolve_common.PREPARED_SOURCES
 
 # project.json에 사람이 고른 것을 적어 둔다. Sprint107이 대본에
 # production_source를 쓰는 것과 같은 방식이고, 단계마다 출처가
 # 다를 수 있으므로(Sprint109) 이미지는 이미지의 칸을 쓴다.
 SOURCE_FIELD = "image_source"
-
-PROJECT_FILENAME = "project.json"
 
 
 class AssetResolveError(ValueError):
@@ -135,12 +135,11 @@ def detect_source(project_path):
     scene{N}.png가 있으면 Provider가 이미 놓고 간 것이다.
     """
 
-    recorded = source_from_metadata(project_path)
-
-    if recorded:
-        return recorded
-
-    return IMPORT if _placed_numbers(project_path) else AUTO
+    return resolve_common.resolve_source(
+        project_path,
+        SOURCE_FIELD,
+        lambda: bool(_placed_numbers(project_path)),
+    )
 
 
 def validate(scenes, project_path):
@@ -221,8 +220,7 @@ def run(scenes, project_path, channel, source=None):
 
     if resolved not in SOURCES:
         raise AssetResolveError(
-            f"알 수 없는 이미지 출처입니다: {resolved}. "
-            f"{', '.join(SOURCES)} 중 하나여야 합니다."
+            resolve_common.unknown_source_message("이미지", resolved)
         )
 
     if resolved in PREPARED_SOURCES:
