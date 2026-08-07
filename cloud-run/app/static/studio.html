@@ -168,8 +168,7 @@ a{color:var(--accent)}
   border-radius:99px;padding:0 6px}
 .pick .pcard .soon{font-size:10px;color:var(--dim);border:1px solid var(--line);
   border-radius:99px;padding:0 6px}
-.pick .pcard .q{margin-left:auto;color:var(--warn);font-size:11px;
-  letter-spacing:-1px}
+.pick .pcard .q{margin-left:auto;color:var(--dim);font-size:10.5px}
 .pick .pcard .c{color:var(--dim);font-size:11px;min-width:56px;
   text-align:right}
 .pick .pcard .q + .c{margin-left:0}
@@ -940,9 +939,16 @@ let uiPick = {};
 let uiProvider = {};
 
 
-// 품질은 Provider가 신고한 등급이다. 별은 그 등급을 그리는 것일 뿐,
-// 화면이 점수를 매기지 않는다.
-const STARS = {premium: 5, standard: 4, economy: 3};
+// Sprint137 - 재 본 것만 잰 값으로 말한다.
+//
+// 별은 등급이고 등급은 의견이다. quality_tier는 Provider가 스스로
+// 신고한 값이라 측정이 아니고, 지금 전부 같은 값이라 화면에 옮기면
+// 아무 사실도 전하지 못한 채 등급처럼 읽힌다.
+//
+// 이 저장소가 실제로 잰 것은 제작 시간 하나뿐이다(stageSpec.
+// sample_size편의 중앙값). 품질과 금액은 한 번도 재지 않았다.
+const MEASURED = "측정 완료";
+const UNMEASURED = "미측정";
 
 // 기본 화면에 두는 단계. 메타데이터는 고를 일이 드물어 고급 설정으로
 // 내렸다 - 계획에는 그대로 들어간다.
@@ -994,11 +1000,6 @@ const API_MODES = ["generate"];
 function stageLabel(stage){
   const spec = (stageSpec && stageSpec.stages.find(s => s.stage === stage));
   return spec ? spec.label : stage;
-}
-
-function starText(n){
-  const k = Math.max(0, Math.min(5, n));
-  return "★".repeat(k) + "☆".repeat(5 - k);
 }
 
 function optionOf(stage, key){
@@ -1624,8 +1625,7 @@ function providerCard(stage, option, spec){
   const cost = option.engine
     ? (engine.calls_api ? "단가 미상" : "무료")
     : (soon ? "—" : "무료");
-  const tier = (option.engine && providers.length)
-    ? spec.provider_quality[providers[0]] : "";
+  const measured = option.engine && providers.length;
 
   return `<label class="pcard ${cardKind(option)} ${on?"on":""} ${off?"off":""}"
       ${soon?'title="향후 지원 예정"':""}>
@@ -1635,7 +1635,7 @@ function providerCard(stage, option, spec){
     <span class="n">${plainLabel(option)}</span>
     ${soon?'<span class="soon">Coming Soon</span>':""}
     ${missing?'<span class="soon">Provider 없음</span>':""}
-    ${tier?`<span class="q" title="${tier}">${starText(STARS[tier])}</span>`:""}
+    ${measured?`<span class="q">${UNMEASURED}</span>`:""}
     <span class="c">${cost}</span>
     ${on && option.engine && !soon
       ? `<span class="model">현재 엔진 · ${engine.name}${
@@ -1694,9 +1694,9 @@ function providerStatus(p){
 // 때문이다. 모르면 모른다고 적는다.
 function providerMeasured(p, spec){
   if(providerKind(p) === "Current" && spec.seconds_if_generated != null){
-    return `제작 ${spec.seconds_if_generated}초`;
+    return `${MEASURED} · 제작 ${spec.seconds_if_generated}초`;
   }
-  return "미측정";
+  return UNMEASURED;
 }
 
 function providerCompare(spec){
@@ -1864,22 +1864,6 @@ async function pickStage(stage, key){
   await refreshPlan();
 }
 
-// 고른 것들의 등급 중 가장 낮은 것. 하나라도 낮으면 결과가 그만큼
-// 내려가므로 평균이 아니라 최저를 쓴다.
-function planQuality(d){
-  const tiers = [];
-  Object.keys(STAGE_UI).forEach(stage => {
-    const row = d.stages[stage];
-    if(!row || row.source_mode !== "generate" || !row.provider) return;
-    const spec = stageSpec.stages.find(s => s.stage === stage);
-    const tier = spec && spec.provider_quality[row.provider];
-    if(tier) tiers.push(tier);
-  });
-  if(!tiers.length) return {stars: 0, tier: "직접 제공"};
-  const worst = tiers.reduce((a, b) => (STARS[a] <= STARS[b] ? a : b));
-  return {stars: STARS[worst], tier: worst};
-}
-
 // 계획의 api_stages는 generate면 전부 센다 - 메타데이터는 규칙 기반이고
 // BGM은 로컬 파일인데도 들어간다. 여기서는 실제로 나가는 것만 센다.
 function payingStages(d){
@@ -1930,36 +1914,22 @@ function automationShare(d){
 //
 //   fixed_seconds                       전부 직접 제공할 때
 //   fixed + 모든 seconds_if_generated   전부 AI에게 맡길 때
-function speedStars(d){
-  const fastest = stageSpec.fixed_seconds;
-  const slowest = fastest + stageSpec.stages.reduce(
-    (sum, s) => sum + s.seconds_if_generated, 0);
-  if(slowest <= fastest) return 5;
-
-  const at = Math.min(Math.max(d.estimated_seconds, fastest), slowest);
-  return Math.round(5 - 4 * (at - fastest) / (slowest - fastest));
-}
-
-// 금액이 아니다 - 돈이 나가는 단계가 몇 개인가다. 단가를 아는
-// Provider가 하나도 없어서 금액으로는 셀 수 없다.
-function costStars(d){
-  return Math.max(1, 5 - payingStages(d).length);
-}
-
+// 잰 것은 숫자로 적고, 안 잰 것은 안 쟀다고 적는다. 등급으로
+// 바꾸지 않는다 - 바꾸는 순간 지어내는 것이 된다.
 function expectedResult(d){
-  const q = planQuality(d);
   const share = automationShare(d);
 
   return `<div class="res">
     <div class="r"><span class="k">품질</span>
-      <b>${starText(q.stars)}</b><span class="s">${q.tier}</span></div>
-    <div class="r"><span class="k">제작속도</span>
-      <b>${starText(speedStars(d))}</b>
-      <span class="s">${d.estimated_seconds}초 · 실측 ${
+      <b>${UNMEASURED}</b>
+      <span class="s">Provider를 나란히 재 본 적이 없습니다</span></div>
+    <div class="r"><span class="k">제작시간</span>
+      <b>${d.estimated_seconds}초</b>
+      <span class="s">${MEASURED} · 실측 ${
         stageSpec.sample_size}편</span></div>
     <div class="r"><span class="k">비용</span>
-      <b>${starText(costStars(d))}</b>
-      <span class="s">API ${payingStages(d).length}단계 기준 · 금액 아님</span></div>
+      <b>${UNMEASURED}</b>
+      <span class="s">API ${payingStages(d).length}단계 · 단가를 모릅니다</span></div>
     <div class="r"><span class="k">자동화</span>
       <b>${share.percent}%</b>
       <span class="s">${share.made}단계 중 ${share.auto}단계</span></div>

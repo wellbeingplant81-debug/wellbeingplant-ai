@@ -189,36 +189,40 @@ class TestTheExpectedResultCard(unittest.TestCase):
         page = _page()
         block = _block(page, "function expectedResult")
 
-        for label in ("품질", "제작속도", "비용", "자동화"):
+        # Sprint137 - "제작속도"는 등급으로 읽힌다. 잰 것은 시간이므로
+        # 시간이라고 적는다.
+        for label in ("품질", "제작시간", "비용", "자동화"):
             with self.subTest(label=label):
                 self.assertIn(label, block)
 
-    def test_speed_uses_the_measured_range_not_a_new_formula(self):
-        page = _page()
-        block = _block(page, "function speedStars")
-
-        self.assertIn("fixed_seconds", block)
-        self.assertIn("seconds_if_generated", block)
-
-    def test_cost_stars_come_from_the_paying_stage_count(self):
-        page = _page()
-        block = _block(page, "function costStars")
-
-        self.assertIn("payingStages", block)
-
-    def test_the_cost_rating_says_it_is_not_money(self):
-        """별이 금액처럼 읽히면 안 된다."""
+    def test_time_shows_the_measured_number_not_a_rating(self):
+        """
+        Sprint137 - 초는 사실이고 별은 의견이다. 1~5로 환산하는 순간
+        "빠르다 느리다"라는 판정이 되므로 잰 숫자를 그대로 적는다.
+        """
 
         page = _page()
         block = _block(page, "function expectedResult")
 
-        self.assertIn("금액", block)
+        self.assertIn("estimated_seconds", block)
+        self.assertIn("sample_size", block)
+        self.assertIn("MEASURED", block)
 
-    def test_quality_still_comes_from_the_reported_tier(self):
+    def test_cost_says_it_does_not_know_the_price(self):
+        """단가를 아는 Provider가 하나도 없다."""
+
         page = _page()
-        block = _block(page, "function planQuality")
+        block = _block(page, "function expectedResult")
 
-        self.assertIn("provider_quality", block)
+        self.assertIn("payingStages", block)
+        self.assertIn("단가", block)
+
+    def test_quality_says_it_was_never_measured(self):
+        page = _page()
+        block = _block(page, "function expectedResult")
+        quality = block[block.index("품질"):block.index("제작시간")]
+
+        self.assertIn("UNMEASURED", quality)
 
 
 class TestTheHeaderLine(unittest.TestCase):

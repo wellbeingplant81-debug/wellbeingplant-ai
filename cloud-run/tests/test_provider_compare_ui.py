@@ -140,7 +140,10 @@ class TestItDoesNotInventEvaluations(unittest.TestCase):
                 self.assertNotIn(word, block)
 
     def test_it_says_unmeasured_instead(self):
-        self.assertIn("미측정", _function("providerMeasured"))
+        """Sprint137 - 그 말은 이제 한 곳에서만 적는다."""
+
+        self.assertIn("UNMEASURED", _function("providerMeasured"))
+        self.assertIn('const UNMEASURED = "미측정"', _script())
 
     def test_it_does_not_draw_stars(self):
         block = _without_comments(

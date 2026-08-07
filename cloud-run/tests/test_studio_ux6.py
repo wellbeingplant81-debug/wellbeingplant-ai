@@ -129,15 +129,19 @@ class TestTheSummaryStillTellsTheTruth(unittest.TestCase):
         page = _page()
         block = _block(page, "function expectedResult")
 
-        for label in ("품질", "제작속도", "비용", "자동화"):
+        # Sprint137 - "제작속도"는 등급으로 읽힌다. 잰 것은 시간이므로
+        # 시간이라고 적는다.
+        for label in ("품질", "제작시간", "비용", "자동화"):
             with self.subTest(label=label):
                 self.assertIn(label, block)
 
     def test_the_cost_rating_still_says_it_is_not_money(self):
+        """Sprint137 - 별을 걷으면서 이유를 더 분명히 적었다."""
+
         page = _page()
         block = _block(page, "function expectedResult")
 
-        self.assertIn("금액", block)
+        self.assertIn("단가", block)
 
     def test_the_cost_wording_still_has_the_states(self):
         page = _page()
@@ -205,15 +209,17 @@ class TestTheScriptHasNoDanglingNames(unittest.TestCase):
     def test_the_constants_this_sprint_deleted_are_back(self):
         script = self._script()
 
+        # Sprint137 - STARS는 이번에 뜻이 있어서 지웠다. 사고로
+        # 사라진 것이 아니므로 이 가드에서 뺀다.
         for name in ("HIDDEN_STAGES", "API_MODES", "BASIC_STAGES",
-                     "ADVANCED_STAGES", "STAGE_UI", "STARS", "HAVE_ITEMS"):
+                     "ADVANCED_STAGES", "STAGE_UI", "HAVE_ITEMS"):
             with self.subTest(name=name):
                 self.assertIn("const " + name, script)
 
     def test_the_helpers_this_sprint_deleted_are_back(self):
         script = self._script()
 
-        for name in ("stageLabel", "starText", "optionOf", "plainLabel",
+        for name in ("stageLabel", "optionOf", "plainLabel",
                      "cardKind", "stageSummary"):
             with self.subTest(name=name):
                 self.assertIn("function " + name, script)

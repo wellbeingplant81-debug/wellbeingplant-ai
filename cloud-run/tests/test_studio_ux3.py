@@ -158,7 +158,9 @@ class TestTheProviderCard(unittest.TestCase):
 
         # Sprint119 - 이름은 평이한 말이 되고(plainLabel) 현재 엔진은
         # 고른 뒤 한 줄로 붙는다. 다섯 가지는 그대로다.
-        for piece in ("plainLabel", "현재 엔진", "starText", "cost", "soon"):
+        # Sprint137 - 별은 걷었다. 품질 자리는 이제 "미측정"이라
+        # 적는다 - 잰 적이 없기 때문이다.
+        for piece in ("plainLabel", "현재 엔진", "UNMEASURED", "cost", "soon"):
             with self.subTest(piece=piece):
                 self.assertIn(piece, block)
 
@@ -175,22 +177,22 @@ class TestTheProviderCard(unittest.TestCase):
     def test_the_current_engine_is_marked(self):
         self.assertIn("Current", _page())
 
-    def test_the_stars_are_the_reported_tier_not_a_guess(self):
-        from app.production import stage_provider
+    def test_no_grade_is_drawn_at_all(self):
+        """
+        Sprint117은 신고된 등급을 별로 그렸다. Sprint137에서 걷었다 -
+        등급은 Provider가 스스로 적은 값이지 잰 값이 아니고, 지금 전부
+        같은 값이라 옮겨 적어도 사실을 전하지 못한 채 등급처럼 읽힌다.
+        """
 
         page = _page()
 
-        block = page[page.index("const STARS"):]
-        block = block[:block.index("}") + 1]
+        self.assertNotIn("★", page)
+        self.assertNotIn("const STARS", page)
 
-        for tier in stage_provider.QUALITY_TIERS:
-            with self.subTest(tier=tier):
-                self.assertIn(tier, block)
+    def test_the_unmeasured_word_is_shown_instead(self):
+        """무엇을 근거로 넷인지 말할 수 없으면 안 잰 것이다."""
 
-    def test_the_tier_name_is_shown_next_to_the_stars(self):
-        """별만 있으면 무엇을 근거로 넷인지 알 수 없다."""
-
-        self.assertIn("quality", _page())
+        self.assertIn('const UNMEASURED = "미측정"', _page())
 
     def test_a_free_option_says_free(self):
         """Sprint118이 "Unknown"을 사람의 말로 바꿨다.
