@@ -64,11 +64,11 @@ class TestTheResultPresetsWereReplaced(unittest.TestCase):
         page = _page()
 
         self.assertNotIn("const PRESETS", page)
-        self.assertIn("const SITUATIONS", page)
+        self.assertIn("const HAVE_ITEMS", page)
 
     def test_it_still_only_sets_defaults(self):
         page = _page()
-        block = _block(page, "async function pickSituation")
+        block = _block(page, "async function recommend")
 
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
@@ -93,7 +93,7 @@ class TestTheMoneyIsNotInvented(unittest.TestCase):
         아예 사라졌다. 우리가 계산할 수 없는 것을 묻지 않는다."""
 
         page = _page()
-        block = _block(page, "function situationCard")
+        block = _block(page, "function haveCard")
 
         self.assertNotIn("원", block)
         self.assertNotIn("amount", block)
@@ -232,7 +232,7 @@ class TestTheHeaderLine(unittest.TestCase):
     def test_it_is_redrawn_on_every_change(self):
         page = _page()
 
-        for fn in ("async function pickStage", "async function pickSituation"):
+        for fn in ("async function pickStage", "async function recommend"):
             with self.subTest(fn=fn):
                 self.assertIn("renderCurrentProviders", _block(page, fn))
 

@@ -48,23 +48,21 @@ def _block(page, start, end="\nfunction "):
     return cut[:cut.index(end)]
 
 
-class TestTheQuestionIsAboutWhatYouHave(unittest.TestCase):
+class TestTheRadioAnswersBecameCheckboxes(unittest.TestCase):
+    """Sprint120(UX 6.0) - 라디오 하나로 다섯 상황 중 하나를 고르게 하던
+    것을 체크박스 넷으로 바꿨다.
 
-    def test_the_five_answers_are_offered(self):
+    라디오는 "대본은 있는데 음성만 없다" 같은 조합을 표현할 수 없었다.
+    가진 것은 서로 독립이다. 새 화면은 test_studio_ux7이 본다."""
+
+    def test_the_checkboxes_took_their_place(self):
         page = _page()
-        block = _block(page, "const SITUATIONS", "\n];")
 
-        for label in ("자료가 아무것도 없습니다",
-                      "대본은 이미 있습니다",
-                      "이미지도 있습니다",
-                      "내 목소리를 사용할 겁니다",
-                      "전부 직접 만들었습니다"):
-            with self.subTest(label=label):
-                self.assertIn(label, block)
+        self.assertNotIn("const SITUATIONS", page)
+        self.assertIn("const HAVE_ITEMS", page)
+        self.assertIn("이미 준비된 자료가 있나요?", page)
 
-    def test_the_budget_wording_is_gone(self):
-        """금액은 우리가 계산할 수 없는 값이었다."""
-
+    def test_the_budget_wording_is_still_gone(self):
         page = _page()
         visible = re.sub(r"^\s*//.*$", "", page, flags=re.M)
         visible = re.sub(r"/\*.*?\*/", "", visible, flags=re.S)
@@ -72,47 +70,6 @@ class TestTheQuestionIsAboutWhatYouHave(unittest.TestCase):
         for wording in ("500원", "1000원", "목표 0원", "제한 없음"):
             with self.subTest(wording=wording):
                 self.assertNotIn(wording, visible)
-
-    def test_the_answers_are_a_ladder(self):
-        """앞의 답이 참이면 뒤의 답도 참이다 - 직접 주는 단계가
-        늘기만 하고 줄지 않는다."""
-
-        page = _page()
-        block = _block(page, "const SITUATIONS", "\n];")
-
-        given = []
-        for entry in re.findall(r"picks:\{(.*?)\}", block, re.S):
-            given.append(sum(
-                1 for mode in re.findall(r':\s*"(\w+)"', entry)
-                if mode != "generate"))
-
-        self.assertEqual(len(given), 5)
-        self.assertEqual(given, sorted(given))
-        self.assertEqual(given[0], 0)
-
-    def test_the_keys_are_real_option_keys(self):
-        page = _page()
-        ui = re.search(r"const STAGE_UI = \{(.*?)\n\};", page, re.S).group(1)
-        keys = set(re.findall(r'\{key:"(\w+)"', ui))
-
-        block = _block(page, "const SITUATIONS", "\n];")
-        used = set(re.findall(
-            r'(?:script|image|voice|metadata):\s*"(\w+)"', block))
-
-        self.assertTrue(used)
-        for key in used:
-            with self.subTest(key=key):
-                self.assertIn(key, keys)
-
-    def test_the_first_answer_is_what_the_pipeline_does_today(self):
-        """기본값은 지금 파이프라인이 하는 일이다 - 전부 AI."""
-
-        page = _page()
-        block = _block(page, "const SITUATIONS", "\n];")
-        first = block[block.index("picks:{"):block.index("}", block.index("picks:{"))]
-
-        self.assertNotIn("manual", first)
-        self.assertNotIn("import", first)
 
 
 class TestTheNextButton(unittest.TestCase):
@@ -144,7 +101,7 @@ class TestTheNextButton(unittest.TestCase):
         """[다음]을 누르기 전에도 요약이 무엇을 만들지 말해 준다."""
 
         page = _page()
-        block = _block(page, "async function pickSituation")
+        block = _block(page, "async function recommend")
 
         self.assertIn("refreshPlan", block)
 
@@ -153,7 +110,7 @@ class TestTheAnswerOnlySetsDefaults(unittest.TestCase):
 
     def test_it_does_not_lock_the_stages(self):
         page = _page()
-        block = _block(page, "async function pickSituation")
+        block = _block(page, "async function recommend")
 
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
@@ -249,7 +206,7 @@ class TestTheScriptHasNoDanglingNames(unittest.TestCase):
         script = self._script()
 
         for name in ("HIDDEN_STAGES", "API_MODES", "BASIC_STAGES",
-                     "ADVANCED_STAGES", "STAGE_UI", "STARS", "SITUATIONS"):
+                     "ADVANCED_STAGES", "STAGE_UI", "STARS", "HAVE_ITEMS"):
             with self.subTest(name=name):
                 self.assertIn("const " + name, script)
 

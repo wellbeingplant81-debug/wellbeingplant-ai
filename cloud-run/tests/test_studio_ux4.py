@@ -62,12 +62,12 @@ class TestTheStrategyPanelWasReplaced(unittest.TestCase):
         page = _page()
 
         self.assertNotIn("const STRATEGIES", page)
-        self.assertIn("const SITUATIONS", page)
-        self.assertIn("이번 영상을 어떻게 만들까요?", page)
+        self.assertIn("const HAVE_ITEMS", page)
+        self.assertIn("이미 준비된 자료가 있나요?", page)
 
     def test_it_still_only_sets_defaults(self):
         page = _page()
-        block = _block(page, "async function pickSituation")
+        block = _block(page, "async function recommend")
 
         self.assertIn("uiPick", block)
         self.assertNotIn("disabled", block)
