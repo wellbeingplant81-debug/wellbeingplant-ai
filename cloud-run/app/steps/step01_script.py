@@ -1,7 +1,31 @@
 import json
 import os
 
+from app.services import provider_selection
 from app.services.duration_gate import generate_script_within_duration
+
+
+def _generate_script(topic: str, provider: str = None):
+    """
+    Sprint128 - 대본을 만드는 유일한 지점. 다른 Provider가 붙는다면
+    여기 붙는다.
+
+    지금 붙어 있는 것은 현재 엔진 하나뿐이다. current(=고르지 않음)는
+    None으로 오고 예전 경로를 그대로 탄다 - Writer, Duration Gate,
+    Topic Fidelity, QA, Retry 전부.
+
+    "gemini"는 그 파이프라인 없이 모델을 직접 부르는 장래의 자리이고
+    아직 비어 있다. 현재 엔진과 같게 취급하면 지어내는 것이 되므로
+    정직하게 거절한다.
+    """
+
+    provider_selection.require_wired("script", provider)
+
+    # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
+    # 길이가 43~47초 범위인지 먼저 확인하고, 벗어나면 Writer를 다시
+    # 호출한다(최대 3회). Duration Optimizer(Sprint53-2)는 이 게이트를
+    # 통과한 대본의 미세한 오차만 다듬는다.
+    return generate_script_within_duration(topic=topic)
 
 
 def run(
@@ -9,11 +33,16 @@ def run(
     project_path: str,
 ):
 
-    # Sprint53-4 - Duration Gate: TTS를 부르기 전에 narration 예상
-    # 길이가 43~47초 범위인지 먼저 확인하고, 벗어나면 Writer를 다시
-    # 호출한다(최대 3회). Duration Optimizer(Sprint53-2)는 이 게이트를
-    # 통과한 대본의 미세한 오차만 다듬는다.
-    gate_outcome = generate_script_within_duration(topic=topic)
+    # Sprint128 - 이 프로젝트가 어느 Provider로 만들기로 했는가.
+    # 환경변수를 읽지 않는다 - project_path를 이미 받고 있으므로 그
+    # 프로젝트의 결정을 읽는다. 스레드가 겹쳐도 서로 섞이지 않는다.
+    #
+    # 음성·이미지는 아래 서비스가 project_path를 받아서 거기서 읽었지만
+    # (Sprint126·127), 대본은 그 아래로 project_path가 내려가지 않아
+    # 읽는 자리가 여기다. 계약(인자 둘)은 그대로다.
+    gate_outcome = _generate_script(
+        topic, provider_selection.selected(project_path, "script"),
+    )
 
     result = gate_outcome["result"]
     data = result["data"]
