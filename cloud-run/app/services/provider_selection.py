@@ -46,6 +46,64 @@ FIELDS = {
 CURRENT = "current"
 
 
+class ProviderNotWired(RuntimeError):
+    """고른 Provider가 아직 연결되지 않았다.
+
+    app.production의 ProviderUnavailable과 같은 뜻이지만 층이 다르다 -
+    그쪽은 StageProvider를 부를 때고, 이쪽은 엔진이 만들려는 순간이다.
+    엔진 서비스가 app.production을 import하지 않게 하려고 나눠 둔다."""
+
+
+def _wired_for(stage):
+    """
+    그 단계가 실제로 아는 Provider 이름들.
+
+    voice는 tts_provider가 안다 - 여기 다시 적으면 한쪽만 바뀌는 날이
+    온다. 나머지 셋은 아직 하나도 붙지 않았다(Sprint124의 자리들은
+    부르면 거절한다).
+    """
+
+    if stage == "voice":
+        from app.providers import tts_provider
+
+        return tuple(tts_provider.PROVIDERS)
+
+    return ()
+
+
+class _Wired(dict):
+    """WIRED["image"] 처럼 읽히되, 값은 물어볼 때 계산한다."""
+
+    def __missing__(self, stage):
+        require_stage(stage)
+        return _wired_for(stage)
+
+
+# 실제로 연결된 것. 여기 없는 이름을 고르면 만들 때 정직하게 거절한다.
+WIRED = _Wired()
+
+
+def require_wired(stage, provider):
+    """
+    고른 Provider로 실제로 만들 수 있는가.
+
+    None(=고르지 않음/current)은 언제나 통과한다 - 기존 경로다.
+    """
+
+    require_stage(stage)
+
+    if not provider or provider == CURRENT:
+        return None
+
+    if provider not in _wired_for(stage):
+        raise ProviderNotWired(
+            f"{provider}은(는) {stage} 단계에 아직 연결되지 않았습니다. "
+            "현재 엔진으로 만들려면 current를 고르십시오."
+        )
+
+    return provider
+
+
 def _path(project_path):
     return os.path.join(project_path, PROJECT_FILENAME)
 

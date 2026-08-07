@@ -4,6 +4,7 @@ import subprocess
 from app.services import asset_feedback_service
 from app.services import asset_observatory
 from app.services import best_of_n_service
+from app.services import provider_selection
 from app.services import scene_prompt_service
 from app.services.asset_mode_config import get_pexels_quality_threshold
 from app.services.asset_priority_classifier import effective_pexels_threshold
@@ -44,9 +45,13 @@ def resolve_image_style(scene: dict) -> str:
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
                image_style=image_service.IMAGE_STYLE_DEFAULT,
-               candidate_count=1, scene=None):
+               candidate_count=1, scene=None, provider=None):
     """
     Sprint74 - Imagen을 부르는 유일한 지점. Best-of-N이 여기 붙는다.
+
+    Sprint127 - 그래서 다른 Provider가 붙는다면 여기 붙는다. 프로젝트가
+    고른 이름이 여기까지 온다. 아직 붙은 것이 하나도 없으므로 current
+    (=고르지 않음)가 아니면 정직하게 거절한다 - 되는 척하지 않는다.
 
     candidate_count가 1이면 예전과 완전히 같은 경로다 - generate_image를
     한 번 부르고 끝난다. 플래그가 꺼져 있으면 항상 1이 들어온다.
@@ -56,6 +61,9 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
     scene에 남아야 하고, 그것이 이 엔진이 실제로 무엇을 했는지 확인할
     유일한 기록이다.
     """
+
+    # 고른 것이 없으면(None) 예전 경로 그대로다.
+    provider_selection.require_wired("image", provider)
 
     candidate_paths = best_of_n_service.generate_candidates(
         image_prompt,
@@ -87,7 +95,7 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
 
 def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
                        image_style=image_service.IMAGE_STYLE_DEFAULT,
-                       scene=None):
+                       scene=None, provider=None):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
@@ -116,7 +124,7 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
     return (
         _ai_result(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
-            candidate_count=1, scene=scene,
+            candidate_count=1, scene=scene, provider=provider,
         ),
         False,
     )
@@ -124,7 +132,7 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
 
 def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
                      image_style=image_service.IMAGE_STYLE_DEFAULT,
-                     candidate_count=1, scene=None):
+                     candidate_count=1, scene=None, provider=None):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
 
@@ -139,9 +147,15 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
             _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
                 candidate_count=candidate_count, scene=scene,
+                provider=provider,
             ),
             True,
         )
+    except provider_selection.ProviderNotWired:
+        # Sprint127 - 이것은 폴백 대상이 아니다. 엔진이 실패한 것과
+        # 고른 Provider가 없는 것은 다른 일이고, 여기서 삼키면
+        # FLUX를 고른 사람이 스톡 사진을 받게 된다.
+        raise
     except Exception as exc:
         print(
             f"[AssetIntegration] visual_type=ai, Imagen 생성 실패, "
@@ -254,15 +268,20 @@ def integrate_asset(
     visual_type = scene.get("visual_type")
     image_style = resolve_image_style(scene)
 
+    # Sprint127 - 이 프로젝트가 어느 Provider로 만들기로 했는가.
+    # 환경변수를 읽지 않는다 - project_path를 이미 받고 있으므로 그
+    # 프로젝트의 결정을 읽는다. 스레드가 겹쳐도 서로 섞이지 않는다.
+    provider = provider_selection.selected(project_path, "image")
+
     if visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
-            scene=scene,
+            scene=scene, provider=provider,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
-            candidate_count=candidate_count, scene=scene,
+            candidate_count=candidate_count, scene=scene, provider=provider,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
