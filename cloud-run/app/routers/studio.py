@@ -249,9 +249,14 @@ def production_import(request: ChatImportRequest):
         # 사람이 읽고 고칠 수 있는 문장이 그대로 화면에 가야 한다.
         raise HTTPException(status_code=400, detail=str(exc))
 
+    # Sprint108 - 만들기 전에 무엇이 나올지. 재기만 하고 대본은
+    # 손대지 않는다.
+    from app.production import script_forecast
+
     return {
         "title": script["title"],
         "hook": script["hook"],
+        "forecast": script_forecast.forecast(script, _registry()),
         "scene_count": len(script["scenes"]),
         "scenes": [
             {
