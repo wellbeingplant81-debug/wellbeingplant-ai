@@ -1217,25 +1217,40 @@ async function openReview(projectId){
 
 // 프로젝트만 만든다. 아무것도 생성하지 않는다 - 첫 단계는 사람이
 // 누른 뒤에 돈다.
+// Sprint139 - maker에서 고른 것을 그 프로젝트에 적는다.
+//
+// 새 API를 만들지 않는다 - Sprint126이 만든 자리로 보낸다. 검토
+// 경로와 영상 생성 경로가 같은 함수를 쓰므로 한쪽만 고쳐지는 일이
+// 없다.
+async function saveMakerProviders(projectId){
+  if(!projectId || !Object.keys(uiProvider).length) return;
+
+  await fetch(`/studio/api/review/${projectId}/providers`, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({providers: uiProvider})});
+}
+
+// 빈 프로젝트를 만든다. 아무것도 생성하지 않는다 - 고른 것을 적을
+// 자리가 필요할 뿐이다.
+async function createProject(topic){
+  const r = await fetch("/studio/api/review", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({topic: topic, channel: $("channel").value})});
+
+  if(!r.ok) return null;
+  return (await r.json()).project_id;
+}
+
 async function startReview(){
   const topic = $("topic").value.trim();
   if(!topic){ alert("주제를 입력하십시오."); return; }
 
-  const r = await fetch("/studio/api/review", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({topic: topic, channel: $("channel").value})});
+  const projectId = await createProject(topic);
 
-  if(!r.ok){ alert("프로젝트를 만들지 못했습니다."); return; }
-  const d = await r.json();
+  if(!projectId){ alert("프로젝트를 만들지 못했습니다."); return; }
 
-  // Sprint132 - maker에서 고른 Provider를 이제야 적을 수 있다. 새 API를
-  // 만들지 않는다 - Sprint126이 만든 그 자리로 보낸다.
-  reviewProject = d.project_id;
-  if(Object.keys(uiProvider).length){
-    await reviewCall("PUT", "/providers", {providers: uiProvider});
-  }
-
-  await openReview(d.project_id);
+  await saveMakerProviders(projectId);
+  await openReview(projectId);
 }
 
 // STEP 2 / 4 · 50%. 완료율이 아니라 지금 몇 번째 단계인가다.
@@ -1938,6 +1953,16 @@ function automationShare(d){
 //
 //   fixed_seconds                       전부 직접 제공할 때
 //   fixed + 모든 seconds_if_generated   전부 AI에게 맡길 때
+// Sprint139 - 잰 것은 현재 엔진의 제작 시간이다. 직접 호출 Provider를
+// 고르면 재 본 적이 없는 길로 가므로 그 숫자를 실측이라 부를 수 없다.
+function planTimeIsMeasured(d){
+  return Object.keys(STAGE_UI).every(stage => {
+    const row = d.stages[stage];
+    if(!row || row.source_mode !== "generate" || !row.provider) return true;
+    return row.provider === "current";
+  });
+}
+
 // 잰 것은 숫자로 적고, 안 잰 것은 안 쟀다고 적는다. 등급으로
 // 바꾸지 않는다 - 바꾸는 순간 지어내는 것이 된다.
 function expectedResult(d){
@@ -1949,8 +1974,10 @@ function expectedResult(d){
       <span class="s">Provider를 나란히 재 본 적이 없습니다</span></div>
     <div class="r"><span class="k">제작시간</span>
       <b>${d.estimated_seconds}초</b>
-      <span class="s">${MEASURED} · 실측 ${
-        stageSpec.sample_size}편</span></div>
+      <span class="s">${planTimeIsMeasured(d)
+        ? `${MEASURED} · 실측 ${stageSpec.sample_size}편`
+        : `${UNMEASURED} · 실측 ${stageSpec.sample_size}편은 현재 엔진 기준입니다`
+      }</span></div>
     <div class="r"><span class="k">비용</span>
       <b>${UNMEASURED}</b>
       <span class="s">API ${payingStages(d).length}단계 · 단가를 모릅니다</span></div>
@@ -2005,7 +2032,7 @@ function summaryCards(d){
 async function refreshPlan(){
   const r = await fetch("/studio/api/production/plan", {
     method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({selections: stagePick})});
+    body: JSON.stringify({selections: stagePick, providers: uiProvider})});
   const d = await r.json();
 
   if(!r.ok){
@@ -2169,10 +2196,23 @@ $("go").onclick = async () => {
   $("inspector").innerHTML = '<span class="muted">생성 중…</span>';
   $("videoBox").innerHTML = '<span class="muted">아직 영상이 없습니다.</span>';
   $("thumbBox").innerHTML = '<span class="muted">아직 썸네일이 없습니다.</span>';
+  // Sprint139 - 고른 Provider가 있으면 프로젝트를 먼저 만들어 적어
+  // 둔다. 작업 안에서 만들면 적을 자리가 생기기 전에 파이프라인이
+  // 돌아, 고른 것이 조용히 무시된다.
+  //
+  // 붙여넣기로 이미 만들어 둔 프로젝트가 있으면 그것에 적는다.
+  let projectId = preparedProjectId;
+
+  if(!projectId && Object.keys(uiProvider).length){
+    projectId = await createProject(topic);
+  }
+
+  await saveMakerProviders(projectId);
+
   const r = await fetch("/studio/api/jobs", {method:"POST",
     headers:{"Content-Type":"application/json"},
     body: JSON.stringify({topic, channel: $("channel").value,
-                          project_id: preparedProjectId})});
+                          project_id: projectId})});
   const d = await r.json();
   jobId = d.job_id; $("jobState").textContent = "생성 중…";
   if(poll) clearInterval(poll);

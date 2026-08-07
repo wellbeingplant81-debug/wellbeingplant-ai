@@ -392,12 +392,22 @@ class TestTheMakerScreenOffersIt(unittest.TestCase):
                               script[start:start + 900])
 
     def test_the_choice_travels_when_the_project_is_made(self):
+        """
+        Sprint139 - 적는 일이 함수 하나로 옮겨졌다. 검토 경로와 영상
+        생성 경로가 같은 것을 쓰므로 한쪽만 고쳐지는 일이 없다.
+        """
+
         script = _script()
         start = script.index("async function startReview(")
         body = script[start:start + 900]
 
-        self.assertIn("uiProvider", body)
-        self.assertIn("/providers", body)
+        self.assertIn("saveMakerProviders", body)
+
+        start = script.index("async function saveMakerProviders(")
+        writer = script[start:start + 400]
+
+        self.assertIn("uiProvider", writer)
+        self.assertIn("/providers", writer)
 
 
 class TestNothingElseMoved(unittest.TestCase):

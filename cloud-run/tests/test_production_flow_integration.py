@@ -244,8 +244,12 @@ class TestTheScreen(unittest.TestCase):
     def test_the_generate_button_carries_the_prepared_project(self):
         page = client.get("/studio").text
 
+        # Sprint139 - 준비된 프로젝트가 있으면 그것으로, 없고 고른
+        # Provider가 있으면 새로 만들어 그것으로 간다. 어느 쪽이든
+        # 작업은 project_id를 받는다.
         self.assertIn("preparedProjectId", page)
-        self.assertIn("project_id: preparedProjectId", page)
+        self.assertIn("let projectId = preparedProjectId", page)
+        self.assertIn("project_id: projectId", page)
 
     def test_there_is_still_only_one_generate_button(self):
         page = client.get("/studio").text

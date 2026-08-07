@@ -66,6 +66,9 @@ class ImportProjectRequest(ChatImportRequest):
 class StagePlanRequest(BaseModel):
     # {단계: 입력방식}. 고르지 않은 단계는 계획에 들어가지 않는다.
     selections: dict
+    # Sprint139 - {단계: Provider 이름}. maker에서 고른 것이다.
+    # 비어 있으면 예전처럼 그 단계의 첫 Provider(현재 엔진)로 센다.
+    providers: dict = {}
 
 
 class RegenerateRequest(BaseModel):
@@ -379,6 +382,53 @@ ENGINE_FACTS = {
 }
 
 
+def _known_provider(stage: str, name: str, registry) -> bool:
+    """
+    그 단계가 이 이름을 아는가.
+
+    Sprint139 - maker의 계획과 Review의 저장이 같은 규칙을 써야 한다.
+    두 자리가 다른 이름을 받아 주면 고른 것이 도중에 바뀐다.
+
+    받아 줄 이름은 두 층에서 온다.
+
+        엔진이 아는 이름   provider_selection.WIRED - 지금 실제로 도는 것
+        등록소의 이름      app.production - 아직 안 붙은 자리들.
+                           골라 두면 만들 때 정직하게 거절한다
+
+    둘은 겹치지 않는다 - 등록소의 "google_tts"는 모델을 직접 부르는
+    다른 자리이고, 엔진의 "google"은 지금 도는 경로다.
+    """
+
+    from app.services import provider_selection
+
+    if name in provider_selection.WIRED[stage]:
+        return True
+
+    try:
+        registry.get(stage, name)
+    except ValueError:
+        return False
+
+    return True
+
+
+def _unknown_provider_error(stage: str, name: str, registry):
+    from app.services import provider_selection
+
+    known = list(provider_selection.WIRED[stage]) + [
+        p.name for p in registry.for_stage(stage)
+    ]
+
+    return HTTPException(
+        status_code=400,
+        detail=(
+            f"{stage} 단계가 모르는 Provider입니다: {name}. "
+            f"사용 가능한 값: {provider_selection.CURRENT}, "
+            f"{', '.join(sorted(set(known)))}"
+        ),
+    )
+
+
 @router.post("/api/production/plan")
 def production_plan_view(request: StagePlanRequest):
     """
@@ -391,9 +441,18 @@ def production_plan_view(request: StagePlanRequest):
     from app.production.production_plan import (
         PlanError, ProductionPlan, StageSelection,
     )
+    from app.services import provider_selection
 
     registry = _registry()
     plan = ProductionPlan(mode=production_modes.ASSISTED)
+
+    # 고른 Provider가 어느 단계 것인지부터 본다. 모르는 단계를 조용히
+    # 흘리면 고른 대로 만들어지지 않는다.
+    try:
+        for stage in (request.providers or {}):
+            stages.require_stage(stage)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     try:
         for stage, mode in (request.selections or {}).items():
@@ -404,6 +463,17 @@ def production_plan_view(request: StagePlanRequest):
             if source_modes.calls_api(mode):
                 chosen = registry.available(stage, mode)
                 provider = chosen[0].name if chosen else None
+
+                # Sprint139 - maker에서 고른 것이 있으면 그것으로 센다.
+                # 없으면 위에서 고른 첫 Provider 그대로다.
+                wanted = (request.providers or {}).get(stage)
+
+                if wanted and wanted != provider_selection.CURRENT:
+                    if not _known_provider(stage, wanted, registry):
+                        raise _unknown_provider_error(
+                            stage, wanted, registry)
+
+                    provider = wanted
 
             plan.select(StageSelection(
                 stage=stage, source_mode=mode, provider=provider,
@@ -955,23 +1025,8 @@ def review_save_providers(project_id: str, request: ReviewProviderRequest):
         #
         # 둘은 겹치지 않는다. 등록소의 "google_tts"는 모델을 직접 부르는
         # 다른 자리이고, 엔진의 "google"은 지금 도는 경로다.
-        if name in provider_selection.WIRED[stage]:
-            continue
-
-        try:
-            registry.get(stage, name)
-        except ValueError:
-            known = list(provider_selection.WIRED[stage]) + [
-                p.name for p in registry.for_stage(stage)
-            ]
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"{stage} 단계가 모르는 Provider입니다: {name}. "
-                    f"사용 가능한 값: {provider_selection.CURRENT}, "
-                    f"{', '.join(sorted(set(known)))}"
-                ),
-            )
+        if not _known_provider(stage, name, registry):
+            raise _unknown_provider_error(stage, name, registry)
 
     try:
         provider_selection.save(path, request.providers)
