@@ -49,6 +49,22 @@ VOICE = "voice"
 
 KINDS = (IMAGES, VIDEOS, MUSIC, VOICE)
 
+# Sprint152 - 같은 것을 가리키는 다른 폴더 이름.
+#
+# Sprint150·151이 만든 것은 voice/이고 Sprint152 사양이 적은 것은
+# voices/다. 둘 다 받는다 - 이미 voice/로 모아 둔 사람의 폴더를 못
+# 쓰게 만들 이유가 없고, 새로 만드는 사람이 voices/라고 지어도 된다.
+#
+# 종류(kind)는 하나로 수렴한다. 두 이름이 각각 다른 종류가 되면
+# local_voice가 한쪽만 보게 된다.
+ALIASES = {VOICE: ("voice", "voices")}
+
+
+def _folders(kind: str) -> tuple:
+    """그 종류를 담을 수 있는 폴더 이름들. 첫째가 기준 이름이다."""
+
+    return ALIASES.get(kind, (kind,))
+
 EXTENSIONS = {
     IMAGES: (".png", ".jpg", ".jpeg", ".webp", ".bmp"),
     VIDEOS: (".mp4", ".mov", ".mkv", ".webm", ".avi"),
@@ -62,14 +78,18 @@ _SPLIT = re.compile(r"[\s_\-.,()\[\]]+")
 VERSION = 1
 
 
-def _tags(path: str, root: str, kind: str) -> list:
+def _tags(path: str, folder: str) -> list:
     """
-    파일 이름과 그 위 폴더 이름에서 낱말을 끊어 낸다.
+    파일 이름과 그 아래 폴더 이름에서 낱말을 끊어 낸다.
 
     내용을 보지 않는다 - 이름이 곧 우리가 아는 전부다.
+
+    Sprint152 - 종류가 아니라 실제로 훑은 폴더를 받는다. voice/와
+    voices/가 같은 종류이므로, 종류 이름으로 경로를 다시 지으면
+    한쪽에서 낱말이 통째로 어긋난다.
     """
 
-    relative = os.path.relpath(path, os.path.join(root, kind))
+    relative = os.path.relpath(path, folder)
     stem = os.path.splitext(relative)[0]
 
     words = [w.strip().lower() for w in _SPLIT.split(stem.replace(os.sep, " "))]
@@ -170,41 +190,50 @@ def scan(root: str) -> dict:
     """
 
     items = []
+    seen_paths = set()
 
     for kind in KINDS:
-        folder = os.path.join(root, kind)
+        for folder_name in _folders(kind):
+            folder = os.path.join(root, folder_name)
 
-        if not os.path.isdir(folder):
-            continue
+            if not os.path.isdir(folder):
+                continue
 
-        for base, _, names in os.walk(folder):
-            for name in sorted(names):
-                if not name.lower().endswith(EXTENSIONS[kind]):
-                    continue
+            for base, _, names in os.walk(folder):
+                for name in sorted(names):
+                    if not name.lower().endswith(EXTENSIONS[kind]):
+                        continue
 
-                path = os.path.join(base, name)
+                    path = os.path.join(base, name)
 
-                item = {
-                    "path": path,
-                    "kind": kind,
-                    "name": name,
-                    "tags": _tags(path, root, kind),
-                    "size": _size_of(path),
-                    "modified": _modified_of(path),
-                }
+                    # 같은 파일을 두 번 세지 않는다 - Windows에서
+                    # voice/와 Voice/는 같은 폴더다.
+                    if os.path.normcase(path) in seen_paths:
+                        continue
 
-                if kind == IMAGES:
-                    width, height = _dimensions(path)
-                    item["width"] = width
-                    item["height"] = height
+                    seen_paths.add(os.path.normcase(path))
 
-                # Sprint151 - 목소리는 길이가 곧 자막 시각이라, 무엇이
-                # 들어 있는지 미리 재 둔다. 그림에는 적지 않는다 -
-                # 없는 사실이다.
-                if kind == VOICE:
-                    item.update(_sound(path))
+                    item = {
+                        "path": path,
+                        "kind": kind,
+                        "name": name,
+                        "tags": _tags(path, folder),
+                        "size": _size_of(path),
+                        "modified": _modified_of(path),
+                    }
 
-                items.append(item)
+                    if kind == IMAGES:
+                        width, height = _dimensions(path)
+                        item["width"] = width
+                        item["height"] = height
+
+                    # Sprint151 - 목소리는 길이가 곧 자막 시각이라,
+                    # 무엇이 들어 있는지 미리 재 둔다. 그림에는 적지
+                    # 않는다 - 없는 사실이다.
+                    if kind == VOICE:
+                        item.update(_sound(path))
+
+                    items.append(item)
 
     return {"version": VERSION, "root": root, "items": items}
 

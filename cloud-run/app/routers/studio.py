@@ -990,6 +990,14 @@ class ReviewScriptRequest(BaseModel):
 
 class LibraryScanRequest(BaseModel):
     # Sprint150 - 훑을 폴더. 그 아래 images/videos/music/voice를 본다.
+    #
+    # Sprint152 - 비워 두면 정해 둔 내 자료 폴더를 쓴다. 프로젝트마다
+    # 같은 경로를 다시 적게 만들지 않는다.
+    root: str = ""
+
+
+class WorkspaceRequest(BaseModel):
+    # Sprint152 - 내 자료 폴더. 한 번 정하면 기억한다.
     root: str
 
 
@@ -1289,6 +1297,66 @@ def review_save_script(project_id: str, request: ReviewScriptRequest):
     return review_state(project_id)
 
 
+def _workspace_store() -> str:
+    # 경로 정의는 free_workspace 한 곳에만 둔다.
+    from app.services import free_workspace
+
+    return free_workspace.default_store_path()
+
+
+@router.get("/api/workspace")
+def workspace_state():
+    """
+    Sprint152 - 정해 둔 내 자료 폴더와 그 안에 무엇이 몇 개 있는가.
+
+    정한 적이 없으면 root가 없고 전부 0이다. 화면은 그 사실을 그대로
+    말한다 - 있는 척하지 않는다.
+    """
+
+    from app.services import free_workspace
+
+    found = free_workspace.remembered(_workspace_store())
+
+    return {
+        "root": found["root"],
+        "counts": free_workspace.inventory(found["root"]),
+    }
+
+
+@router.put("/api/workspace")
+def workspace_choose(request: WorkspaceRequest):
+    """Sprint152 - 이 폴더를 쓰겠다. 파일은 읽기만 한다."""
+
+    from app.services import free_workspace
+
+    try:
+        found = free_workspace.remember(_workspace_store(), request.root)
+    except free_workspace.WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "root": found["root"],
+        "counts": free_workspace.inventory(found["root"]),
+    }
+
+
+@router.get("/api/review/{project_id}/preparation")
+def review_preparation(project_id: str):
+    """
+    Sprint152 - 이 프로젝트를 무료로 만들 수 있는가. Scene마다.
+
+    고쳐 주지 않고 만들지도 않는다. 무엇이 있고 무엇이 없는지만
+    말한다 - 렌더를 누르고 몇 분 뒤에 아는 것보다 낫다.
+    """
+
+    from app.services import free_workspace, studio_review
+
+    path = _project_path(project_id)
+    scenes = studio_review.state(path).get("scenes") or []
+
+    return free_workspace.preparation(path, scenes)
+
+
 @router.post("/api/review/{project_id}/library")
 def review_scan_library(project_id: str, request: LibraryScanRequest):
     """
@@ -1298,15 +1366,25 @@ def review_scan_library(project_id: str, request: LibraryScanRequest):
     제작 모드가 그 목록에서 고른다.
     """
 
-    from app.services import local_library
+    from app.services import free_workspace, local_library
 
     path = _project_path(project_id)
     root = (request.root or "").strip()
 
-    if not root or not os.path.isdir(root):
+    # Sprint152 - 주지 않았으면 정해 둔 폴더를 쓴다. 프로젝트마다 같은
+    # 경로를 다시 적게 만들지 않는다.
+    if not root:
+        root = free_workspace.remembered(_workspace_store())["root"] or ""
+
+        if not root:
+            raise HTTPException(
+                status_code=400,
+                detail="내 자료 폴더를 먼저 고르십시오.",
+            )
+
+    if not os.path.isdir(root):
         raise HTTPException(
-            status_code=400,
-            detail=f"그런 폴더가 없습니다: {root or '(비어 있음)'}",
+            status_code=400, detail=f"그런 폴더가 없습니다: {root}",
         )
 
     index = local_library.scan(root)

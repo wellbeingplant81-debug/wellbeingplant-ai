@@ -143,6 +143,25 @@ ENDPOINTS = [
      {"metadata": {"title": "t"}},
      ["app.services.publish_gate.save_edits"],
      f"/studio/api/review/{PROJECT_ID}/metadata"),
+    # Sprint152 - 정해 둔 내 자료 폴더. 읽기와 정하기 둘 다 파일을
+    # 건드리지 않는다 - 경로를 적어 둘 뿐이다.
+    ("GET", "/studio/api/workspace", None,
+     ["app.services.free_workspace.remembered",
+      "app.services.free_workspace.inventory"],
+     "/studio/api/workspace",
+     {"app.services.free_workspace.remembered": {"root": None},
+      "app.services.free_workspace.inventory": {}}),
+    ("PUT", "/studio/api/workspace", {"root": REPO_ROOT},
+     ["app.services.free_workspace.remember",
+      "app.services.free_workspace.inventory"],
+     "/studio/api/workspace",
+     {"app.services.free_workspace.remember": {"root": REPO_ROOT},
+      "app.services.free_workspace.inventory": {}}),
+    # Sprint152 - Scene마다 무엇이 준비됐는가. 순수 읽기다.
+    ("GET", "/studio/api/review/{project_id}/preparation", None,
+     ["app.services.free_workspace.preparation"],
+     f"/studio/api/review/{PROJECT_ID}/preparation",
+     {"app.services.free_workspace.preparation": {"scenes": []}}),
     # Sprint150 - 내 PC 폴더를 훑는다. 없는 폴더는 400이므로 root는
     # 실제로 있는 곳을 준다(이 저장소 자신). 훑기와 적기는 패치한다 -
     # 여기는 계약을 보는 자리이지 파일 시스템을 보는 자리가 아니다.
