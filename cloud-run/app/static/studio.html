@@ -2673,6 +2673,34 @@ async function loadOutputCheck(projectId){
   outputCheck = r.ok ? await r.json() : null;
 }
 
+// Sprint165 - 고친 뒤에 같은 자리에서 다시 본다.
+//
+// 검사는 처음부터 무상태다 - output_check.build는 부를 때마다 지금
+// 있는 파일을 읽고 아무것도 적어 두지 않는다. 그래서 여기서 할 일은
+// 같은 것을 한 번 더 읽고 다시 그리는 것뿐이다.
+//
+// 만드는 자리를 부르지 않는다. 부르면 검사 단추가 곧 생성 단추가
+// 되고, 사람은 무엇이 빠졌는지 모른 채 넘어간다.
+let rechecking = false;
+
+async function recheckOutput(){
+  if(rechecking) return;
+
+  rechecking = true;
+  renderReview(reviewState);
+
+  // 고치면서 단계 상태도 달라졌을 수 있다. 화면이 든 옛 값으로
+  // 그리면 방금 고친 것이 안 보인다.
+  const fresh = await reviewCall("GET", "");
+
+  await loadOutputCheck(reviewProject);
+
+  rechecking = false;
+
+  if(fresh) renderReview(fresh);
+  else renderReview(reviewState);
+}
+
 function outputCheckPanel(){
   // 만들기 전에는 보여 줄 결과가 없다. 그때 "실패"라고 하면 아직
   // 시작도 안 한 사람에게 빨간 글씨를 내미는 셈이다.
@@ -2684,7 +2712,10 @@ function outputCheckPanel(){
                 failed: "결과가 없습니다"}[o.state] || o.state;
 
   return `<div class="fchk ${o.state === "failed" ? "blocked" : o.state}">
-    <div class="dh"><b>${head}</b></div>
+    <div class="dh"><b>${head}</b>
+      <button class="sm ghost tiny" ${rechecking ? "disabled" : ""}
+              onclick="recheckOutput()">${
+        rechecking ? "검사 중…" : "다시 검사"}</button></div>
     <div class="dcounts">
       <span class="dc"><b>영상</b> ${o.video.exists ? "완료" : "없음"}</span>
       <span class="dc"><b>길이</b> ${o.video.seconds
@@ -2701,6 +2732,8 @@ function outputCheckPanel(){
         말합니다.</div>
     </div>
     ${o.issues.map(issueRow).join("")}` : ""}
+    ${(o.issues || []).length ? "" : (o.problems.length ? ""
+      : '<p class="muted">모든 결과 확인 완료</p>')}
     ${(o.scene_rows || []).map(outputSceneRow).join("")}
   </div>`;
 }
@@ -2726,9 +2759,12 @@ function issueRow(issue){
 
   return `<div class="drow review">
     <span>! ${escHtml(issue.message)}</span>
-    <button class="sm ghost tiny" onclick="goToIssue(${
-      issue.scene === null || issue.scene === undefined
-        ? "null" : issue.scene}, '${issue.kind}')">${label}</button>
+    <span class="dact">
+      <button class="sm ghost tiny" onclick="goToIssue(${
+        issue.scene === null || issue.scene === undefined
+          ? "null" : issue.scene}, '${issue.kind}')">${label}</button>
+      <button class="sm ghost tiny" onclick="recheckOutput()">다시 검사</button>
+    </span>
   </div>`;
 }
 
