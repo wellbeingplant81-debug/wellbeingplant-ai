@@ -2652,6 +2652,19 @@ async function loadFinalCheck(projectId){
 // 자리마다 다른 길이를 갖는다.
 let outputCheck = null;
 
+// Sprint164 - 문제의 종류마다 어느 자리를 여는가.
+//
+// 서버가 내는 종류(output_check.ISSUE_KINDS)와 여기가 아는 것이
+// 같아야 한다 - 모르는 종류가 오면 그 줄은 갈 곳이 없다. 두 곳이
+// 같은 목록을 갖는지 테스트가 지킨다.
+const ISSUE_SECTION = {
+  image: "image",
+  voice: "voice",
+  voice_short: "voice",
+  // 자막은 대본에서 나온다. 고칠 자리도 그쪽이다.
+  subtitle: "script",
+};
+
 async function loadOutputCheck(projectId){
   if(!projectId){ outputCheck = null; return; }
 
@@ -2682,13 +2695,40 @@ function outputCheckPanel(){
     </div>
     ${o.problems.length ? `<div class="short">${
       o.problems.map(x => `<div>${escHtml(x)}</div>`).join("")}</div>` : ""}
-    ${o.warnings.length ? `<div class="reviewnote">
+    ${(o.issues || []).length ? `<div class="reviewnote">
       <b>확인이 필요합니다</b>
-      ${o.warnings.map(x => `<div>${escHtml(x)}</div>`).join("")}
       <div class="muted">고쳐 주지 않았습니다. 무엇이 빠졌는지만
         말합니다.</div>
-    </div>` : ""}
+    </div>
+    ${o.issues.map(issueRow).join("")}` : ""}
     ${(o.scene_rows || []).map(outputSceneRow).join("")}
+  </div>`;
+}
+
+// Sprint164 - 문제에서 그 자리로 바로 간다.
+//
+// Timeline이 이미 가진 goToScene을 쓰고, 화면 구역은 이미 있는
+// toggleReviewSection으로 연다 - 새 이동 방식을 만들지 않는다.
+//
+// 자막 문제에는 Scene이 없다. 그때는 Scene을 고르지 않고 대본
+// 자리만 연다.
+function goToIssue(scene, kind){
+  const section = ISSUE_SECTION[kind];
+
+  if(section && reviewOpen !== section) toggleReviewSection(section);
+
+  if(scene !== null && scene !== undefined) goToScene(scene);
+}
+
+function issueRow(issue){
+  const label = issue.scene === null || issue.scene === undefined
+    ? "대본 열기" : `Scene ${issue.scene} 수정`;
+
+  return `<div class="drow review">
+    <span>! ${escHtml(issue.message)}</span>
+    <button class="sm ghost tiny" onclick="goToIssue(${
+      issue.scene === null || issue.scene === undefined
+        ? "null" : issue.scene}, '${issue.kind}')">${label}</button>
   </div>`;
 }
 

@@ -43,6 +43,17 @@ VIDEO_RELATIVE = ("video", "final_short.mp4")
 # 자막이 놓이는 자리. subtitle_service가 쓰는 그 이름이다.
 SUBTITLE_RELATIVE = ("subtitle", "subtitle.srt")
 
+# Sprint164 - 문제의 종류. 화면이 이 이름으로 어디를 열지 정한다.
+#
+# 화면이 모르는 종류를 여기서 내면 그 줄은 갈 곳이 없다 - 두 곳이
+# 같은 목록을 갖는지 테스트가 지킨다.
+IMAGE = "image"
+VOICE = "voice"
+VOICE_SHORT = "voice_short"
+SUBTITLE = "subtitle"
+
+ISSUE_KINDS = (IMAGE, VOICE, VOICE_SHORT, SUBTITLE)
+
 
 def _subtitle(project_path: str) -> dict:
     """
@@ -93,9 +104,13 @@ def _scene_rows(project_path: str, scenes: list, measured: dict) -> list:
     return rows
 
 
-def _warnings(rows: list) -> list:
+def _issues(rows: list) -> list:
     """
     영상은 나왔으나 사람이 봐야 하는 것들.
+
+    Sprint164 - 글이 아니라 구조로 낸다. 어느 Scene의 무슨 문제인지를
+    함께 주어야 화면이 그 자리로 갈 수 있다. 글(warnings)은 여기서
+    뽑는다 - 둘을 따로 만들면 한쪽만 바뀌는 날이 온다.
 
     길이가 짧다는 판정은 Duration Optimizer가 쓰는 허용 오차를 그대로
     쓴다 - 여기서 새 숫자를 만들지 않는다.
@@ -106,11 +121,19 @@ def _warnings(rows: list) -> list:
     found = []
 
     for row in rows:
+        number = row["scene"]
+
         if not row["image"]:
-            found.append(f"Scene {row['scene']} 이미지 없음")
+            found.append({
+                "scene": number, "kind": IMAGE,
+                "message": f"Scene {number} 이미지 없음",
+            })
 
         if not row["voice"]:
-            found.append(f"Scene {row['scene']} 음성 없음")
+            found.append({
+                "scene": number, "kind": VOICE,
+                "message": f"Scene {number} 음성 없음",
+            })
             continue
 
         seconds = row["seconds"]
@@ -121,10 +144,12 @@ def _warnings(rows: list) -> list:
         expected = duration_estimator.estimate_duration(row["narration"])
 
         if seconds < expected - duration_optimizer.TOLERANCE_SECONDS:
-            found.append(
-                f"Scene {row['scene']} 음성이 짧습니다 - "
-                f"대본 기준 {expected:.1f}초, 실제 {seconds:.1f}초"
-            )
+            found.append({
+                "scene": number, "kind": VOICE_SHORT,
+                "message": (f"Scene {number} 음성이 짧습니다 - "
+                            f"대본 기준 {expected:.1f}초, "
+                            f"실제 {seconds:.1f}초"),
+            })
 
     return found
 
@@ -141,7 +166,8 @@ def build(project_path: str, scenes: list) -> dict:
         voices      음성이 있는 Scene 수 / 전체
         subtitle    있는가
         problems    영상이 없다 - 그때만 찬다
-        warnings    영상은 나왔으나 봐야 하는 것들
+        issues      봐야 하는 것들. {scene, kind, message}
+        warnings    그 message만 뽑은 글
         scene_rows  Scene 하나씩
     """
 
@@ -160,10 +186,16 @@ def build(project_path: str, scenes: list) -> dict:
     rows = _scene_rows(project_path, scenes, measured)
     subtitle = _subtitle(project_path)
 
-    warnings = _warnings(rows)
+    issues = _issues(rows)
 
     if not subtitle["exists"]:
-        warnings.append("자막이 없습니다")
+        # 자막은 영상 하나에 하나다. Scene 번호를 붙이면 지어내는
+        # 것이 된다.
+        issues.append({
+            "scene": None, "kind": SUBTITLE, "message": "자막이 없습니다",
+        })
+
+    warnings = [issue["message"] for issue in issues]
 
     problems = [] if has_video else ["영상이 없습니다"]
 
@@ -191,6 +223,9 @@ def build(project_path: str, scenes: list) -> dict:
         },
         "subtitle": {"exists": subtitle["exists"]},
         "problems": problems,
+        # 같은 사실의 두 모습이다. issues가 원본이고 warnings는 거기서
+        # 뽑은 글이다.
+        "issues": issues,
         "warnings": warnings,
         "scene_rows": rows,
     }
