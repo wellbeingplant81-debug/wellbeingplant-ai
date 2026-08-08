@@ -147,7 +147,11 @@ class TestTheSummaryStillTellsTheTruth(unittest.TestCase):
         page = _page()
         block = _block(page, "function costWording")
 
-        for wording in ("무료", "계산 불가"):
+        # Sprint168 - 문구만 바뀌었다. 지킬 것은 그대로다.
+        self.assertIn("NO_COST", block)
+        self.assertIn('const NO_COST = "API 비용 없음"', page)
+
+        for wording in ("계산 불가",):
             with self.subTest(wording=wording):
                 self.assertIn(wording, block)
 

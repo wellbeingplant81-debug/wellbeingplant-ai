@@ -483,6 +483,28 @@ a{color:var(--accent)}
 .fchk.ready{border-color:#2c4a38}
 .fchk .short div{margin:2px 0}
 .okbox{margin-top:8px;padding-top:8px;border-top:1px solid #1e2534}
+.fhome{border:1px solid #2a3346;border-radius:9px;padding:10px;margin:0 0 12px}
+.fhome .fh{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+  margin-bottom:5px;font-size:12px}
+.fhome .fh b{min-width:70px;color:#8b97ad;font-weight:400}
+.fhome .ok{color:#5fd08a}
+.fhome .no{color:#e07a7a}
+.fsum{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;
+  padding-top:8px;border-top:1px solid #1e2534}
+
+/* Sprint168 - 작은 화면. 가로로 늘어놓던 것을 세로로 쌓고, 표는
+   제 안에서 가로로 넘긴다 - 페이지가 통째로 밀리면 단추를 못 찾는다. */
+@media (max-width: 760px){
+  .layout{grid-template-columns:1fr}
+  .strat,.picks{grid-template-columns:1fr}
+  .dcounts,.wcounts,.fsum{gap:6px}
+  .fhome .fh b{min-width:auto;display:block;width:100%}
+  .drow{flex-wrap:wrap}
+  .prep{overflow-x:auto}
+  .prep table{min-width:520px}
+  .rowbtns{flex-wrap:wrap}
+  .promptbox{min-height:220px}
+}
 .prep tr.need td{border-bottom:1px solid #1e2534;padding-top:0}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
@@ -574,6 +596,9 @@ a{color:var(--accent)}
       <!-- Sprint150 - 무료 제작 모드. 아래 카드들을 한 번에 맞춰 주는
            지름길일 뿐이고, 켜져 보이는지는 그 카드들을 되읽어 정한다. -->
       <div id="costMode" class="cmode"></div>
+      <!-- Sprint168 - 지금 상태와 다음 할 일. 새 사실을 만들지 않고
+           이미 있는 네 곳에서 읽는다. -->
+      <div id="freeHome"></div>
       <!-- Sprint152 - 무료 모드를 골랐을 때만 뜬다. 폴더 하나를
            정하고, 그 안에 무엇이 몇 개 있는지 그대로 보여 준다. -->
       <div id="workspace" class="wspace"></div>
@@ -1005,7 +1030,10 @@ function forecastBlock(f){
   const d = f.duration;
   const pass = d.verdict === "pass";
   const cost = f.cost.complete
-    ? (f.cost.known_total === 0 ? "무료" : "$" + f.cost.known_total.toFixed(4))
+    ? (f.cost.known_total === 0
+        // Sprint168 - 값어치를 주장하지 않는다. 아는 것은 "부르지
+        // 않는다"는 사실뿐이고, 그 말은 Sprint151이 정했다.
+        ? "API 비용 없음" : "$" + f.cost.known_total.toFixed(4))
     : "계산 불가 (단가 미상 " + f.cost.unknown_stages.length + "단계)";
 
   return `<div class="fc">
@@ -2521,6 +2549,9 @@ async function loadPreparation(projectId){
 
   // Sprint166 - 무엇으로 만들어졌는가.
   await loadCompletion(projectId);
+
+  // Sprint168 - 홈이 그 넷을 읽어 다음 할 일을 말한다.
+  renderFreeHome();
 }
 
 // 그 Scene에서 아직 없는 것들. 화면이 다시 판정하지 않는다.
@@ -3316,9 +3347,11 @@ function providerCard(stage, option, spec){
   const off = soon || missing;
   const on = uiPick[stage] === option.key;
 
+  // Sprint168 - 값어치를 주장하지 않는다. 아는 것은 "부르는가"뿐이고,
+  // 그 말은 Sprint151이 정했다.
   const cost = option.engine
-    ? (engine.calls_api ? "단가 미상" : "무료")
-    : (soon ? "—" : "무료");
+    ? (engine.calls_api ? "단가 미상" : NO_COST)
+    : (soon ? "—" : NO_COST);
   const measured = option.engine && providers.length;
   // 고른 것이 실제로 무엇을 요구하는지. 카드가 목록과 다른 말을
   // 하면 안 된다.
@@ -3515,6 +3548,7 @@ function pickProvider(stage, name){
 function renderStagePicks(){
   if(!stageSpec) return;
   renderCostMode();
+  renderFreeHome();
   $("stagePicks").innerHTML = BASIC_STAGES.map(renderStageBlock).join("");
   $("advancedPicks").innerHTML = ADVANCED_STAGES.map(renderStageBlock).join("");
 }
@@ -3588,6 +3622,7 @@ async function pickCostMode(free){
   renderCurrentProviders();
   renderScriptBox();
   showImageImport();
+  renderFreeHome();
   await refreshPlan();
 }
 
@@ -3725,6 +3760,122 @@ let wizError = "";
 // *_source가 기록하고, *_provider는 "누가 만드는가"의 칸이다.
 function freeWizardProviders(){
   return {image: FREE_IMAGE_PROVIDER, voice: FREE_VOICE_PROVIDER};
+}
+
+// Sprint168 - 지금 상태와 다음 할 일을 한 자리에서.
+//
+// 처음 쓰는 사람은 화면을 열고 "그래서 지금 뭘 눌러야 하지"를 묻는다.
+// 자료·대본·제작이 여러 판에 흩어져 있었다.
+//
+// 새 사실을 만들지 않는다. 이미 있는 네 곳에서 읽는다 - workspace ·
+// preparation · finalCheck · outputCheck. 다음 할 일은 그 넷에서
+// 나온다: 어디에 막혀 있는가가 곧 무엇을 해야 하는가다.
+//
+// 말은 사실만 쓴다. 값어치를 주장하지 않는다.
+
+// 지금 어느 단계인가. 앞의 것이 안 되어 있으면 그것이 먼저다.
+function freeNextStep(){
+  if(!workspace || !workspace.root){
+    return {label: "자료 확인", action: "chooseWorkspace()",
+            why: "내 자료 폴더를 먼저 고르십시오."};
+  }
+
+  if(!preparation || !preparation.total){
+    return {label: "자료 확인", action: "toggleFreeWizard()",
+            why: "대본을 먼저 넣으십시오."};
+  }
+
+  if(preparation.state !== "ready"){
+    return {label: "제작 준비", action: "openReview(reviewProject)",
+            why: preparation.state === "blocked"
+              ? "모자란 것을 채우십시오."
+              : "검토할 것을 확인하십시오."};
+  }
+
+  if(finalCheck && finalCheck.can_render === false){
+    return {label: "제작 준비", action: "openReview(reviewProject)",
+            why: "이미지와 음성을 먼저 만드십시오."};
+  }
+
+  if(outputCheck && outputCheck.video && outputCheck.video.exists){
+    return {label: "결과 보기", action: "openReview(reviewProject)",
+            why: outputCheck.state === "ready"
+              ? "검사 통과" : "수정 필요"};
+  }
+
+  return {label: "영상 만들기", action: "reviewApprove('render','음성')",
+          why: "준비됨"};
+}
+
+// 자료 · 대본 · 제작. 셋 다 서버가 낸 숫자를 그대로 적는다.
+function freeHome(){
+  const box = $("freeHome");
+  if(!box) return "";
+
+  if(!freeModeAvailable() || !isFreeMode()) return "";
+
+  const counts = (workspace && workspace.counts) || {};
+  const next = freeNextStep();
+
+  const scenes = preparation ? preparation.total : 0;
+  const ready = preparation ? (preparation.counts || {}).ready || 0 : 0;
+
+  return `<div class="fhome">
+    <div class="fh">
+      <b>자료 준비</b>
+      ${workspace && workspace.root
+        ? `<span class="ok">O 이미지 ${counts.images || 0}개</span>
+           <span class="ok">O 음성 ${counts.voice || 0}개</span>`
+        : '<span class="src">폴더를 고르지 않았습니다</span>'}
+    </div>
+    <div class="fh">
+      <b>대본 준비</b>
+      ${scenes
+        ? `<span class="ok">O Scene ${scenes}개</span>`
+        : '<span class="src">아직 없습니다</span>'}
+    </div>
+    <div class="fh">
+      <b>제작 준비</b>
+      ${scenes
+        ? `<span class="${ready === scenes ? "ok" : "no"}">${
+            ready === scenes ? "O 모든 Scene 준비 완료"
+              : "X " + ready + " / " + scenes + " Scene 준비됨"}</span>`
+        : '<span class="src">-</span>'}
+    </div>
+    ${freeSummary()}
+    <div class="rowbtns">
+      <button class="sm" onclick="${next.action}">${next.label}</button>
+      <span class="muted">${escHtml(next.why)}</span>
+    </div>
+  </div>`;
+}
+
+// 만들고 난 뒤의 요약. 무엇으로 만들어졌는지는 completion이 안다 -
+// 화면이 다시 세지 않는다.
+function freeSummary(){
+  if(!completion || !outputCheck
+     || !outputCheck.video || !outputCheck.video.exists) return "";
+
+  const c = completion;
+  const picked = (c.scene_rows || [])
+    .filter(row => row.image_source === "override").length;
+
+  return `<div class="fsum">
+    <span class="dc"><b>대본</b> ${
+      SOURCE_LABEL[c.script.source] || c.script.source}</span>
+    <span class="dc"><b>이미지</b> ${escHtml(c.image.provider || "")}${
+      picked ? ` · 직접 고름 ${picked}개` : ""}</span>
+    <span class="dc"><b>음성</b> ${escHtml(c.voice.provider || "")}</span>
+    <span class="dc"><b>영상</b> ${c.video.seconds
+      ? c.video.seconds.toFixed(1) + "초" : "-"}</span>
+    <span class="dc"><b>검사</b> ${
+      c.output.state === "ready" ? "검사 통과" : "수정 필요"}</span>
+  </div>`;
+}
+
+function renderFreeHome(){
+  const box = $("freeHome");
+  if(box) box.innerHTML = freeHome();
 }
 
 function toggleFreeWizard(){
@@ -4136,7 +4287,7 @@ function costWording(d){
   const unpriced = unpricedStages(d);
 
   if(!unpriced.length){
-    return known === 0 ? "무료" : "약 $" + known.toFixed(2);
+    return known === 0 ? NO_COST : "약 $" + known.toFixed(2);
   }
   if(known > 0) return "약 $" + known.toFixed(2) + " 이상";
 

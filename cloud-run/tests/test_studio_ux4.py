@@ -94,7 +94,15 @@ class TestTheCostWording(unittest.TestCase):
         page = _page()
         block = _block(page, "function costWording")
 
-        for wording in ("무료", "이상", "계산 불가", "약 $"):
+        # Sprint168 - "무료"를 "API 비용 없음"으로 바꿨다. 값어치를
+        # 주장하지 않고 아는 사실만 말한다는 규칙이다(Sprint151의 말).
+        # 여기서 지킬 것은 "네 경우가 서로 구분된다"이므로 문구만 옮긴다.
+        # 값이 0일 때의 말은 상수(NO_COST)가 들고 있다 - 화면
+        # 여러 곳이 같은 말을 쓰게 하려는 것이다. 이름과 값을 함께 본다.
+        self.assertIn("NO_COST", block)
+        self.assertIn('const NO_COST = "API 비용 없음"', page)
+
+        for wording in ("이상", "계산 불가", "약 $"):
             with self.subTest(wording=wording):
                 self.assertIn(wording, block)
 
