@@ -22,8 +22,16 @@ import subprocess
 
 from app.services import audio_policy
 
-FFMPEG = "ffmpeg"
-FFPROBE = "ffprobe"
+# Sprint169 - 이름 대신 실제 자리를 쓴다. 묶인 프로그램을 받은
+# 사람의 PC에는 PATH에 ffmpeg가 없다 - 그때 나는 오류는
+# FileNotFoundError뿐이고, 무엇을 깔아야 하는지 알 수 없다.
+#
+# 부르는 명령도 인자도 그대로다. 어디에 있는 것을 부르는가만
+# 바뀐다.
+from app.services import media_tools
+
+FFMPEG = media_tools.resolve(media_tools.FFMPEG)
+FFPROBE = media_tools.resolve(media_tools.FFPROBE)
 
 TARGET_DURATION_SECONDS = 45.0
 TOLERANCE_SECONDS = 2.0

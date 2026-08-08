@@ -7,7 +7,13 @@ from app.utils.atomic_write import atomic_write_json
 
 # 모든 프로젝트가 놓이는 루트. resolve_project_path()가 이 밖으로는
 # 절대 나가지 않는다.
-OUTPUT_ROOT = "output"
+#
+# Sprint169 - 실행 파일로 묶이면 코드 옆이 읽기 전용이 된다. 그때는
+# 사용자 자리로 간다. 개발 중에는 예전 그대로 "output"이다 - 어제까지
+# 만든 것이 사라진 것처럼 보이면 안 된다.
+from app import runtime_paths
+
+OUTPUT_ROOT = runtime_paths.output_root()
 
 
 def resolve_project_path(project_id: str) -> str:

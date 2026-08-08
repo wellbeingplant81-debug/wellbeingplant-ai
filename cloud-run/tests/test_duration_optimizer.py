@@ -44,7 +44,11 @@ class TestGetAudioDuration(unittest.TestCase):
         get_audio_duration("scene1.wav")
 
         command = mock_run.call_args[0][0]
-        self.assertIn("ffprobe", command)
+
+        # Sprint169 - 이름 대신 실제 자리를 부른다(묶인 프로그램의
+        # PC에는 PATH에 없다). 부르는 도구는 그대로이므로 경로 안에
+        # 그 이름이 있는지를 본다.
+        self.assertIn("ffprobe", os.path.basename(command[0]).lower())
         self.assertIn("scene1.wav", command)
 
 

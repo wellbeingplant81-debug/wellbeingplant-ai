@@ -2,6 +2,8 @@ import glob
 import os
 import subprocess
 
+from app.services import media_tools
+
 from PIL import Image
 from app.services import audio_policy
 
@@ -22,7 +24,7 @@ def _ffprobe_duration(path):
 
     result = subprocess.run(
         [
-            "ffprobe",
+            media_tools.resolve(media_tools.FFPROBE),
             "-v",
             "error",
             "-show_entries",

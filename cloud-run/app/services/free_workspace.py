@@ -62,11 +62,9 @@ def default_store_path() -> str:
     사용자 한 사람의 결정이 사는 곳을 두 군데 만들지 않는다.
     """
 
-    from app.pipeline.pipeline import DATASET_ROOT
+    from app import runtime_paths
 
-    return os.path.join(
-        os.path.dirname(DATASET_ROOT), ".workflow", STORE_FILENAME,
-    )
+    return os.path.join(runtime_paths.workflow_root(), STORE_FILENAME)
 
 
 def remembered(store_path: str) -> dict:

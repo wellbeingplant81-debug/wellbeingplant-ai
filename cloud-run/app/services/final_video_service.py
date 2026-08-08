@@ -1,5 +1,7 @@
 import os
 import subprocess
+
+from app.services import media_tools
 from app.services import audio_policy
 
 
@@ -12,7 +14,7 @@ FINAL_CRF = 18
 
 def merge_video_audio(project_path: str):
 
-    ffmpeg = "ffmpeg"
+    ffmpeg = media_tools.resolve(media_tools.FFMPEG)
 
     video_path = os.path.join(
         project_path,

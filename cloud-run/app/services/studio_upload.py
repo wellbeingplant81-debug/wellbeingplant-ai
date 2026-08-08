@@ -65,11 +65,10 @@ def default_store_path() -> str:
     DATASET_ROOT가 pipeline에 있고 pipeline이 이 모듈을 부르므로 함수
     안에서 들인다 - 모듈 최상단에 두면 순환한다."""
 
-    from app.pipeline.pipeline import DATASET_ROOT
+    from app import runtime_paths
 
     return os.path.join(
-        os.path.dirname(DATASET_ROOT), ".workflow",
-        studio_workflow.STORE_FILENAME,
+        runtime_paths.workflow_root(), studio_workflow.STORE_FILENAME,
     )
 
 

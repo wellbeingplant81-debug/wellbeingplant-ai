@@ -3,6 +3,7 @@ import os
 import subprocess
 
 from app.services import asset_feedback_service
+from app.services import media_tools
 from app.services import asset_observatory
 from app.services import best_of_n_service
 from app.services import provider_selection
@@ -229,7 +230,7 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
     """
 
     command = [
-        "ffmpeg",
+        media_tools.resolve(media_tools.FFMPEG),
         "-y",
         "-i", video_path,
         "-frames:v", "1",

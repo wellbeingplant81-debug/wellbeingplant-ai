@@ -54,12 +54,12 @@ MEASUREMENT_FILENAME = "measurements.json"
 # 저장소 차원의 관측 기록이므로 프로젝트 디렉터리 밖에 둔다 -
 # 프로젝트는 임시 디렉터리에 만들어질 수 있고, 그때마다 사라지면
 # 축적이 되지 않는다.
-DATASET_ROOT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__),
-    ))),
-    ".dataset",
-)
+# Sprint169 - 자리를 정하는 규칙만 옮겼다. 파이프라인이 하는 일은
+# 한 줄도 바뀌지 않는다 - 묶인 프로그램에서 여기에 쓰면 프로그램을
+# 끌 때 같이 사라진다.
+from app import runtime_paths
+
+DATASET_ROOT = runtime_paths.dataset_root()
 
 
 def _save_script(project_path, data):

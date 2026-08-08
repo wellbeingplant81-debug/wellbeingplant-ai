@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+from app.services import media_tools
+
 from app.services import audio_policy
 from app.services.bgm_service import select_bgm
 from app.services.duration_optimizer import get_audio_duration
@@ -32,7 +34,7 @@ DUCK_MAKEUP = 1
 
 def concat_scene_audio(scene_audio_paths, output_file):
 
-    ffmpeg = "ffmpeg"
+    ffmpeg = media_tools.resolve(media_tools.FFMPEG)
 
     list_file = os.path.join(
         os.path.dirname(output_file),
@@ -84,7 +86,7 @@ def concat_scene_audio(scene_audio_paths, output_file):
 
 def mix_audio(project_path: str, bgm_category: str = None):
 
-    ffmpeg = "ffmpeg"
+    ffmpeg = media_tools.resolve(media_tools.FFMPEG)
 
     voice = os.path.join(
         project_path,

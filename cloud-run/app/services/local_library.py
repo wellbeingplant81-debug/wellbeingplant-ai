@@ -40,6 +40,8 @@ import json
 import os
 import re
 
+from app.services import media_tools
+
 INDEX_FILENAME = "local_library.json"
 
 IMAGES = "images"
@@ -148,7 +150,7 @@ def _sound(path: str) -> dict:
 
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "error",
+            [media_tools.resolve(media_tools.FFPROBE), "-v", "error",
              "-show_entries", "stream=sample_rate,channels:format=duration",
              "-of", "default=noprint_wrappers=1", path],
             capture_output=True, encoding="utf-8", errors="replace",

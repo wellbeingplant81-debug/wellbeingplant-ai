@@ -168,7 +168,9 @@ class TestGenerateVoice(unittest.TestCase):
 
         command = mock_run.call_args[0][0]
 
-        self.assertEqual(command[0], "ffmpeg")
+        # Sprint169 - 이름 대신 실제 자리를 부른다. 부르는 도구는
+        # 그대로이므로 경로 안에 그 이름이 있는지를 본다.
+        self.assertIn("ffmpeg", os.path.basename(command[0]).lower())
         self.assertIn(audio_policy.NARRATION_PCM_CODEC, command)
         self.assertIn(str(audio_policy.NARRATION_SAMPLE_RATE_HZ), command)
         self.assertEqual(command[-1], self.output_file)

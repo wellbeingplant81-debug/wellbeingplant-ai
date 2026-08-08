@@ -4,7 +4,7 @@ import tempfile
 
 import requests
 
-from app.services import audio_policy
+from app.services import audio_policy, media_tools
 
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 VOICES_URL = "https://api.elevenlabs.io/v1/voices"
@@ -140,7 +140,8 @@ def _write_policy_audio(audio_bytes: bytes, output_file: str):
 
     try:
         result = subprocess.run(
-            ["ffmpeg", "-y", "-i", source_path]
+            [media_tools.resolve(media_tools.FFMPEG),
+             "-y", "-i", source_path]
             + audio_policy.pcm_output_args()
             + [output_file],
             capture_output=True,

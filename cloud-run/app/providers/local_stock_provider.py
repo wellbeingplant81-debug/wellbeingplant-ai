@@ -32,7 +32,7 @@ import re
 import shutil
 import subprocess
 
-from app.services import local_library
+from app.services import local_library, media_tools
 from app.services.search_query_extractor import (
     DEFAULT_MAX_WORDS,
     extract_search_query,
@@ -133,7 +133,8 @@ def _first_frame(video_path: str, output_file: str) -> None:
     """
 
     result = subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2",
+        [media_tools.resolve(media_tools.FFMPEG),
+         "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2",
          output_file],
         capture_output=True, encoding="utf-8", errors="replace",
     )
