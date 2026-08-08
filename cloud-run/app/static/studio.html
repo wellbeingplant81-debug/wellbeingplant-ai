@@ -450,6 +450,9 @@ a{color:var(--accent)}
   border-radius:6px;cursor:pointer;font-size:12px}
 .altitem:hover{background:#1b2130}
 .prep .match.weak{color:#c9a06a}
+.prep .decided{display:block;color:#5fd08a;font-size:11px;margin-top:2px}
+.prep .instead{display:block;color:#7c8698;font-size:11px;margin-top:2px;
+  text-decoration:line-through}
 .reviewnote{margin-top:9px;padding:8px 10px;border:1px solid #4a3f2a;
   border-radius:8px;background:#1c1810;font-size:12px;color:#e8d5b0}
 .reviewnote b{display:block;margin-bottom:4px;color:#c9a06a}
@@ -2457,6 +2460,11 @@ const PREP_FROM = {made: "만들어 둠", workspace: "내 자료",
                    // Sprint158 - 사람이 보고 정한 것.
                    override: "직접 고름"};
 
+// Sprint159 - 무엇을 근거로 이 파일이 쓰이는가. 서버가 정한 것을
+// 그대로 옮긴다.
+const ASSET_SOURCE = {override: "직접 선택됨", generated: "만들어 둔 것",
+                      matched: "자동 매칭"};
+
 async function loadPreparation(projectId){
   if(!projectId){ preparation = null; requirements = null; return; }
 
@@ -2491,7 +2499,7 @@ function prepCell(slot){
   return `${prepMark(true)} <span class="src">${where}${
     slot.name ? " · " + escHtml(slot.name) : ""}</span>${
     shared.length ? `<span class="dup">= Scene ${shared.join(", ")}</span>` : ""}${
-    matchScore(slot)}`;
+    decidedNote(slot)}${matchScore(slot)}${insteadNote(slot)}`;
 }
 
 // Sprint157 - 왜 이 파일이 걸렸는가.
@@ -2500,6 +2508,27 @@ function prepCell(slot){
 //
 // 이미 만들어 둔 것에는 붙지 않는다 - 고른 것이 아니라 그 scene의
 // 제 파일이라 "몇 낱말로 걸렸다"가 성립하지 않는다.
+// Sprint159 - 사람이 정한 것이 무엇 대신 쓰이는지.
+//
+// 말해 주지 않으면 "왜 만들어 둔 것이 안 나오지"를 묻게 된다.
+function insteadNote(slot){
+  if(!slot || !slot.instead_of) return "";
+
+  const source = ASSET_SOURCE[slot.instead_of.source] || slot.instead_of.source;
+
+  return `<span class="instead">${source}: ${
+    escHtml(slot.instead_of.file)} (사용 안 함)</span>`;
+}
+
+// 언제 누가 정했는가. 적혀 있을 때만 말한다 - Sprint158에 정한 것은
+// 그 값이 없고, 지어내지 않는다.
+function decidedNote(slot){
+  if(!slot || slot.asset_source !== "override") return "";
+
+  return `<span class="decided">${ASSET_SOURCE.override}${
+    slot.selected_at ? " · " + escHtml(slot.selected_at) : ""}</span>`;
+}
+
 function matchScore(slot){
   if(slot.matched_count === null || slot.matched_count === undefined) return "";
 

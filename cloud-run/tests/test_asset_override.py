@@ -399,11 +399,15 @@ class OverrideSurvivesTest(Base):
                         json={"path": path})
 
         # 파일에 남았는가 - 프로세스가 죽어도 살아남아야 한다.
-        stored = json.load(open(
-            os.path.join(self.project, asset_override.FILENAME),
-            encoding="utf-8"))
+        #
+        # Sprint159가 "언제 누가"를 함께 적게 되었다. 여기서 지킬 것은
+        # 그 경로가 파일에 남는다는 사실이므로, 모양을 통째로 못 박지
+        # 않고 읽는 함수로 확인한다 - 적는 모양이 또 바뀌어도 이
+        # 테스트가 남의 Sprint를 막지 않는다.
+        self.assertTrue(os.path.exists(
+            os.path.join(self.project, asset_override.FILENAME)))
 
-        self.assertEqual(stored["scenes"]["1"], path)
+        self.assertEqual(asset_override.for_scene(self.project, 1), path)
 
         # 새 요청에서도 그대로 온다.
         report = self.client.get(

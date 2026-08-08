@@ -32,16 +32,43 @@ import os
 
 FILENAME = "asset_overrides.json"
 
-VERSION = 1
+# Sprint159 - 결정에 "언제 누가"가 붙었다. 예전 모양(경로 문자열)도
+# 그대로 읽는다 - 못 읽으면 그때 정한 사람들의 결정이 조용히 사라진다.
+VERSION = 2
+
+# 지금은 사람뿐이다. 엔진이 정하는 자리가 생기면 그때 늘어난다 -
+# 미리 여러 값을 만들어 두지 않는다.
+USER = "user"
 
 
 def _path(project_path: str) -> str:
     return os.path.join(project_path, FILENAME)
 
 
-def load(project_path: str) -> dict:
+def _decision(value) -> dict:
     """
-    적어 둔 결정들. {scene 번호(문자열): 경로}.
+    적혀 있던 것을 지금 모양으로 읽는다.
+
+    Sprint158은 경로만 적었다. 그때 정한 것은 언제 누가인지 우리가
+    모르므로 None으로 둔다 - 지어내지 않는다.
+    """
+
+    if isinstance(value, str) and value:
+        return {"path": value, "selected_at": None, "selected_by": None}
+
+    if isinstance(value, dict) and value.get("path"):
+        return {
+            "path": value["path"],
+            "selected_at": value.get("selected_at"),
+            "selected_by": value.get("selected_by"),
+        }
+
+    return None
+
+
+def decisions(project_path: str) -> dict:
+    """
+    적어 둔 결정들. {scene 번호(문자열): {path, selected_at, selected_by}}.
 
     깨져 있으면 빈 것으로 읽는다 - 결정 하나가 망가졌다고 화면 전체가
     죽을 이유는 없다.
@@ -61,10 +88,23 @@ def load(project_path: str) -> dict:
     if not isinstance(scenes, dict):
         return {}
 
+    read = {}
+
+    for number, value in scenes.items():
+        decision = _decision(value)
+
+        if decision is not None:
+            read[str(number)] = decision
+
+    return read
+
+
+def load(project_path: str) -> dict:
+    """경로만. {scene 번호(문자열): 경로}."""
+
     return {
-        str(number): path
-        for number, path in scenes.items()
-        if isinstance(path, str) and path
+        number: decision["path"]
+        for number, decision in decisions(project_path).items()
     }
 
 
@@ -74,39 +114,55 @@ def for_scene(project_path: str, number):
     return load(project_path).get(str(number))
 
 
-def save(project_path: str, number, path: str) -> dict:
+def decision_for(project_path: str, number):
+    """그 scene의 결정 전체. 없으면 None."""
+
+    return decisions(project_path).get(str(number))
+
+
+def _write(project_path: str, scenes: dict) -> dict:
+    from app.utils.atomic_write import atomic_write_json
+
+    atomic_write_json(
+        _path(project_path), {"version": VERSION, "scenes": scenes},
+    )
+
+    return scenes
+
+
+def save(project_path: str, number, path: str, selected_by: str = USER,
+         selected_at: str = None) -> dict:
     """
     이 scene에는 이것을 쓰겠다.
 
     여기서 그 경로가 쓸 만한지 보지 않는다 - 무엇이 목록에 있는가는
     라우터가 판정한다. 이 자리는 적기만 한다.
+
+    Sprint159 - 언제 누가 정했는지 함께 적는다. 그 둘은 어디서도
+    읽어 낼 수 없는 사실이다. asset_source(override/generated/matched)는
+    지금 상태에서 나오므로 적지 않는다.
     """
 
-    scenes = load(project_path)
-    scenes[str(number)] = path
+    from datetime import datetime
 
-    from app.utils.atomic_write import atomic_write_json
+    scenes = decisions(project_path)
+    scenes[str(number)] = {
+        "path": path,
+        "selected_at": selected_at or datetime.now().isoformat(
+            timespec="seconds"),
+        "selected_by": selected_by,
+    }
 
-    atomic_write_json(
-        _path(project_path), {"version": VERSION, "scenes": scenes},
-    )
-
-    return scenes
+    return _write(project_path, scenes)
 
 
 def clear(project_path: str, number) -> dict:
     """사람이 정한 것을 지운다. 그러면 자동으로 고른 것으로 돌아간다."""
 
-    scenes = load(project_path)
+    scenes = decisions(project_path)
     scenes.pop(str(number), None)
 
-    from app.utils.atomic_write import atomic_write_json
-
-    atomic_write_json(
-        _path(project_path), {"version": VERSION, "scenes": scenes},
-    )
-
-    return scenes
+    return _write(project_path, scenes)
 
 
 def missing(project_path: str) -> dict:

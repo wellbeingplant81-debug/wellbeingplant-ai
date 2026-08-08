@@ -195,50 +195,105 @@ def _is_weak(picked: dict) -> bool:
     return picked["matched_count"] == 1 and picked["total_keywords"] > 1
 
 
+# Sprint159 - 무엇을 쓰는가. 앞의 것이 이긴다.
+#
+#     override   사람이 보고 정했다
+#     generated  이미 만들어 둔 파일이 있다
+#     matched    낱말로 우리가 골랐다
+#
+# Sprint158까지는 generated가 override보다 앞이었다. 그래서 한 번
+# 만들고 나면 화면이 "만들어 둠"이라고만 했고, 사람이 정한 것이 아직
+# 살아 있는지 알 수 없었다. 만드는 쪽은 그때도 override를 따르고
+# 있었으므로(collect_assets는 기존 파일을 건너뛰지 않는다), 여기서
+# 뒤집는 것은 화면이 말하는 순서다.
+OVERRIDE = "override"
+GENERATED = "generated"
+MATCHED = "matched"
+
+
+def _made_status(project_path: str, number) -> dict:
+    """이미 만들어 둔 그림. 고른 것이 아니라 그 scene의 제 파일이다."""
+
+    return {
+        "ready": True, "from": "made", "asset_source": GENERATED,
+        "name": f"scene{number}.png", "kind": None,
+        "path": os.path.join(project_path, "images", f"scene{number}.png"),
+        "chosen_by": None,
+        "selected_at": None, "selected_by": None, "instead_of": None,
+        "matched_keywords": [], "matched_count": None,
+        "total_keywords": None, "weak": False,
+    }
+
+
 def _image_status(project_path: str, scene) -> dict:
     """
     이 scene의 그림은 어떤 상태인가.
 
-    이미 만든 것이 먼저다 - 있으면 그것을 쓰고 내 자료를 다시 보지
-    않는다. 그 다음이 내 자료에서 고를 수 있는가이고, 그 판단은
-    local_stock_provider가 한다.
+    사람이 정한 것이 먼저다(Sprint159). 그 다음이 이미 만들어 둔 것,
+    마지막이 내 자료에서 낱말로 고른 것이다. 고르는 판단은 여기서
+    하지 않는다 - local_stock_provider가 한다.
     """
 
     number = scene.get("scene")
+    prompt = scene.get("image_prompt") or ""
+
+    from app.providers import local_stock_provider
+
+    picked = local_stock_provider.match(project_path, prompt, number)
+
+    if picked is not None and picked["chosen_by"] == "user":
+        from app.services import asset_override
+
+        decision = asset_override.decision_for(project_path, number) or {}
+
+        # 사람이 정한 것 대신 무엇이 쓰였을지. 화면이 "자동 매칭
+        # ...(사용 안 함)"이라고 말할 근거다.
+        if _made_image(project_path, number):
+            instead = {"source": GENERATED, "file": f"scene{number}.png"}
+        else:
+            auto = local_stock_provider.match(project_path, prompt)
+            instead = (None if auto is None
+                       else {"source": MATCHED, "file": auto["file"]})
+
+        return {
+            "ready": True,
+            "from": OVERRIDE,
+            "asset_source": OVERRIDE,
+            "chosen_by": picked["chosen_by"],
+            "name": picked["file"],
+            "path": picked["path"],
+            "kind": picked["kind"],
+            "selected_at": decision.get("selected_at"),
+            "selected_by": decision.get("selected_by"),
+            "instead_of": instead,
+            "matched_keywords": picked["matched_keywords"],
+            "matched_count": picked["matched_count"],
+            "total_keywords": picked["total_keywords"],
+            "weak": _is_weak(picked),
+        }
 
     if _made_image(project_path, number):
         # 이미 만든 것은 scene 번호가 곧 파일 이름이라 겹칠 수가 없다.
         #
         # Sprint157 - 고른 것이 아니므로 "몇 낱말로 걸렸다"가 성립하지
         # 않는다. 없는 사실을 적지 않는다.
-        return {"ready": True, "from": "made", "name": f"scene{number}.png",
-                "kind": None,
-                "path": os.path.join(project_path, "images",
-                                     f"scene{number}.png"),
-                "chosen_by": None,
-                "matched_keywords": [], "matched_count": None,
-                "total_keywords": None, "weak": False}
-
-    from app.providers import local_stock_provider
-
-    # Sprint158 - scene 번호를 함께 준다. 사람이 정해 둔 것이 있으면
-    # 그것이 온다.
-    picked = local_stock_provider.match(
-        project_path, scene.get("image_prompt") or "", number,
-    )
+        return _made_status(project_path, number)
 
     if picked is None:
         return {"ready": False, "from": None, "name": None, "kind": None,
-                "path": None, "chosen_by": None,
+                "path": None, "chosen_by": None, "asset_source": None,
+                "selected_at": None, "selected_by": None, "instead_of": None,
                 "matched_keywords": [], "matched_count": None,
                 "total_keywords": None, "weak": False}
 
     return {
         "ready": True,
-        # Sprint158 - 사람이 정한 것과 우리가 고른 것을 갈라 적는다.
-        # 뭉치면 사람은 자기가 정한 것이 아직 쓰이는지 알 수 없다.
-        "from": "override" if picked["chosen_by"] == "user" else "workspace",
+        "from": "workspace",
+        "asset_source": MATCHED,
         "chosen_by": picked["chosen_by"],
+        "selected_at": None,
+        "selected_by": None,
+        "instead_of": None,
         "name": picked["file"],
         # Sprint156 - 어느 파일인지. 이름만으로는 폴더가 다른 같은
         # 이름을 구분하지 못한다.
