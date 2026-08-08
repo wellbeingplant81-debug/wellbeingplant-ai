@@ -266,7 +266,7 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
         Sprint150이 내 PC 폴더 훑기를, Sprint152가 준비 상태 확인을,
         Sprint153이 필요한 것 목록을, Sprint158이 미리보기와 직접
         고르기를, Sprint161이 검토 확인을, Sprint162가 최종 확인을,
-        Sprint163이 결과 확인을 더했다. 숫자를 세는 것이 목적이 아니라 "조용히 늘지 않는다"가
+        Sprint163이 결과 확인을, Sprint166이 제작 결과 보고를 더했다. 숫자를 세는 것이 목적이 아니라 "조용히 늘지 않는다"가
         목적이므로 무엇이 있는지 이름으로 적는다.
         """
 
@@ -282,6 +282,7 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
             "/studio/api/review/{project_id}/requirements",
             "/studio/api/review/{project_id}/final-check",
             "/studio/api/review/{project_id}/output-check",
+            "/studio/api/review/{project_id}/completion",
             "/studio/api/review/{project_id}/asset",
             "/studio/api/review/{project_id}/scenes/{scene}/alternatives",
             "/studio/api/review/{project_id}/scenes/{scene}/asset",

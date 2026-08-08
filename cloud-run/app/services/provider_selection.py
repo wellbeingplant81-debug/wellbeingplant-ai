@@ -56,12 +56,48 @@ GPT_IMAGE = "gpt_image"
 # 않는다.
 LOCAL_STOCK = "local_stock"
 
+# Sprint151 - 내 PC에 녹음해 둔 것. 엔진 쪽 이름은 tts_provider가
+# 소유하고, 여기서는 고른 것을 적기 위해 같은 값을 쓴다.
+LOCAL_VOICE = "local_voice"
+
 # Sprint133 - 실제로 붙은 대본 Provider. current와 같은 모델을 부르지만
 # Writer·게이트·재시도를 거치지 않는 직접 호출 쪽이다.
 GEMINI = "gemini"
 CLAUDE = "claude"
 OPENAI = "openai"
 DEEPSEEK = "deepseek"
+
+
+# Sprint166 - 모델을 부르지 않는 것들.
+#
+# 왜 여기에 적는가
+# ----------------
+# 등록소(app.production)의 ProviderCapabilities가 estimated_cost=0.0으로
+# 같은 사실을 들고 있다. 그런데 서비스 층은 등록소를 부를 수 없다 -
+# 파이프라인과 엔진은 Provider 계층을 모르는 채로 둔다는 경계가 있고,
+# test_production_architecture가 그것을 지킨다.
+#
+# 그래서 서비스 층이 쓸 답을 여기 둔다. 두 층이 갈리지 않는 것은
+# 테스트로 잠근다 - 등록소가 "돈이 안 든다"고 말하는 것과 여기 적힌
+# 것이 같아야 한다.
+#
+# 대본은 Provider가 아니라 출처가 정한다(붙여넣기·직접 작성은 부르지
+# 않는다). 그래서 여기 없다.
+FREE_PROVIDERS = {
+    "image": (LOCAL_STOCK,),
+    "voice": (LOCAL_VOICE,),
+}
+
+
+def calls_api(stage: str, provider: str) -> bool:
+    """
+    그 단계가 모델을 부르는가.
+
+    모르는 이름은 부르는 쪽으로 둔다 - "안 부른다"고 했다가 조용히
+    돈이 나가는 편보다, 부른다고 했다가 안 나가는 편이 낫다.
+    """
+
+    return provider not in FREE_PROVIDERS.get(stage, ())
 
 
 class ProviderNotWired(RuntimeError):

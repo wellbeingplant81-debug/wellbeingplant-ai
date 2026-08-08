@@ -1620,6 +1620,24 @@ def review_unconfirm_scene(project_id: str, scene: int):
     return {"scene": scene, "confirmed": False}
 
 
+@router.get("/api/review/{project_id}/completion")
+def review_completion(project_id: str):
+    """
+    Sprint166 - 무엇으로 만들어졌는가.
+
+    새로 적지 않는다. project.json·검사 결과·준비 상태에 이미 있는
+    것을 읽어 옮긴다 - 적어 두면 그것이 또 하나의 진실이 되고 실제
+    파일과 갈리는 날이 온다.
+    """
+
+    from app.services import completion_report, studio_review
+
+    path = _project_path(project_id)
+    scenes = studio_review.state(path).get("scenes") or []
+
+    return completion_report.build(path, scenes)
+
+
 @router.get("/api/review/{project_id}/output-check")
 def review_output_check(project_id: str):
     """

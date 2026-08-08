@@ -2501,7 +2501,7 @@ const ASSET_SOURCE = {override: "직접 선택됨", generated: "만들어 둔 �
 async function loadPreparation(projectId){
   if(!projectId){
     preparation = null; requirements = null;
-    finalCheck = null; outputCheck = null;
+    finalCheck = null; outputCheck = null; completion = null;
     return;
   }
 
@@ -2518,6 +2518,9 @@ async function loadPreparation(projectId){
 
   // Sprint163 - 만든 뒤의 결과도 함께.
   await loadOutputCheck(projectId);
+
+  // Sprint166 - 무엇으로 만들어졌는가.
+  await loadCompletion(projectId);
 }
 
 // 그 Scene에서 아직 없는 것들. 화면이 다시 판정하지 않는다.
@@ -2673,6 +2676,72 @@ async function loadOutputCheck(projectId){
   outputCheck = r.ok ? await r.json() : null;
 }
 
+// Sprint166 - 무엇으로 만들어졌는가.
+//
+// 새로 적지 않는다. 서버가 이미 있는 것을 읽어 옮기고, 화면은 그것을
+// 그대로 그린다.
+//
+// 값어치를 말하지 않는다. 우리가 아는 것은 "이 단계가 API를
+// 부르는가"뿐이고, 값은 모른다.
+let completion = null;
+
+const SOURCE_LABEL = {
+  auto: "엔진이 만듦", import: "붙여넣기", manual: "직접 작성",
+  override: "직접 고름", generated: "만들어 둔 것", matched: "자동 매칭",
+  made: "만들어 둔 것", workspace: "내 자료",
+};
+
+async function loadCompletion(projectId){
+  if(!projectId){ completion = null; return; }
+
+  const r = await fetch(`/studio/api/review/${projectId}/completion`);
+
+  completion = r.ok ? await r.json() : null;
+}
+
+function completionPanel(){
+  // 영상이 나오기 전에는 보고할 것이 없다.
+  if(!completion || !reviewState || !reviewState.done
+     || !reviewState.done.video) return "";
+
+  const c = completion;
+
+  return `<div class="fchk">
+    <div class="dh"><b>제작 결과 보고</b>
+      <span class="muted">${escHtml(c.title || c.topic || "")}</span></div>
+    <div class="dcounts">
+      <span class="dc"><b>대본</b> ${
+        SOURCE_LABEL[c.script.source] || c.script.source}</span>
+      <span class="dc"><b>이미지</b> ${escHtml(c.image.provider || "")}</span>
+      <span class="dc"><b>음성</b> ${escHtml(c.voice.provider || "")}</span>
+      <span class="dc"><b>길이</b> ${c.video.seconds
+        ? c.video.seconds.toFixed(1) + "초" : "-"}</span>
+      <span class="dc ${c.output.state === "ready" ? "ready" : "review"}"><b>검사</b> ${
+        STATE_LABEL[c.output.state] || c.output.state}</span>
+    </div>
+    <div class="dcounts" style="margin-top:6px">
+      ${c.cost.no_api_call
+        ? '<span class="dc ready">API 호출 없음</span>'
+        : Object.keys(c.cost.stages).map(stage =>
+            `<span class="dc ${c.cost.stages[stage].calls_api ? "" : "ready"}">${
+              escHtml(stage)} ${c.cost.stages[stage].calls_api
+                ? "API 호출" : "호출 없음"}</span>`).join("")}
+    </div>
+    ${(c.scene_rows || []).map(completionRow).join("")}
+  </div>`;
+}
+
+// Scene마다 무엇이 쓰였는가. 파일 이름을 그대로 적는다 - "직접
+// 고름"이라고만 하면 무엇을 골랐는지 알 수 없다.
+function completionRow(row){
+  return `<div class="drow" onclick="goToScene(${row.scene})">
+    <span>Scene ${row.scene}</span>
+    <span class="src">${escHtml(row.image || "-")}${
+      row.image_source ? " (" + (SOURCE_LABEL[row.image_source]
+        || row.image_source) + ")" : ""} · ${escHtml(row.voice || "-")}</span>
+  </div>`;
+}
+
 // Sprint165 - 고친 뒤에 같은 자리에서 다시 본다.
 //
 // 검사는 처음부터 무상태다 - output_check.build는 부를 때마다 지금
@@ -2694,6 +2763,7 @@ async function recheckOutput(){
   const fresh = await reviewCall("GET", "");
 
   await loadOutputCheck(reviewProject);
+  await loadCompletion(reviewProject);
 
   rechecking = false;
 
@@ -3077,6 +3147,7 @@ function renderReview(state){
   renderCanvas(state);
   $("reviewProgress").innerHTML = reviewProgress(state);
   $("reviewBody").innerHTML = sceneTimeline(state)
+    + completionPanel()
     + outputCheckPanel()
     + finalCheckPanel()
     + readinessDashboard()
