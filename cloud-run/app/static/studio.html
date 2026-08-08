@@ -446,6 +446,12 @@ a{color:var(--accent)}
 .pbuild{margin:0 0 10px}
 .pbuild .sminput{background:#131926;border:1px solid #2a3346;border-radius:7px;
   color:#dbe3f0;padding:6px 9px;font-size:12px;min-width:150px}
+.wiz{margin:0 0 10px}
+.wiz .wh{margin:12px 0 4px;font-size:13px;color:#8b97ad}
+.wiz .wh.on{color:#dbe3f0}
+.wiz .wh .at{color:#4a7dff}
+.wiz textarea{width:100%;min-height:110px}
+.wiz button[disabled]{opacity:.4;cursor:not-allowed}
 .promptbox{width:100%;min-height:170px;font-family:ui-monospace,monospace;
   font-size:11.5px;line-height:1.5;background:#0f141f;border:1px solid #2a3346;
   border-radius:8px;color:#c8d2e2;padding:9px}
@@ -493,6 +499,14 @@ a{color:var(--accent)}
         <label>Language</label>
         <select id="lang"><option>한국어</option></select>
       </div>
+    </div>
+
+    <!-- Sprint155 - 무료 제작 준비를 한 자리에서 끝낸다.
+         새 기능이 아니라 Sprint150~154를 순서대로 이은 것이다. -->
+    <div class="wiz" id="freeWizard"></div>
+    <div class="rowbtns" style="margin-top:0">
+      <button class="sm ghost" id="wizToggle"
+              onclick="toggleFreeWizard()">무료 제작 시작</button>
     </div>
 
     <!-- Sprint120 (UX 6.0) - 고르게 하지 않고, 가진 것을 체크하면
@@ -1354,6 +1368,7 @@ async function refreshPreparation(){
   await loadPreparation(reviewProject);
 
   if(reviewState) renderReview(reviewState);
+  renderFreeWizard();
 }
 
 // 프로젝트만 만든다. 아무것도 생성하지 않는다 - 첫 단계는 사람이
@@ -3061,6 +3076,227 @@ function renderCostMode(){
       아래에서 단계별로 고른 상태입니다.</p>`}`;
 
   renderWorkspace();
+}
+
+// Sprint155 - 무료 제작 위저드.
+//
+// 새 기능을 만들지 않는다. Sprint150~154가 만든 것을 순서대로 이을
+// 뿐이고, 부르는 자리도 전부 이미 있던 것들이다.
+//
+//   STEP 1  주제              (화면)
+//   STEP 2  요청문            POST /api/script-prompt
+//   STEP 3  대본 붙여넣기      POST /api/production/import -> .../project
+//   STEP 4  내 자료 폴더       PUT  /api/workspace · POST .../library
+//   STEP 5  준비 상태         GET  .../requirements
+//
+// 어디까지 왔는지는 서버가 준 것으로 정한다. 화면이 따로 세면 서버가
+// 아는 것과 갈리고, 사람은 화면이 초록인데 렌더가 막히는 것을 본다.
+let wizOpen = false;
+let wizProject = null;
+let wizScript = null;
+let wizError = "";
+
+// 무료 모드에서 고르는 Provider. 대본은 여기 없다 - 붙여넣은 대본은
+// *_source가 기록하고, *_provider는 "누가 만드는가"의 칸이다.
+function freeWizardProviders(){
+  return {image: FREE_IMAGE_PROVIDER, voice: FREE_VOICE_PROVIDER};
+}
+
+function toggleFreeWizard(){
+  wizOpen = !wizOpen;
+  $("wizToggle").textContent = wizOpen ? "무료 제작 닫기" : "무료 제작 시작";
+
+  if(wizOpen){ loadWorkspace(); }
+
+  renderFreeWizard();
+}
+
+async function wizBuildPrompt(){
+  wizError = "";
+  await buildScriptPrompt();
+  renderFreeWizard();
+}
+
+// 붙여넣은 것을 읽어 본다. 아직 아무것도 만들지 않는다.
+async function wizReadScript(){
+  const raw = ($("wizRaw") || {value: ""}).value;
+  wizError = "";
+
+  const r = await fetch("/studio/api/production/import", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({raw: raw, topic: ($("topic").value || "").trim()})});
+
+  const d = await r.json();
+
+  if(!r.ok){ wizError = d.detail || "대본을 읽지 못했습니다."; wizScript = null; }
+  else { wizScript = d; }
+
+  renderFreeWizard();
+}
+
+// 확정. 여기서 프로젝트가 생긴다.
+async function wizCreateProject(){
+  wizError = "";
+
+  const r = await fetch("/studio/api/production/project", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      raw: ($("wizRaw") || {value: ""}).value,
+      topic: ($("topic").value || "").trim(),
+      channel: $("channel").value, source: "import",
+    })});
+
+  const d = await r.json();
+
+  if(!r.ok){ wizError = d.detail || "프로젝트를 만들지 못했습니다."; }
+  else {
+    wizProject = d;
+    // 기존 생성 버튼이 이 프로젝트를 들고 간다. 버튼을 새로 만들지
+    // 않는다(Sprint107의 그 연결이다).
+    preparedProjectId = d.project_id;
+
+    // 무료 모드의 Provider를 그 프로젝트에 적는다.
+    await fetch(`/studio/api/review/${d.project_id}/providers`, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({providers: freeWizardProviders()})});
+
+    await wizScan();
+    await loadProjects();
+  }
+
+  renderFreeWizard();
+}
+
+async function wizChooseWorkspace(){
+  wizError = "";
+  await chooseWorkspace();
+  if(wizProject) await wizScan();
+  renderFreeWizard();
+}
+
+// 정해 둔 폴더를 이 프로젝트가 훑는다. 경로를 다시 적지 않는다.
+async function wizScan(){
+  if(!wizProject) return;
+
+  // 지난번 오류를 먼저 지운다. 안 지우면 자료를 다 채운 뒤에도
+  // "폴더를 먼저 고르십시오"가 남아, 다 됐는데 안 된 것처럼 보인다.
+  wizError = "";
+
+  const scan = await fetch(
+    `/studio/api/review/${wizProject.project_id}/library`,
+    {method: "POST", headers: {"Content-Type": "application/json"},
+     body: JSON.stringify({})});
+
+  if(!scan.ok){
+    const d = await scan.json().catch(() => ({}));
+    wizError = d.detail || "";
+    return;
+  }
+
+  await loadPreparation(wizProject.project_id);
+}
+
+function wizStep(){
+  if(!($("topic").value || "").trim()) return 1;
+  if(!scriptPrompt) return 2;
+  if(!wizProject) return 3;
+  if(!workspace || !workspace.root) return 4;
+  return 5;
+}
+
+function wizHead(n, title){
+  const now = wizStep();
+  const mark = now > n ? '<span class="yes">O</span>'
+    : (now === n ? '<span class="at">></span>' : '<span class="src">·</span>');
+
+  return `<div class="wh ${now === n ? "on" : ""}">${mark} STEP ${n} ${title}</div>`;
+}
+
+// 자료 상태. 준비된 수 / 전체다. 영상은 분모가 없다 - 몇 개가
+// "필요한지" 정해져 있지 않고, 그림을 영상에서 가져온 scene의 수일
+// 뿐이다. 6/6처럼 적으면 6개가 필요했다는 뜻이 되어 거짓말이 된다.
+function wizAssetLines(){
+  if(!preparation) return '<span class="muted">아직 확인하지 않았습니다.</span>';
+
+  const r = preparation.ready || {};
+  const total = preparation.total || 0;
+
+  return `<span class="wc"><b>이미지</b> ${r.images || 0}/${total}</span>
+    <span class="wc"><b>음성</b> ${r.voice || 0}/${total}</span>
+    <span class="wc"><b>영상에서</b> ${r.videos || 0}개</span>`;
+}
+
+function renderFreeWizard(){
+  const box = $("freeWizard");
+  if(!box) return;
+
+  if(!wizOpen){ box.innerHTML = ""; return; }
+
+  const step = wizStep();
+  const ready = preparation && preparation.total
+    && !(preparation.missing || []).length;
+
+  box.innerHTML = `
+    ${wizHead(1, "주제")}
+    <p class="muted">위 <b>주제</b> 칸에 적으면 됩니다.
+      예: "40대 허리 건강 운동"</p>
+
+    ${wizHead(2, "Gemini 요청문")}
+    <div class="rowbtns" style="margin-top:0">
+      <button class="sm ${step === 2 ? "" : "ghost"}"
+              onclick="wizBuildPrompt()">Gemini 요청문 만들기</button>
+    </div>
+    ${scriptPrompt ? `<textarea class="promptbox" readonly
+      >${escHtml(scriptPrompt.prompt)}</textarea>
+      <div class="rowbtns">
+        <button class="sm" onclick="copyScriptPrompt()">복사</button>
+        <span class="muted" id="promptCopied"></span>
+      </div>
+      <p class="muted">${escHtml(scriptPrompt.how_to_use)}</p>` : ""}
+
+    ${wizHead(3, "대본 붙여넣기")}
+    ${wizProject ? `<p class="muted">
+        <b>${escHtml(wizProject.title)}</b> · scene ${wizProject.scene_count}개
+        · 프로젝트 ${wizProject.project_id}</p>`
+      : `<textarea id="wizRaw" placeholder="Gemini 답을 그대로 붙여넣기"
+           ></textarea>
+         <div class="rowbtns">
+           <button class="sm ghost" onclick="wizReadScript()">읽어 보기</button>
+           ${wizScript ? `<button class="sm" onclick="wizCreateProject()">
+             이 대본으로 시작</button>` : ""}
+         </div>
+         ${wizScript ? `<p class="muted"><b>${escHtml(wizScript.title)}</b>
+           · scene ${wizScript.scene_count}개</p>` : ""}`}
+
+    ${wizHead(4, "내 자료 폴더")}
+    <div class="rowbtns" style="margin-top:0">
+      <button class="sm ${step === 4 ? "" : "ghost"}"
+              onclick="wizChooseWorkspace()">내 자료 폴더 선택</button>
+      ${workspace && workspace.root
+        ? `<code class="wpath">${escHtml(workspace.root)}</code>` : ""}
+    </div>
+
+    ${wizHead(5, "준비 상태")}
+    <div class="wcounts">${wizAssetLines()}</div>
+    ${preparation && (preparation.missing || []).length
+      ? `<div class="short">부족: ${preparation.missing.join(" · ")}</div>
+         <p class="muted">무엇을 어디에 넣으면 되는지는 아래 검토 화면의
+           준비 표에 있습니다.</p>` : ""}
+    <div class="rowbtns">
+      <button class="sm" ${ready ? "" : "disabled"}
+              onclick="wizStart()">제작 시작</button>
+      ${ready ? "" : '<span class="muted">모자란 것을 채우면 열립니다.</span>'}
+    </div>
+
+    ${wizError ? `<div class="short">${escHtml(wizError)}</div>` : ""}`;
+}
+
+// 만드는 것은 기존 버튼이 한다. 새 생성 경로를 만들지 않는다.
+async function wizStart(){
+  if(!wizProject) return;
+
+  await openReview(wizProject.project_id);
+  $("reviewPanel").scrollIntoView({behavior: "smooth", block: "start"});
 }
 
 function toggleAdvanced(){

@@ -193,9 +193,18 @@ class TestTheScriptHasNoDanglingNames(unittest.TestCase):
 
         ALL_CAPS 뒤에 점이나 대괄호가 오는 자리만 본다 - 화면 글에
         들어 있는 대문자 낱말(API, HIT 같은 것)까지 세면 가드가
-        스스로 못 쓰게 된다."""
+        스스로 못 쓰게 된다.
 
-        script = self._script()
+        Sprint155 - 주석 줄은 먼저 걷어낸다. 코드를 보는 가드인데
+        주석을 읽으면, 설명에 "POST .../library"라고 적은 것만으로
+        선언되지 않은 상수를 쓴 것처럼 걸린다(실제로 걸렸다). 이
+        저장소가 여러 번 겪은 모양이다.
+
+        줄 전체가 주석인 것만 지운다 - 코드 줄 뒤에 붙은 "// ..."까지
+        지우면 "https://"가 든 문자열이 잘려 그 줄의 진짜 쓰임을
+        놓칠 수 있다."""
+
+        script = re.sub(r"(?m)^[ \t]*//.*$", "", self._script())
 
         declared = set(re.findall(r"const\s+([A-Z][A-Z0-9_]+)\s*=", script))
         # 브라우저가 주는 전역.
