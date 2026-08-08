@@ -32,7 +32,10 @@ import shutil
 import subprocess
 
 from app.services import local_library
-from app.services.search_query_extractor import extract_search_query
+from app.services.search_query_extractor import (
+    DEFAULT_MAX_WORDS,
+    extract_search_query,
+)
 
 
 class LocalStockUnavailable(RuntimeError):
@@ -41,28 +44,78 @@ class LocalStockUnavailable(RuntimeError):
     무엇이 없어서인지 적는다 - 사람이 고쳐서 다시 할 수 있어야 한다."""
 
 
+def _usable(word: str) -> bool:
+    """
+    이 낱말로 그림을 고를 수 있는가.
+
+    숫자만인 것은 아니다. "40"이나 "2026"은 그림의 내용을 가리키지
+    않으므로, 그것 하나로 고르면 아무 파일이나 걸린다.
+    """
+
+    word = (word or "").strip()
+
+    return bool(word) and not word.isdigit()
+
+
 def _keywords(image_prompt: str) -> list:
     """
     프롬프트에서 찾을 낱말을 뽑는다.
 
-    스톡 검색이 쓰던 추출기를 그대로 쓴다 - 여기서 새 규칙을 만들면
+    스톡 검색이 쓰던 추출기를 먼저 쓴다 - 여기서 새 규칙을 만들면
     같은 프롬프트가 자리마다 다르게 읽힌다.
+
+    한국어는 추출기가 버린다
+    ------------------------
+    extract_search_query는 Pexels/Pixabay 검색용이라 영문·숫자만
+    남긴다. 그쪽에서는 맞는 동작이다 - 한국어를 그대로 보내 봐야
+    스톡 사이트가 못 알아듣는다.
+
+    문제는 우리 파일 이름은 한국어라는 것이다. 요소를 이어 붙인
+    프롬프트에서
+
+        "40대 남성, 무릎 스트레칭, 거실, 미디엄, 중앙, 자연광"
+
+    추출기가 남기는 것은 "40" 하나뿐이다. Sprint150이 폴백을 만들어
+    두긴 했으나 조건이 "낱말이 하나도 없을 때"라, 숫자 한 조각만
+    나와도 열리지 않았다. 그래서 Scene이 몇 개든 전부 같은 낱말을
+    찾았고, 파일 하나로 모든 Scene이 같은 그림이 됐다(Sprint155 실측).
+
+    Sprint156 - 두 가지를 고친다.
+
+        1. 숫자만인 토큰은 낱말로 치지 않는다
+        2. 원문에 한국어가 있으면 그쪽도 함께 뽑는다
+
+    둘째가 "대신"이 아니라 "함께"인 이유는, 섞여 있는 프롬프트에서
+    한쪽만 쓰면 나머지 절반을 못 찾기 때문이다. 영문만 있는
+    프롬프트에는 더할 것이 없으므로 예전 그대로다.
+
+    개수는 추출기가 쓰는 그 한도를 따른다 - 여기서 새 숫자를 정하지
+    않는다.
     """
 
-    query = extract_search_query(image_prompt or "")
+    text = image_prompt or ""
 
-    words = [w.strip().lower() for w in query.split() if w.strip()]
+    words = [
+        w.strip().lower()
+        for w in extract_search_query(text).split()
+        if _usable(w)
+    ]
 
-    # 한국어 프롬프트는 추출기가 영어 낱말을 못 찾을 수 있다. 그때는
-    # 원문에서 끊어 낸다 - 파일 이름도 한국어일 것이기 때문이다.
-    if not words:
-        words = [
-            w.strip().lower()
-            for w in local_library._SPLIT.split(image_prompt or "")
-            if w.strip()
-        ]
+    # 원문에서 끊어 낸 것 중 추출기가 버린 것들(한국어 등).
+    for word in local_library._SPLIT.split(text):
+        word = word.strip().lower()
 
-    return words
+        if not _usable(word) or word in words:
+            continue
+
+        if word.isascii():
+            # 영문·숫자는 추출기가 이미 보았다. 그것이 버린 것은
+            # 버릴 이유가 있어서다(불용어·상투어).
+            continue
+
+        words.append(word)
+
+    return words[:DEFAULT_MAX_WORDS]
 
 
 def _first_frame(video_path: str, output_file: str) -> None:

@@ -190,8 +190,11 @@ def _image_status(project_path: str, scene) -> dict:
     number = scene.get("scene")
 
     if _made_image(project_path, number):
+        # 이미 만든 것은 scene 번호가 곧 파일 이름이라 겹칠 수가 없다.
         return {"ready": True, "from": "made", "name": f"scene{number}.png",
-                "kind": None}
+                "kind": None,
+                "path": os.path.join(project_path, "images",
+                                     f"scene{number}.png")}
 
     from app.providers import local_stock_provider
 
@@ -200,12 +203,16 @@ def _image_status(project_path: str, scene) -> dict:
     )
 
     if picked is None:
-        return {"ready": False, "from": None, "name": None, "kind": None}
+        return {"ready": False, "from": None, "name": None, "kind": None,
+                "path": None}
 
     return {
         "ready": True,
         "from": "workspace",
         "name": picked["name"],
+        # Sprint156 - 어느 파일인지. 이름만으로는 폴더가 다른 같은
+        # 이름을 구분하지 못한다.
+        "path": picked["path"],
         # 영상에서 온 것인지 그림에서 온 것인지. 화면이 "영상 선택"을
         # 여기서 읽는다.
         "kind": picked["kind"],
@@ -240,6 +247,63 @@ def _voice_status(project_path: str, scene) -> dict:
     }
 
 
+# Sprint156 - 여러 Scene이 같은 그림을 쓰는 일.
+#
+# Sprint155 실측에서 세 Scene이 전부 "40.png" 하나로 채워졌는데
+# 화면은 "이미지 3/3 준비 완료"라고만 했다. 낱말 뽑기를 고쳐 그런
+# 일이 줄었지만, 없앨 수는 없다 - 사람이 가진 파일이 정말 하나뿐일
+# 수도 있다.
+#
+# 그래서 막지 않고 말한다. 같은 그림을 쓰는 것이 틀린 것은 아니다 -
+# 일부러 그렇게 할 수도 있고, 그것은 사람이 정할 일이다.
+
+READY = "ready"
+REVIEW = "review"
+MISSING = "missing"
+
+
+def _shared_images(rows: list) -> dict:
+    """
+    파일 하나에 걸린 Scene 번호들. 둘 이상인 것만 돌려준다.
+
+    경로로 묶는다 - 이름만 보면 폴더가 다른 같은 이름을 한 파일로
+    센다.
+    """
+
+    by_path = {}
+
+    for row in rows:
+        image = row["image"]
+
+        if not image.get("ready") or not image.get("path"):
+            continue
+
+        by_path.setdefault(os.path.normcase(image["path"]), []).append(row)
+
+    return {
+        path: found for path, found in by_path.items() if len(found) > 1
+    }
+
+
+def _review_notes(shared: dict) -> list:
+    """사람이 읽을 한 줄씩. 몇 개가, 무엇을, 어느 Scene에서."""
+
+    notes = []
+
+    for _, found in sorted(
+        shared.items(), key=lambda pair: pair[1][0]["scene"],
+    ):
+        numbers = [row["scene"] for row in found]
+        name = found[0]["image"]["name"]
+
+        notes.append(
+            f"{len(numbers)}개 Scene이 같은 이미지를 사용합니다: "
+            f"{name} (Scene {', '.join(str(n) for n in numbers)})"
+        )
+
+    return notes
+
+
 def preparation(project_path: str, scenes: list) -> dict:
     """
     지금 이 프로젝트를 무료로 만들 수 있는가. Scene마다 말한다.
@@ -262,6 +326,9 @@ def preparation(project_path: str, scenes: list) -> dict:
         image = _image_status(project_path, scene)
         voice = _voice_status(project_path, scene)
         from_video = image["kind"] == local_library.VIDEOS
+
+        # Sprint156 - 같은 그림을 쓰는 Scene은 아래에서 채운다.
+        image["shared_with"] = []
 
         rows.append({
             "scene": number,
@@ -290,12 +357,28 @@ def preparation(project_path: str, scenes: list) -> dict:
         else:
             missing.append(f"Scene {number} 음성")
 
+    shared = _shared_images(rows)
+
+    for found in shared.values():
+        numbers = [row["scene"] for row in found]
+
+        for row in found:
+            row["image"]["shared_with"] = [
+                n for n in numbers if n != row["scene"]
+            ]
+
+    review = _review_notes(shared)
+
     return {
         "scanned": scanned,
         "root": index.get("root"),
         "total": len(rows),
         "ready": ready,
         "missing": missing,
+        # Sprint156 - 없는 것은 아니지만 사람이 봐야 하는 것들.
+        # 자동으로 실패시키지 않는다.
+        "review": review,
+        "state": (MISSING if missing else (REVIEW if review else READY)),
         "scenes": rows,
     }
 
@@ -437,6 +520,7 @@ def requirements(project_path: str, scenes: list) -> dict:
                 "expected_root": None,
                 "location": None,
                 "status": "missing",
+                "shared_with": [],
                 "found": None,
                 "message": _message("script", "missing", None, None),
             })
@@ -462,6 +546,19 @@ def requirements(project_path: str, scenes: list) -> dict:
                 else:
                     path = _found_path(folder, slot)
 
+                # Sprint156 - 준비는 됐지만 다른 Scene과 같은 파일을
+                # 쓰는 경우. 없는 것으로 치지 않는다 - 사람이 일부러
+                # 그렇게 했을 수도 있다.
+                shared = slot.get("shared_with") or []
+                message = _message(asset, "ready", path, where)
+
+                if shared:
+                    message += (
+                        " · Scene "
+                        + ", ".join(str(n) for n in shared)
+                        + "과(와) 같은 파일입니다"
+                    )
+
                 rows.append({
                     "scene": number,
                     "required_asset": asset,
@@ -469,8 +566,9 @@ def requirements(project_path: str, scenes: list) -> dict:
                     "expected_root": base,
                     "location": where,
                     "status": "ready",
+                    "shared_with": shared,
                     "found": slot.get("name"),
-                    "message": _message(asset, "ready", path, where),
+                    "message": message,
                 })
                 continue
 
@@ -483,6 +581,7 @@ def requirements(project_path: str, scenes: list) -> dict:
                 "expected_root": root if where == "workspace" else project_path,
                 "location": where,
                 "status": "missing",
+                "shared_with": [],
                 "found": None,
                 "message": _message(asset, "missing", path, where),
             })
@@ -492,5 +591,8 @@ def requirements(project_path: str, scenes: list) -> dict:
         "root": root,
         "total": prepared["total"],
         "ready": prepared["ready"],
+        # 두 화면이 갈리지 않도록 같은 판정을 그대로 옮긴다.
+        "review": prepared["review"],
+        "state": prepared["state"],
         "requirements": rows,
     }

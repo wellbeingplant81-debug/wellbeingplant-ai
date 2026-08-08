@@ -273,15 +273,22 @@ class MissingAssetReportTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.project, ignore_errors=True)
 
     def test_missing_asset_report(self):
+        # Sprint156 - 프롬프트마다 낱말이 달라야 한다. 예전에는
+        # "프롬프트 1"~"프롬프트 4"를 썼는데, 낱말 뽑기를 고친 뒤로는
+        # 넷이 "프롬프트"를 함께 가져 4번도 1번 그림에 걸린다.
+        # 실제 대본에서는 Scene마다 다른 것을 말하므로, 그 모양으로
+        # 맞춘다 - 여기서 지킬 것은 "없는 것을 없다고 말한다"이다.
+        topics = {1: "무릎", 2: "허리", 3: "어깨", 4: "우주선"}
+
         scenes = [
             {"scene": n, "narration": f"{n}번 문장",
-             "image_prompt": f"프롬프트 {n}"}
+             "image_prompt": topics[n]}
             for n in (1, 2, 3, 4)
         ]
 
         # 1·2·3번 그림만 있고, 음성은 1번만.
         for n in (1, 2, 3):
-            _png(os.path.join(self.root, "images", f"프롬프트 {n}.png"))
+            _png(os.path.join(self.root, "images", f"{topics[n]}.png"))
 
         _tone(os.path.join(self.root, "voices", "scene1.wav"), seconds=0.3)
 

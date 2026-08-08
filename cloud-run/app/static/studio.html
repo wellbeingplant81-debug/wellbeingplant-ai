@@ -439,6 +439,11 @@ a{color:var(--accent)}
 .prep .yes{color:#5fd08a}
 .prep .src{color:#8b97ad}
 .prep .short{margin-top:8px;color:#e07a7a;font-size:12px}
+.prep .dup,.wiz .dup{color:#c9a06a;font-size:11px;margin-left:6px}
+.reviewnote{margin-top:9px;padding:8px 10px;border:1px solid #4a3f2a;
+  border-radius:8px;background:#1c1810;font-size:12px;color:#e8d5b0}
+.reviewnote b{display:block;margin-bottom:4px;color:#c9a06a}
+.reviewnote .muted{margin-top:4px}
 .prep tr.need td{border-bottom:1px solid #1e2534;padding-top:0}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
@@ -2468,9 +2473,12 @@ function prepCell(slot){
   if(!slot || !slot.ready) return prepMark(false);
 
   const where = PREP_FROM[slot.from] || "";
+  // Sprint156 - 다른 Scene과 같은 파일이면 그 자리에서 말한다.
+  const shared = (slot.shared_with || []);
 
   return `${prepMark(true)} <span class="src">${where}${
-    slot.name ? " · " + slot.name : ""}</span>`;
+    slot.name ? " · " + escHtml(slot.name) : ""}</span>${
+    shared.length ? `<span class="dup">= Scene ${shared.join(", ")}</span>` : ""}`;
 }
 
 function preparationPanel(){
@@ -2502,6 +2510,23 @@ function preparationPanel(){
         <td>${row.video ? prepMark(true) : '<span class="src">-</span>'}</td>
       </tr>${needRow(row.scene)}`).join("")}</tbody>
     </table>
+    ${prepReview()}
+  </div>`;
+}
+
+// Sprint156 - 없는 것은 아니지만 사람이 봐야 하는 것.
+//
+// 여러 Scene이 같은 그림을 쓰는 일이다. 막지 않는다 - 일부러 그렇게
+// 할 수도 있고, 그것은 사람이 정할 일이다. 판정은 서버가 한 것을
+// 그대로 옮긴다.
+function prepReview(){
+  const notes = (preparation && preparation.review) || [];
+  if(!notes.length) return "";
+
+  return `<div class="reviewnote">
+    <b>검토 필요</b>
+    ${notes.map(n => `<div>${escHtml(n)}</div>`).join("")}
+    <div class="muted">틀린 것은 아닙니다. 이대로 만들 수 있습니다.</div>
   </div>`;
 }
 
@@ -3233,8 +3258,16 @@ function renderFreeWizard(){
   if(!wizOpen){ box.innerHTML = ""; return; }
 
   const step = wizStep();
-  const ready = preparation && preparation.total
-    && !(preparation.missing || []).length;
+  // Sprint156 - 상태는 셋이다. 서버가 정한 것을 그대로 읽는다.
+  //
+  //   ready    다 되었다
+  //   review   다 있으나 여러 Scene이 같은 그림을 쓴다
+  //   missing  없는 것이 있다
+  //
+  // 검토 필요를 부족으로 처리하면 자동 실패가 된다 - 사람이 정할
+  // 일이므로 버튼은 열어 두고 사실만 말한다.
+  const state = preparation && preparation.state;
+  const ready = state === "ready" || state === "review";
 
   box.innerHTML = `
     ${wizHead(1, "주제")}
@@ -3282,10 +3315,14 @@ function renderFreeWizard(){
       ? `<div class="short">부족: ${preparation.missing.join(" · ")}</div>
          <p class="muted">무엇을 어디에 넣으면 되는지는 아래 검토 화면의
            준비 표에 있습니다.</p>` : ""}
+    ${prepReview()}
     <div class="rowbtns">
       <button class="sm" ${ready ? "" : "disabled"}
               onclick="wizStart()">제작 시작</button>
       ${ready ? "" : '<span class="muted">모자란 것을 채우면 열립니다.</span>'}
+      ${state === "review"
+        ? '<span class="muted">검토할 것이 있지만 이대로 만들 수 있습니다.</span>'
+        : ""}
     </div>
 
     ${wizError ? `<div class="short">${escHtml(wizError)}</div>` : ""}`;

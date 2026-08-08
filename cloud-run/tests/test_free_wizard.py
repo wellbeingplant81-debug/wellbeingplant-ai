@@ -47,6 +47,12 @@ PAGE = os.path.join(
     "app", "static", "studio.html",
 )
 
+# Sprint156 - Scene마다 다른 낱말. 예전에는 "동작 1"~"동작 3"이라
+# 셋이 "동작"을 함께 가졌고, 낱말 뽑기를 고친 뒤로는 한 파일이 셋 다
+# 걸린다. 실제 대본에서는 Scene마다 다른 것을 말한다.
+ACTIONS = ["무릎 펴기", "허리 세우기", "공원 걷기"]
+PLACES = ["거실", "침실", "공원"]
+
 
 def _script_source():
     with open(PAGE, encoding="utf-8") as f:
@@ -175,8 +181,8 @@ class WizardFlowBase(unittest.TestCase):
             "character": "40대 남성",
             "scenes": [
                 {"scene": n, "narration": f"{n}번째 문장입니다.",
-                 "subject": "40대 남성", "action": f"동작 {n}",
-                 "environment": f"장소 {n}", "camera": "미디엄 샷",
+                 "subject": "40대 남성", "action": ACTIONS[n - 1],
+                 "environment": PLACES[n - 1], "camera": "미디엄 샷",
                  "composition": "중앙", "lighting": "자연광"}
                 for n in range(1, count + 1)
             ],
@@ -237,8 +243,8 @@ class FreeWizardFlowTest(WizardFlowBase):
 
         # STEP 4 - 내 자료 폴더
         self.fill_workspace(
-            images=["동작 1.png", "동작 2.png"],
-            videos=["동작 3.mp4"],
+            images=[f"{ACTIONS[0]}.png", f"{ACTIONS[1]}.png"],
+            videos=[f"{ACTIONS[2]}.mp4"],
             voices=[f"scene{n}.wav" for n in (1, 2, 3)],
         )
 
@@ -321,7 +327,7 @@ class FreeWizardStateTest(WizardFlowBase):
         self.assertEqual(state["requirements"]["ready"]["images"], 0)
 
         # 폴더만 골랐을 때 - 훑기 전에는 여전히 없다.
-        self.fill_workspace(images=["동작 1.png"],
+        self.fill_workspace(images=[f"{ACTIONS[0]}.png"],
                             voices=["scene1.wav", "scene2.wav"])
         self.step4_workspace(self.workspace)
 
@@ -415,7 +421,7 @@ class FreeWizardNoExternalApiTest(WizardFlowBase):
         from app.services import asset_integration_service
 
         self.fill_workspace(
-            images=["동작 1.png", "동작 2.png"],
+            images=[f"{ACTIONS[0]}.png", f"{ACTIONS[1]}.png"],
             voices=["scene1.wav", "scene2.wav"],
         )
 
@@ -503,7 +509,7 @@ class FreeWizardKeepsProviderTest(WizardFlowBase):
 
         # 뒤 단계를 지나도 그대로인가 - 훑기와 준비 상태 확인이
         # 고른 것을 지우지 않는다.
-        self.fill_workspace(images=["동작 1.png"], voices=["scene1.wav"])
+        self.fill_workspace(images=[f"{ACTIONS[0]}.png"], voices=["scene1.wav"])
         self.step4_workspace(self.workspace)
         self.step4_scan()
         self.step5_requirements()
