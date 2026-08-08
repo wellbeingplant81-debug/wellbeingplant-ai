@@ -192,6 +192,13 @@ ENDPOINTS = [
     ("DELETE", "/studio/api/review/{project_id}/scenes/{scene}/asset", None,
      ["app.services.asset_override.clear"],
      f"/studio/api/review/{PROJECT_ID}/scenes/1/asset"),
+    # Sprint163 - 만든 뒤 결과 확인. 순수 읽기다.
+    ("GET", "/studio/api/review/{project_id}/output-check", None,
+     ["app.services.studio_review.state",
+      "app.services.output_check.build"],
+     f"/studio/api/review/{PROJECT_ID}/output-check",
+     {"app.services.studio_review.state": {"scenes": []},
+      "app.services.output_check.build": {"state": "failed"}}),
     # Sprint162 - 누르기 전 최종 확인. 순수 읽기다.
     ("GET", "/studio/api/review/{project_id}/final-check", None,
      ["app.services.studio_review.state",

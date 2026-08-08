@@ -1620,6 +1620,23 @@ def review_unconfirm_scene(project_id: str, scene: int):
     return {"scene": scene, "confirmed": False}
 
 
+@router.get("/api/review/{project_id}/output-check")
+def review_output_check(project_id: str):
+    """
+    Sprint163 - 만든 뒤에 결과를 본다.
+
+    읽고 말하기만 한다. 빠진 것을 우리가 만들어 주면, 사람은 무엇이
+    빠졌는지 영영 모른 채 다음에도 같은 자리에서 걸린다.
+    """
+
+    from app.services import output_check, studio_review
+
+    path = _project_path(project_id)
+    scenes = studio_review.state(path).get("scenes") or []
+
+    return output_check.build(path, scenes)
+
+
 @router.get("/api/review/{project_id}/final-check")
 def review_final_check(project_id: str):
     """
