@@ -312,8 +312,13 @@ class DuplicateAssetTest(unittest.TestCase):
         self.assertEqual(report["missing"], [])
         self.assertEqual(report["state"], "review")
 
-        # 2번에만 걸리는 그림을 넣으면 완료다. "허리 운동"은 낱말
-        # 둘이 겹치므로 "운동"만 겹치는 것을 이긴다.
+        # Scene마다 제 그림을 넣으면 완료다.
+        #
+        # Sprint157 - 낱말 하나로만 걸린 것도 검토 대상이 되었으므로,
+        # 둘 다 낱말 둘이 겹치게 넣는다. "허리 운동.png"만 넣으면
+        # 1번이 "운동" 하나로만 걸려 여전히 검토 필요다 - 그것도
+        # 맞는 판정이다.
+        _png(os.path.join(self.root, "images", "무릎 운동.png"))
         _png(os.path.join(self.root, "images", "허리 운동.png"))
         self._scan()
 
@@ -321,6 +326,10 @@ class DuplicateAssetTest(unittest.TestCase):
 
         self.assertEqual(report["state"], "ready")
         self.assertEqual(report["review"], [])
+
+        for row in report["scenes"]:
+            with self.subTest(scene=row["scene"]):
+                self.assertEqual(row["image"]["matched_count"], 2)
 
     def test_the_requirement_rows_carry_it_too(self):
         """요구 목록도 같은 말을 한다 - 두 화면이 갈리지 않는다."""

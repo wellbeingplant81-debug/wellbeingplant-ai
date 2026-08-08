@@ -144,24 +144,70 @@ def _first_frame(video_path: str, output_file: str) -> None:
         )
 
 
-def find(project_path: str, image_prompt: str):
+def match(project_path: str, image_prompt: str):
     """
-    이 scene에 쓸 파일을 고른다. 없으면 None.
+    Sprint157 - 무엇을 고르고, 왜 골랐는가.
 
-    그림을 먼저 보고, 없으면 영상을 본다 - 영상은 프레임을 꺼내야
-    하므로 손이 더 간다.
+    고르는 규칙은 여기 하나뿐이다. find()도 이 결과를 그대로 쓴다 -
+    두 자리가 따로 고르면 화면이 말하는 파일과 실제로 쓰이는 파일이
+    달라진다.
+
+    돌려주는 것:
+
+        file              고른 파일 이름
+        path              어디 있는가
+        kind              images / videos
+        item              목록에 적힌 그대로(호출자가 더 볼 수 있게)
+        matched_keywords  실제로 겹친 낱말들
+        matched_count     그 개수
+        total_keywords    프롬프트에서 뽑은 낱말 수
+
+    왜 이것을 밖으로 내는가
+    -----------------------
+    Sprint156이 낱말을 넓게 뽑게 하면서 맞는 파일을 찾을 확률이
+    올라갔고, 엉뚱한 파일이 걸릴 확률도 함께 올라갔다. "자연광.png"이
+    무릎 scene에 걸려도 우리는 걸렸다고만 말했다.
+
+    막지는 않는다 - 사람이 그렇게 이름 지었을 수도 있다. 다만 몇
+    낱말로 걸렸는지는 알려 준다. 그 숫자만 봐도 미심쩍은 것이 보인다.
     """
 
     index = local_library.load(project_path)
     words = _keywords(image_prompt)
 
+    # 그림을 먼저 보고, 없으면 영상을 본다 - 영상은 프레임을 꺼내야
+    # 하므로 손이 더 간다.
     for kind in (local_library.IMAGES, local_library.VIDEOS):
-        found = local_library.search(index, words, kind=kind)
+        found = local_library.search_scored(index, words, kind=kind)
 
-        if found:
-            return found[0]
+        if not found:
+            continue
+
+        item, matched = found[0]
+
+        return {
+            "file": item["name"],
+            "path": item["path"],
+            "kind": item["kind"],
+            "item": item,
+            "matched_keywords": matched,
+            "matched_count": len(matched),
+            "total_keywords": len(words),
+        }
 
     return None
+
+
+def find(project_path: str, image_prompt: str):
+    """
+    이 scene에 쓸 파일을 고른다. 없으면 None.
+
+    고르는 일은 match()가 한다 - 여기서 다시 고르면 두 답이 생긴다.
+    """
+
+    found = match(project_path, image_prompt)
+
+    return found["item"] if found else None
 
 
 def generate_image(prompt: str, output_file: str) -> str:

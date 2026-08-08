@@ -279,12 +279,15 @@ def counts(index: dict) -> dict:
     return found
 
 
-def search(index: dict, words, kind: str = IMAGES) -> list:
+def search_scored(index: dict, words, kind: str = IMAGES) -> list:
     """
-    낱말이 많이 겹치는 것부터 돌려준다. 하나도 안 겹치면 빈 목록이다.
+    Sprint157 - 걸린 것과 무엇이 겹쳤는지를 함께 돌려준다.
 
-    억지로 아무거나 고르지 않는다 - 안 맞는 그림을 넣느니 없다고
-    말하는 편이 낫다.
+    (item, 겹친 낱말들) 쌍을 많이 겹치는 것부터. 예전에는 세어 놓고
+    버렸는데, 사람이 "왜 이게 걸렸지"를 알려면 그 값이 필요하다 -
+    낱말 하나로 걸린 것과 다섯으로 걸린 것은 근거의 무게가 다르다.
+
+    겹친 낱말은 준 차례대로 남긴다. 화면이 그대로 읽어 준다.
     """
 
     wanted = [w.strip().lower() for w in (words or []) if w and w.strip()]
@@ -299,11 +302,25 @@ def search(index: dict, words, kind: str = IMAGES) -> list:
             continue
 
         tags = set(item.get("tags") or [])
-        hits = sum(1 for word in wanted if word in tags)
+        matched = [word for word in wanted if word in tags]
 
-        if hits:
-            scored.append((hits, item))
+        if matched:
+            scored.append((len(matched), item, matched))
 
-    scored.sort(key=lambda pair: (-pair[0], pair[1]["path"]))
+    scored.sort(key=lambda found: (-found[0], found[1]["path"]))
 
-    return [item for _, item in scored]
+    return [(item, matched) for _, item, matched in scored]
+
+
+def search(index: dict, words, kind: str = IMAGES) -> list:
+    """
+    낱말이 많이 겹치는 것부터 돌려준다. 하나도 안 겹치면 빈 목록이다.
+
+    억지로 아무거나 고르지 않는다 - 안 맞는 그림을 넣느니 없다고
+    말하는 편이 낫다.
+
+    고르는 규칙은 search_scored 하나뿐이다 - 여기서 다시 세면 두
+    자리가 다른 답을 내는 날이 온다.
+    """
+
+    return [item for item, _ in search_scored(index, words, kind)]

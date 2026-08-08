@@ -178,6 +178,23 @@ def _made_voice(project_path: str, number) -> bool:
     ))
 
 
+def _is_weak(picked: dict) -> bool:
+    """
+    Sprint157 - 근거가 가장 약한 경우인가.
+
+    "몇 퍼센트 이하면 약하다"는 숫자를 만들지 않았다. 그런 숫자는
+    근거가 없고, 한 번 적어 두면 아무도 왜 그 값인지 설명하지 못한다.
+
+    대신 셀 수 있는 사실만 쓴다 - 낱말 하나로만 걸렸는데 프롬프트에는
+    낱말이 더 있었다면, 그것이 우리가 가진 가장 약한 근거다. 0개는
+    아예 안 걸린 것이므로 1개가 최소값이다.
+
+    낱말이 하나뿐인 프롬프트에서 1/1은 전부 맞은 것이라 약하지 않다.
+    """
+
+    return picked["matched_count"] == 1 and picked["total_keywords"] > 1
+
+
 def _image_status(project_path: str, scene) -> dict:
     """
     이 scene의 그림은 어떤 상태인가.
@@ -191,31 +208,42 @@ def _image_status(project_path: str, scene) -> dict:
 
     if _made_image(project_path, number):
         # 이미 만든 것은 scene 번호가 곧 파일 이름이라 겹칠 수가 없다.
+        #
+        # Sprint157 - 고른 것이 아니므로 "몇 낱말로 걸렸다"가 성립하지
+        # 않는다. 없는 사실을 적지 않는다.
         return {"ready": True, "from": "made", "name": f"scene{number}.png",
                 "kind": None,
                 "path": os.path.join(project_path, "images",
-                                     f"scene{number}.png")}
+                                     f"scene{number}.png"),
+                "matched_keywords": [], "matched_count": None,
+                "total_keywords": None, "weak": False}
 
     from app.providers import local_stock_provider
 
-    picked = local_stock_provider.find(
+    picked = local_stock_provider.match(
         project_path, scene.get("image_prompt") or "",
     )
 
     if picked is None:
         return {"ready": False, "from": None, "name": None, "kind": None,
-                "path": None}
+                "path": None, "matched_keywords": [], "matched_count": None,
+                "total_keywords": None, "weak": False}
 
     return {
         "ready": True,
         "from": "workspace",
-        "name": picked["name"],
+        "name": picked["file"],
         # Sprint156 - 어느 파일인지. 이름만으로는 폴더가 다른 같은
         # 이름을 구분하지 못한다.
         "path": picked["path"],
         # 영상에서 온 것인지 그림에서 온 것인지. 화면이 "영상 선택"을
         # 여기서 읽는다.
         "kind": picked["kind"],
+        # Sprint157 - 왜 걸렸는가. 고른 쪽이 낸 값을 그대로 옮긴다.
+        "matched_keywords": picked["matched_keywords"],
+        "matched_count": picked["matched_count"],
+        "total_keywords": picked["total_keywords"],
+        "weak": _is_weak(picked),
     }
 
 
@@ -285,8 +313,15 @@ def _shared_images(rows: list) -> dict:
     }
 
 
-def _review_notes(shared: dict) -> list:
-    """사람이 읽을 한 줄씩. 몇 개가, 무엇을, 어느 Scene에서."""
+def _review_notes(shared: dict, rows: list) -> list:
+    """
+    사람이 읽을 한 줄씩.
+
+    까닭이 둘이다. 하나만 적으면 사람이 나머지 하나를 모른 채 넘어간다.
+
+        여러 Scene이 같은 파일을 쓴다        Sprint156
+        낱말 하나로만 걸렸다                  Sprint157
+    """
 
     notes = []
 
@@ -299,6 +334,19 @@ def _review_notes(shared: dict) -> list:
         notes.append(
             f"{len(numbers)}개 Scene이 같은 이미지를 사용합니다: "
             f"{name} (Scene {', '.join(str(n) for n in numbers)})"
+        )
+
+    for row in rows:
+        image = row["image"]
+
+        if not image.get("weak"):
+            continue
+
+        notes.append(
+            f"Scene {row['scene']}은(는) 낱말 {image['matched_count']}개로만 "
+            f"걸렸습니다: {image['name']} "
+            f"({', '.join(image['matched_keywords'])} / "
+            f"낱말 {image['total_keywords']}개 중)"
         )
 
     return notes
@@ -367,7 +415,7 @@ def preparation(project_path: str, scenes: list) -> dict:
                 n for n in numbers if n != row["scene"]
             ]
 
-    review = _review_notes(shared)
+    review = _review_notes(shared, rows)
 
     return {
         "scanned": scanned,
