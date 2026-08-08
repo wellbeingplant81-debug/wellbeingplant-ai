@@ -1,5 +1,6 @@
 """
 Sprint169 - 함께 보낼 ffmpeg·ffprobe를 어느 자리에 놓는가 (Epic 58).
+Sprint170 - 그 자리가 exe 옆의 tools/가 됐다.
 
 왜 spec 안에 두지 않는가
 ------------------------
@@ -10,17 +11,25 @@ spec은 pyinstaller가 제 방식으로 읽는 파일이라 테스트가 부를 
     번들 안에 실제로 생긴 것   ffmpeg\\ffprobe.exe\\ffprobe.exe
     media_tools가 보는 자리    ffmpeg\\ffprobe.exe
 
-PyInstaller의 binaries는 (어디 있는 것, **넣을 폴더**) 쌍이다. 둘째
-자리에 파일 경로를 적으면 그 이름의 폴더가 생긴다. 한 글자 차이가
-"길이를 못 잰다"로 끝났다.
+한 글자 차이가 "음성 길이를 못 잰다"로 끝났다. 그래서 자리를 정하는
+일을 여기로 꺼내 두고, 테스트가 그 자리를 직접 본다.
 
-여기로 꺼내 두면 그 자리를 테스트가 직접 볼 수 있다.
+Sprint170 - 안에 넣지 않고 옆에 둔다
+------------------------------------
+배포 구조가 tools/를 정했다. 옆에 두면
+
+    exe가 가벼워진다           200MB가 넘던 것에서 도구가 빠진다
+    사람이 바꿔 넣을 수 있다   제 ffmpeg를 쓰고 싶은 사람이 있다
+
+대신 폴더가 흩어지면 못 찾는다. 그때 프로그램은 켜지면서 무엇이
+없는지 말하고, README가 폴더를 통째로 두라고 말한다 - 조용히
+실패하지 않는다.
 
 이름을 바꿔 담는다
 ------------------
 imageio-ffmpeg가 들고 있는 것은 ffmpeg-win-x86_64-v7.1.exe 같은
-판번호가 붙은 이름이다. media_tools는 ffmpeg.exe를 찾으므로, 묶기
-전에 그 이름으로 복사해 둔다.
+판번호가 붙은 이름이다. media_tools는 ffmpeg.exe를 찾으므로 그
+이름으로 복사한다.
 """
 
 import os
@@ -37,13 +46,13 @@ FFPROBE_ENV = "PACKAGING_FFPROBE"
 
 def landing(name: str) -> str:
     """
-    묶인 프로그램 안에서 이 도구가 놓일 자리(뿌리로부터).
+    받은 폴더 안에서 이 도구가 놓일 자리(exe가 있는 자리로부터).
 
-    media_tools._beside_program이 보는 그 자리다 - 두 자리가 따로
-    정해지면 넣어 놓고도 못 찾는다.
+    media_tools가 보는 그 자리다 - 두 자리가 따로 정해지면 넣어
+    놓고도 못 찾는다.
     """
 
-    return os.path.join(media_tools.BUNDLED_DIRNAME, name + ".exe")
+    return os.path.join(media_tools.BESIDE_DIRNAME, name + ".exe")
 
 
 def _imageio_ffmpeg():
@@ -81,24 +90,22 @@ def sources() -> list:
     return found
 
 
-def entries(staging: str) -> list:
+def place(program_dir: str) -> list:
     """
-    PyInstaller의 binaries에 그대로 넣을 목록.
+    받은 폴더에 도구를 놓는다. 놓은 자리들을 돌려준다.
 
-    둘째 값은 파일 이름이 아니라 **넣을 폴더**다. landing()이 정한
-    자리에서 폴더만 떼어 쓴다 - 여기서 문자열을 다시 지으면 두 자리가
+    자리는 landing()이 정한다 - 여기서 문자열을 다시 지으면 두 자리가
     또 어긋난다.
     """
 
-    os.makedirs(staging, exist_ok=True)
-
-    found = []
+    placed = []
 
     for name, source in sources():
-        staged = os.path.join(staging, os.path.basename(landing(name)))
+        target = os.path.join(program_dir, landing(name))
 
-        shutil.copyfile(source, staged)
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copyfile(source, target)
 
-        found.append((staged, os.path.dirname(landing(name))))
+        placed.append(target)
 
-    return found
+    return placed

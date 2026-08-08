@@ -12,7 +12,7 @@ Sprint169 - ffmpeg와 ffprobe를 어디서 찾는가 (Epic 58, Phase 1).
 찾는 순서
 ---------
     1. AI_STUDIO_FFMPEG / AI_STUDIO_FFPROBE   사람이 직접 가리킨 것
-    2. 프로그램 옆의 ffmpeg 폴더               같이 묶어 보낸 것
+    2. 묶여 들어간 것 · exe 옆의 tools/        같이 보낸 것
     3. imageio-ffmpeg가 들고 있는 것           이미 있는 의존성이다
     4. PATH                                    개발 중에는 이것이 잡힌다
 
@@ -38,8 +38,12 @@ FFPROBE = "ffprobe"
 # 사람이 직접 가리킬 때 쓰는 이름.
 ENV = {FFMPEG: "AI_STUDIO_FFMPEG", FFPROBE: "AI_STUDIO_FFPROBE"}
 
-# 프로그램 옆에 같이 보낼 때 두는 폴더.
+# 묶어 넣을 때 프로그램 안에 두는 폴더.
 BUNDLED_DIRNAME = "ffmpeg"
+
+# Sprint170 - 받은 사람의 폴더에서 exe 옆에 두는 이름. 배포 구조가
+# 정한 그 tools/다.
+BESIDE_DIRNAME = "tools"
 
 
 def _from_env(name: str):
@@ -48,14 +52,34 @@ def _from_env(name: str):
     return given if given and os.path.exists(given) else None
 
 
-def _beside_program(name: str):
-    """프로그램 옆의 ffmpeg 폴더."""
+def _looking_places():
+    """
+    도구를 찾아볼 폴더들. 앞의 것이 먼저다.
+
+    Sprint170 - 둘을 가른다. 묶여 들어간 것은 임시 폴더 안에 있고,
+    옆에 함께 보낸 것은 사람이 받은 폴더에 있다. 예전에는 앞의
+    자리밖에 없어서 exe 옆에 둔 것을 찾는 길이 아예 없었다.
+    """
 
     from app import runtime_paths
 
-    for base in (runtime_paths.bundle_root(),
-                 os.path.dirname(runtime_paths.bundle_root())):
-        found = os.path.join(base, BUNDLED_DIRNAME, name + ".exe")
+    bundle = runtime_paths.bundle_root()
+    program = runtime_paths.program_dir()
+
+    return (
+        os.path.join(bundle, BUNDLED_DIRNAME),
+        os.path.join(program, BESIDE_DIRNAME),
+        # Sprint169처럼 ffmpeg/로 둔 사람도 그대로 쓴다.
+        os.path.join(program, BUNDLED_DIRNAME),
+        os.path.join(os.path.dirname(program), BESIDE_DIRNAME),
+    )
+
+
+def _beside_program(name: str):
+    """묶여 들어간 것이나 프로그램 옆에 함께 온 것."""
+
+    for folder in _looking_places():
+        found = os.path.join(folder, name + ".exe")
 
         if os.path.exists(found):
             return found

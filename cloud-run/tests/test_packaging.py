@@ -200,7 +200,7 @@ class FfmpegTest(unittest.TestCase):
 
     def test_the_bundle_puts_them_where_we_look_for_them(self):
         """
-        묶어 보낸 것을 실제로 찾을 수 있는가.
+        함께 보낸 것을 실제로 찾을 수 있는가.
 
         test_ffmpeg_is_available은 이것을 못 잡는다 - 개발 PC의 PATH에
         둘 다 있으니 어디에 넣든 초록불이다. 실제로 처음 만든 exe는
@@ -208,29 +208,30 @@ class FfmpegTest(unittest.TestCase):
         결과가 "음성 길이 None"이었다.
 
         그래서 넣는 자리와 찾는 자리를 마주 붙여 본다.
+
+        Sprint170 - 자리가 번들 안에서 exe 옆의 tools/로 옮겨졌다.
+        보는 것은 그대로다: 넣은 자리와 찾는 자리가 같은가.
         """
 
         sys.path.insert(0, os.path.join(REPO, "packaging"))
 
         import bundled_tools
 
-        staging = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, staging, ignore_errors=True)
-
-        made = bundled_tools.entries(staging)
-
-        self.assertTrue(made, "묶을 것이 하나도 없다")
-
         root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
 
-        # 묶기가 하는 일을 그대로 흉내 낸다: 둘째 값은 넣을 폴더다.
-        for source, folder in made:
-            target = os.path.join(root, folder, os.path.basename(source))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            shutil.copyfile(source, target)
+        placed = bundled_tools.place(root)
 
-        with patch.object(runtime_paths, "bundle_root", return_value=root), \
+        self.assertTrue(placed, "함께 보낼 것이 하나도 없다")
+
+        empty = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, empty, ignore_errors=True)
+
+        with patch.object(runtime_paths, "program_dir", return_value=root), \
+                patch.object(runtime_paths, "bundle_root",
+                             return_value=empty), \
+                patch.object(media_tools, "_from_imageio",
+                             return_value=None), \
                 patch.object(shutil, "which", return_value=None), \
                 patch.dict(os.environ, {}, clear=False):
 
@@ -243,12 +244,12 @@ class FfmpegTest(unittest.TestCase):
 
                     self.assertTrue(
                         os.path.isfile(found),
-                        f"{name}을 묶어 놓고도 못 찾는다: {found}")
+                        f"{name}을 넣어 놓고도 못 찾는다: {found}")
                     self.assertEqual(
                         os.path.relpath(found, root),
                         bundled_tools.landing(name))
 
-    def test_the_spec_uses_that_one_rule(self):
+    def test_the_spec_does_not_invent_its_own_places(self):
         """
         묶는 목록이 제 나름의 자리를 다시 짓지 않는다.
 
@@ -261,9 +262,10 @@ class FfmpegTest(unittest.TestCase):
         with open(spec, encoding="utf-8") as f:
             body = f.read()
 
-        self.assertIn("bundled_tools", body)
-        self.assertNotIn('"ffmpeg/ffprobe.exe"', body)
-        self.assertNotIn('"ffmpeg/ffmpeg.exe"', body)
+        for invented in ("ffmpeg/ffprobe.exe", "ffmpeg/ffmpeg.exe",
+                         "ffmpeg\\\\ffprobe.exe", "tools/ffmpeg.exe"):
+            with self.subTest(invented=invented):
+                self.assertNotIn(invented, body)
 
     def test_it_says_what_is_missing_instead_of_pretending(self):
         with patch.object(media_tools, "resolve", return_value="없는것"), \

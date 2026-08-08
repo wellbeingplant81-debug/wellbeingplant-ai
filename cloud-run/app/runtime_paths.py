@@ -60,6 +60,27 @@ def bundle_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def program_dir() -> str:
+    """
+    사람이 받은 폴더. exe가 실제로 놓인 자리다.
+
+    bundle_root()와 다르다
+    ----------------------
+    묶인 프로그램에서 bundle_root()는 켤 때마다 새로 생기는 임시
+    폴더(_MEIPASS)다. 사람이 거기에 무엇을 둘 수 없고, 끄면 사라진다.
+
+    옆에 함께 보낸 것(tools/ 같은)을 찾으려면 이 자리라야 한다 -
+    Sprint169는 이 구분이 없어서, 옆에 두고 찾는 길이 아예 없었다.
+
+    개발 중에는 저장소다.
+    """
+
+    if is_frozen():
+        return os.path.dirname(os.path.abspath(sys.executable))
+
+    return bundle_root()
+
+
 def _appdata() -> str:
     """
     Windows가 프로그램마다 쓰라고 내주는 자리.

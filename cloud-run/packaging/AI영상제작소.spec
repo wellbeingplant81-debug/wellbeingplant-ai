@@ -1,41 +1,41 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 Sprint169 - 무엇을 묶고 무엇을 두는가 (Epic 58, Phase 1).
+Sprint170 - 판번호와 빌드 날짜를 함께 넣는다 (Phase 2).
 
-    pyinstaller packaging/AI영상제작소.spec --noconfirm
+    python packaging/build_release.py
 
 무엇을 넣는가
 -------------
-    launcher.py     켜는 자리
-    app/            코드
-    app/static/     화면. 빠지면 화면이 통째로 안 뜬다
-    app/prompts/    요청문 틀. 대본이 이것으로 만들어진다
-    ffmpeg          moviepy가 쓰는 imageio-ffmpeg의 것
+    launcher.py       켜는 자리
+    app/              코드
+    app/static/       화면. 빠지면 화면이 통째로 안 뜬다
+    app/prompts/      요청문 틀. 대본이 이것으로 만들어진다
+    build_info.json   언제 묶었는가
+    판번호            Windows 파일 속성 창이 읽는 자리
 
 무엇을 넣지 않는가
 ------------------
-    output/         만든 영상들 - 남의 것을 함께 배포하게 된다
-    .workflow/      사람이 내린 결정
-    .dataset/       쌓아 온 관측 기록
-    credentials/    자격 증명
-    .env            API 키
+    ffmpeg · ffprobe  exe 옆 tools/에 둔다(Sprint170 배포 구조)
+    output/           만든 영상들 - 남의 것을 함께 배포하게 된다
+    .workflow/        사람이 내린 결정
+    .dataset/         쌓아 온 관측 기록
+    credentials/      자격 증명
+    .env              API 키
 
-앞의 셋은 받는 사람의 자리(%APPDATA%)에 새로 생긴다. 뒤의 둘은
+가운데 셋은 받는 사람의 자리(%APPDATA%)에 새로 생긴다. 뒤의 둘은
 애초에 넣으면 안 되는 것이다 - 넣으면 키가 함께 퍼진다.
 
-ffprobe는 따로다
-----------------
-imageio-ffmpeg는 ffmpeg만 들고 온다. ffprobe가 있어야 길이를 재므로,
-가진 사람은 PACKAGING_FFPROBE에 그 경로를 주면 함께 묶인다. 없으면
-묶지 않고, 프로그램이 켜질 때 없다고 말한다 - 있는 척하지 않는다.
-
-두 도구를 어느 자리에 놓는가는 여기서 정하지 않는다
-----------------------------------------------------
-bundled_tools가 정한다. 이 파일은 pyinstaller만 읽을 수 있어서,
-여기에 자리를 적으면 아무도 그 자리를 검사하지 못한다 - 처음 만든
-exe가 실제로 엉뚱한 자리에 넣고도 초록불이었다.
+자리를 여기서 정하지 않는다
+---------------------------
+도구가 어디 놓이는지는 bundled_tools가, 판번호는 version_resource가
+정한다. 이 파일은 pyinstaller만 읽을 수 있어서, 여기에 규칙을 적으면
+아무도 그것을 검사하지 못한다 - 처음 만든 exe가 실제로 엉뚱한 자리에
+넣고도 초록불이었다.
 """
 
+import datetime
+import json
 import os
 import sys
 
@@ -47,16 +47,32 @@ HERE = os.path.dirname(os.path.abspath(SPEC))
 REPO = os.path.dirname(HERE)
 
 sys.path.insert(0, HERE)
+sys.path.insert(0, REPO)
 
-import bundled_tools
+import version_resource
 
-# 판번호가 붙은 이름을 제 이름으로 바꿔 담아 둘 자리. 만든 것만
-# 남으므로 build/ 아래다.
-binaries = bundled_tools.entries(os.path.join(REPO, "build", "도구"))
+from app import app_info
+
+# 만드는 것만 두는 자리.
+STAGING = os.path.join(REPO, "build", "묶을것")
+
+os.makedirs(STAGING, exist_ok=True)
+
+# 언제 묶었는가. 재는 것이지 정하는 것이 아니다 - 지금이 그 순간이다.
+BUILD_INFO = os.path.join(STAGING, app_info.BUILD_FILENAME)
+
+with open(BUILD_INFO, "w", encoding="utf-8") as f:
+    json.dump(
+        {"version": app_info.VERSION,
+         "built_at": datetime.datetime.now().isoformat(timespec="seconds")},
+        f, ensure_ascii=False)
+
+binaries = []
 
 datas = [
     (os.path.join(REPO, "app", "static"), "app/static"),
     (os.path.join(REPO, "app", "prompts"), "app/prompts"),
+    (BUILD_INFO, "."),
 ]
 
 
@@ -127,7 +143,8 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="AI영상제작소",
+    name=app_info.NAME,
+    version=version_resource.write(STAGING),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
