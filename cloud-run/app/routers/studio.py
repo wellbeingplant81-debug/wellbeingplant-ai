@@ -1599,8 +1599,11 @@ def review_confirm_scene(project_id: str, scene: int):
             detail=f"Scene {scene}은 검토할 것이 없습니다.",
         )
 
+    # 무엇에 대한 확인인지는 free_workspace가 정한다 - 여기서 따로
+    # 고르면 적을 때와 견줄 때가 다른 것을 가리킨다.
     review_confirm.save(
-        path, scene, row["image"]["path"], row["reasons"],
+        path, scene, free_workspace.review_anchor(row["image"]),
+        row["reasons"],
     )
 
     return {"scene": scene, "confirmed": True, "reasons": row["reasons"]}
@@ -1615,6 +1618,24 @@ def review_unconfirm_scene(project_id: str, scene: int):
     review_confirm.clear(_project_path(project_id), scene)
 
     return {"scene": scene, "confirmed": False}
+
+
+@router.get("/api/review/{project_id}/final-check")
+def review_final_check(project_id: str):
+    """
+    Sprint162 - 누르기 전에 마지막으로 본다.
+
+    읽고 말하기만 한다. 막는 일은 예전부터 있던 렌더 검사가 하고,
+    여기서는 그것을 그대로 읽어 옮긴다 - 두 곳에서 따로 판정하면
+    화면이 "가능"이라고 한 것을 서버가 거절하는 날이 온다.
+    """
+
+    from app.services import final_check, studio_review
+
+    path = _project_path(project_id)
+    scenes = studio_review.state(path).get("scenes") or []
+
+    return final_check.build(path, scenes)
 
 
 @router.get("/api/review/{project_id}/requirements")

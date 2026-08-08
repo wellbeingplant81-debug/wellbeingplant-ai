@@ -192,6 +192,13 @@ ENDPOINTS = [
     ("DELETE", "/studio/api/review/{project_id}/scenes/{scene}/asset", None,
      ["app.services.asset_override.clear"],
      f"/studio/api/review/{PROJECT_ID}/scenes/1/asset"),
+    # Sprint162 - 누르기 전 최종 확인. 순수 읽기다.
+    ("GET", "/studio/api/review/{project_id}/final-check", None,
+     ["app.services.studio_review.state",
+      "app.services.final_check.build"],
+     f"/studio/api/review/{PROJECT_ID}/final-check",
+     {"app.services.studio_review.state": {"scenes": []},
+      "app.services.final_check.build": {"state": "blocked"}}),
     # Sprint161 - 봤고 괜찮다. 판정은 준비 상태에서 그대로 읽으므로
     # 그 한 줄만 흉내 내면 계약을 볼 수 있다.
     ("POST", "/studio/api/review/{project_id}/scenes/{scene}/confirm", None,

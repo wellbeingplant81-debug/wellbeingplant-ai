@@ -211,8 +211,19 @@ GENERATED = "generated"
 MATCHED = "matched"
 
 
-def _made_status(project_path: str, number) -> dict:
-    """이미 만들어 둔 그림. 고른 것이 아니라 그 scene의 제 파일이다."""
+def _made_status(project_path: str, number, picked=None) -> dict:
+    """
+    이미 만들어 둔 그림. 고른 것이 아니라 그 scene의 제 파일이다.
+
+    이 파일이 어떻게 만들어졌는지는 우리가 모른다 - 그래서 matched_*는
+    비운다(Sprint157).
+
+    다만 지금 자료로 이 scene에 무엇이 걸리는지는 안다. 그것을
+    would_match에 담는다. 렌더는 이미 있는 파일을 그대로 쓰므로
+    (Resolver가 step02를 건너뛴다) 이 값이 그 파일을 설명하지는
+    않는다 - "지금 자료가 이런 상태다"라는 말이고, 검토할 것이
+    남았는지는 그것으로 본다.
+    """
 
     return {
         "ready": True, "from": "made", "asset_source": GENERATED,
@@ -222,6 +233,11 @@ def _made_status(project_path: str, number) -> dict:
         "selected_at": None, "selected_by": None, "instead_of": None,
         "matched_keywords": [], "matched_count": None,
         "total_keywords": None, "weak": False,
+        "would_match": None if picked is None else {
+            "file": picked["file"],
+            "path": picked["path"],
+            "weak": _is_weak(picked),
+        },
     }
 
 
@@ -277,7 +293,7 @@ def _image_status(project_path: str, scene) -> dict:
         #
         # Sprint157 - 고른 것이 아니므로 "몇 낱말로 걸렸다"가 성립하지
         # 않는다. 없는 사실을 적지 않는다.
-        return _made_status(project_path, number)
+        return _made_status(project_path, number, picked)
 
     if picked is None:
         return {"ready": False, "from": None, "name": None, "kind": None,
@@ -363,6 +379,23 @@ REVIEW = "review"
 BLOCKED = "blocked"
 
 
+def review_anchor(image: dict) -> str:
+    """
+    검토가 무엇에 대한 것인가.
+
+    확인(Sprint161)은 이 값에 묶인다. 이미 만들어 둔 scene에서는
+    scene1.png이 아니라 지금 자료가 주는 파일이 검토의 대상이다 -
+    "약한 매칭"이라는 말이 그 파일에 대한 것이기 때문이다.
+
+    한 곳에서 정한다. 적을 때와 견줄 때가 다른 것을 가리키면 확인이
+    영영 맞지 않는다.
+    """
+
+    image = image or {}
+
+    return (image.get("would_match") or {}).get("path") or image.get("path")
+
+
 def _scene_state(row: dict, override_gone: bool = False) -> tuple:
     """
     이 Scene 하나는 어떤 상태인가. (상태, 까닭들).
@@ -402,7 +435,12 @@ def _scene_state(row: dict, override_gone: bool = False) -> tuple:
         review.append("override_gone")
 
     if image.get("asset_source") != OVERRIDE:
-        if image.get("weak"):
+        # 이미 만들어 둔 것은 그 파일이 어떻게 왔는지 모른다. 대신
+        # 지금 자료가 이 scene에 무엇을 주는지를 본다 - 검토할 것이
+        # 남았는가는 자료의 상태다.
+        would = image.get("would_match") or {}
+
+        if image.get("weak") or would.get("weak"):
             review.append("weak")
 
         if image.get("shared_with"):
@@ -424,10 +462,18 @@ def _shared_images(rows: list) -> dict:
     for row in rows:
         image = row["image"]
 
-        if not image.get("ready") or not image.get("path"):
+        if not image.get("ready"):
             continue
 
-        by_path.setdefault(os.path.normcase(image["path"]), []).append(row)
+        # 이미 만들어 둔 것은 scene 번호가 곧 파일 이름이라 겹칠 수가
+        # 없다. 그래서 지금 자료가 주는 것으로 본다 - 여러 Scene이
+        # 같은 자료를 쓰고 있다는 사실은 만든 뒤에도 그대로다.
+        path = (image.get("would_match") or {}).get("path") or image.get("path")
+
+        if not path:
+            continue
+
+        by_path.setdefault(os.path.normcase(path), []).append(row)
 
     return {
         path: found for path, found in by_path.items() if len(found) > 1
@@ -450,7 +496,8 @@ def _review_notes(shared: dict, rows: list, gone: dict) -> list:
         shared.items(), key=lambda pair: pair[1][0]["scene"],
     ):
         numbers = [row["scene"] for row in found]
-        name = found[0]["image"]["name"]
+        image = found[0]["image"]
+        name = (image.get("would_match") or {}).get("file") or image["name"]
 
         notes.append(
             f"{len(numbers)}개 Scene이 같은 이미지를 사용합니다: "
@@ -564,7 +611,7 @@ def preparation(project_path: str, scenes: list) -> dict:
         # 확인은 "무엇을"에 묶인다. 파일이 바뀌었거나 새 까닭이
         # 생겼으면 그 확인은 지금 상황을 덮지 못한다.
         if state == REVIEW and review_confirm.covers(
-            confirmed, (row["image"] or {}).get("path"), reasons,
+            confirmed, review_anchor(row["image"]), reasons,
         ):
             state = READY
         else:

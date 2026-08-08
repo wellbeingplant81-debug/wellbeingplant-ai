@@ -477,6 +477,12 @@ a{color:var(--accent)}
 .drow .dact{display:flex;gap:5px}
 .okline{display:flex;align-items:center;gap:8px;color:#5fd08a;font-size:12px;
   margin:2px 0}
+.fchk{border:1px solid #2a3346;border-radius:9px;padding:10px;margin:10px 0}
+.fchk.blocked{border-color:#5a3030}
+.fchk.review{border-color:#4a3f2a}
+.fchk.ready{border-color:#2c4a38}
+.fchk .short div{margin:2px 0}
+.okbox{margin-top:8px;padding-top:8px;border-top:1px solid #1e2534}
 .prep tr.need td{border-bottom:1px solid #1e2534;padding-top:0}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
@@ -2441,10 +2447,17 @@ function reviewSection(step, state){
     ? REVIEW_BODY[step.key](state)
     : '<p class="muted">앞 단계를 승인하면 열립니다.</p>';
 
+  // Sprint162 - 렌더로 가는 단추만 최종 확인을 본다. 막힌 상태에서
+  // 열어 두면 사람이 누르고 400을 본다 - 판정은 서버가 한 것을
+  // 그대로 읽는다.
+  const gated = step.next === "render" && finalCheck
+    && finalCheck.can_render === false;
+
   const button = (current && step.next && done)
-    ? `<div class="rowbtns"><button
+    ? `<div class="rowbtns"><button ${gated ? "disabled" : ""}
          onclick="reviewApprove('${step.next}','${step.label}')">${
-           step.nextLabel}</button></div>`
+           step.nextLabel}</button>${
+      gated ? '<span class="muted">위 목록을 먼저 채우십시오.</span>' : ""}</div>`
     : "";
 
   return `<div class="rsec ${cls}">
@@ -2486,7 +2499,9 @@ const ASSET_SOURCE = {override: "직접 선택됨", generated: "만들어 둔 �
                       matched: "자동 매칭"};
 
 async function loadPreparation(projectId){
-  if(!projectId){ preparation = null; requirements = null; return; }
+  if(!projectId){
+    preparation = null; requirements = null; finalCheck = null; return;
+  }
 
   const [prep, req] = await Promise.all([
     fetch(`/studio/api/review/${projectId}/preparation`),
@@ -2495,6 +2510,9 @@ async function loadPreparation(projectId){
 
   preparation = prep.ok ? await prep.json() : null;
   requirements = req.ok ? await req.json() : null;
+
+  // Sprint162 - 누르기 전 최종 확인도 함께.
+  await loadFinalCheck(projectId);
 }
 
 // 그 Scene에서 아직 없는 것들. 화면이 다시 판정하지 않는다.
@@ -2602,6 +2620,66 @@ async function unconfirmScene(number){
               {method: "DELETE"});
 
   await refreshPreparation();
+}
+
+// Sprint162 - 누르기 전에 마지막으로 본다.
+//
+// 자료 준비와 산출물은 다른 물음이다. 내 자료가 다 있어도 아직
+// 만들지 않았으면 렌더는 막힌다 - 그때 "준비 완료"라고만 하면 사람은
+// 버튼을 누르고 400을 본다.
+//
+// 판정은 서버가 한다. 화면이 다시 재면 "가능"이라고 한 것을 서버가
+// 거절하는 날이 온다.
+let finalCheck = null;
+
+async function loadFinalCheck(projectId){
+  if(!projectId){ finalCheck = null; return; }
+
+  const r = await fetch(`/studio/api/review/${projectId}/final-check`);
+
+  finalCheck = r.ok ? await r.json() : null;
+}
+
+function finalCheckPanel(){
+  if(!finalCheck) return "";
+
+  const f = finalCheck;
+  const head = {ready: "제작 준비 완료", review: "제작 가능 · 확인 필요",
+                blocked: "제작할 수 없습니다"}[f.state] || f.state;
+
+  return `<div class="fchk ${f.state}">
+    <div class="dh"><b>${head}</b></div>
+    <div class="dcounts">
+      <span class="dc"><b>Scene</b> ${f.total}</span>
+      <span class="dc"><b>이미지</b> ${f.images.ready}/${f.images.total}</span>
+      <span class="dc"><b>음성</b> ${f.voices.ready}/${f.voices.total}</span>
+      <span class="dc ${f.review ? "review" : "zero"}"><b>검토</b> ${
+        f.review}</span>
+    </div>
+    ${f.problems.length ? `<div class="short">${
+      f.problems.map(x => `<div>${escHtml(x)}</div>`).join("")}</div>` : ""}
+    ${f.warnings.length ? `<div class="reviewnote">
+      <b>확인이 필요합니다</b>
+      ${f.warnings.map(x => `<div>${escHtml(x)}</div>`).join("")}
+      <div class="muted">막지는 않습니다. 이대로 만들 수 있습니다.</div>
+    </div>` : ""}
+    ${f.confirmed.length ? `<div class="okbox">
+      ${f.confirmed.map(finalConfirmed).join("")}
+    </div>` : ""}
+  </div>`;
+}
+
+// 사람이 보고 괜찮다고 한 것. 무엇을 왜 봤는지 함께 적는다 -
+// "확인함"만으로는 무엇을 봤는지 알 수 없다.
+function finalConfirmed(row){
+  const why = (row.reasons || [])
+    .map(r => REASON_LABEL[r] || r).join(" · ");
+
+  return `<div class="okline">
+    <span class="yes">O</span> Scene ${row.scene} 사용자 확인 완료
+    <span class="src">${escHtml(row.file || "")}${
+      why ? " · " + escHtml(why) : ""}</span>
+  </div>`;
 }
 
 function readinessDashboard(){
@@ -2857,6 +2935,7 @@ function renderReview(state){
   renderCanvas(state);
   $("reviewProgress").innerHTML = reviewProgress(state);
   $("reviewBody").innerHTML = sceneTimeline(state)
+    + finalCheckPanel()
     + readinessDashboard()
     + preparationPanel()
     + REVIEW_STEPS.map(step => reviewSection(step, state)).join("")
