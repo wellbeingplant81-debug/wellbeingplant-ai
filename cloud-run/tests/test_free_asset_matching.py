@@ -299,8 +299,12 @@ class DuplicateAssetTest(unittest.TestCase):
         scenes = self._scenes(["무릎 운동", "허리 운동"])
         report = free_workspace.preparation(self.project, scenes)
 
-        # 음성이 없으니 아직 부족이다.
-        self.assertEqual(report["state"], "missing")
+        # 음성이 없으니 아직 막혀 있다.
+        #
+        # Sprint160이 이 값을 "missing"에서 "blocked"로 바꿨다. 뜻은
+        # 같고, 화면이 "부족"과 "막힘"을 같은 말로 쓰던 것을 바로잡은
+        # 것이다.
+        self.assertEqual(report["state"], free_workspace.BLOCKED)
 
         for n in (1, 2):
             _tone(os.path.join(self.root, "voices", f"scene{n}.wav"))
@@ -473,7 +477,7 @@ class NoExternalProviderTest(unittest.TestCase):
                 with self.subTest(name=name):
                     mock.assert_not_called()
 
-        self.assertEqual(report["state"], "missing")
+        self.assertEqual(report["state"], free_workspace.BLOCKED)
         self.assertTrue(report["review"])
 
     def test_the_keyword_rule_pulls_in_nothing_new(self):

@@ -347,9 +347,60 @@ def _voice_status(project_path: str, scene) -> dict:
 # 그래서 막지 않고 말한다. 같은 그림을 쓰는 것이 틀린 것은 아니다 -
 # 일부러 그렇게 할 수도 있고, 그것은 사람이 정할 일이다.
 
+# Sprint160 - 지금 만들 수 있는가. 셋뿐이다.
+#
+#     READY    다 있고 볼 것도 없다
+#     REVIEW   다 있으나 사람이 봐야 할 것이 있다
+#     BLOCKED  없는 것이 있다
+#
+# BLOCKED만 막는다. REVIEW는 막지 않는다 - 같은 그림을 여러 Scene에
+# 쓰는 것도, 낱말 하나로 걸린 것도 사람이 일부러 그랬을 수 있다.
+#
+# Sprint156~159는 이 값을 "missing"이라 불렀다. 뜻은 같고, 화면이
+# "부족"과 "막힘"을 같은 말로 쓰던 것을 바로잡는다.
 READY = "ready"
 REVIEW = "review"
-MISSING = "missing"
+BLOCKED = "blocked"
+
+
+def _scene_state(row: dict) -> tuple:
+    """
+    이 Scene 하나는 어떤 상태인가. (상태, 까닭들).
+
+    까닭을 함께 돌려주는 것이 이 Sprint의 값어치다 - 표를 끝까지
+    읽지 않아도 무엇을 봐야 하는지 알 수 있어야 한다.
+
+    사람이 정한 것(override)은 검토 대상이 아니다. 이미 사람이 본
+    것이므로, 다시 보라고 하면 자기가 정한 것을 의심하라는 말이 된다.
+    """
+
+    image = row["image"]
+    voice = row["voice"]
+
+    blocked = []
+
+    if not row["script"]:
+        blocked.append("script")
+
+    if not image.get("ready"):
+        blocked.append("image")
+
+    if not voice.get("ready"):
+        blocked.append("voice")
+
+    if blocked:
+        return BLOCKED, blocked
+
+    review = []
+
+    if image.get("asset_source") != OVERRIDE:
+        if image.get("weak"):
+            review.append("weak")
+
+        if image.get("shared_with"):
+            review.append("shared")
+
+    return (REVIEW, review) if review else (READY, [])
 
 
 def _shared_images(rows: list) -> dict:
@@ -488,6 +539,27 @@ def preparation(project_path: str, scenes: list) -> dict:
 
     review = _review_notes(shared, rows, asset_override.missing(project_path))
 
+    # Sprint160 - Scene 하나씩 판정하고, 전체는 그것을 센다. 두 곳에서
+    # 따로 세면 화면에 뜬 숫자가 표와 달라지고, 사람은 어느 쪽을
+    # 믿어야 할지 모른다.
+    counts = {READY: 0, REVIEW: 0, BLOCKED: 0}
+
+    for row in rows:
+        state, reasons = _scene_state(row)
+
+        row["state"] = state
+        row["reasons"] = reasons
+        counts[state] += 1
+
+    if counts[BLOCKED] or not rows:
+        # Scene이 없으면 만들 것이 없다. 빈 것을 "준비 완료"라고 하면
+        # 제작 버튼이 열리고, 눌러도 아무 일도 일어나지 않는다.
+        state = BLOCKED
+    elif counts[REVIEW] or review:
+        state = REVIEW
+    else:
+        state = READY
+
     return {
         "scanned": scanned,
         "root": index.get("root"),
@@ -497,7 +569,8 @@ def preparation(project_path: str, scenes: list) -> dict:
         # Sprint156 - 없는 것은 아니지만 사람이 봐야 하는 것들.
         # 자동으로 실패시키지 않는다.
         "review": review,
-        "state": (MISSING if missing else (REVIEW if review else READY)),
+        "counts": counts,
+        "state": state,
         "scenes": rows,
     }
 
@@ -712,6 +785,7 @@ def requirements(project_path: str, scenes: list) -> dict:
         "ready": prepared["ready"],
         # 두 화면이 갈리지 않도록 같은 판정을 그대로 옮긴다.
         "review": prepared["review"],
+        "counts": prepared["counts"],
         "state": prepared["state"],
         "requirements": rows,
     }

@@ -457,6 +457,23 @@ a{color:var(--accent)}
   border-radius:8px;background:#1c1810;font-size:12px;color:#e8d5b0}
 .reviewnote b{display:block;margin-bottom:4px;color:#c9a06a}
 .reviewnote .muted{margin-top:4px}
+.dash{border:1px solid #2a3346;border-radius:9px;padding:10px;margin:10px 0}
+.dash.blocked{border-color:#5a3030}
+.dash.review{border-color:#4a3f2a}
+.dash.ready{border-color:#2c4a38}
+.dash .dh{font-size:13px;margin-bottom:8px}
+.dash .dh .muted{margin-left:6px}
+.dcounts{display:flex;gap:8px;flex-wrap:wrap}
+.dc{padding:4px 9px;border:1px solid #2a3346;border-radius:7px;font-size:12px}
+.dc.ready{color:#5fd08a}
+.dc.review{color:#c9a06a}
+.dc.blocked{color:#e07a7a}
+.dc.zero{opacity:.4}
+.drow{display:flex;justify-content:space-between;gap:10px;padding:5px 7px;
+  margin-top:5px;border-radius:6px;cursor:pointer;font-size:12px}
+.drow:hover{background:#1b2130}
+.drow.review{color:#c9a06a}
+.drow.blocked{color:#e07a7a}
 .prep tr.need td{border-bottom:1px solid #1e2534;padding-top:0}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
@@ -2539,6 +2556,68 @@ function matchScore(slot){
     words ? " · " + escHtml(words) : ""}</span>`;
 }
 
+// Sprint160 - 지금 만들 수 있는가를 한 자리에서.
+//
+// 세는 일은 서버가 한다. 화면이 다시 세면 표와 숫자가 갈리고, 사람은
+// 어느 쪽을 믿어야 할지 모른다.
+//
+//   ready    다 있고 볼 것도 없다      제작 시작
+//   review   다 있으나 봐야 할 것이 있다 제작 가능하되 확인 권함
+//   blocked  없는 것이 있다             제작 못 함
+const STATE_MARK = {ready: "O", review: "!", blocked: "X"};
+const STATE_LABEL = {ready: "준비 완료", review: "검토 필요", blocked: "부족"};
+
+// 그 Scene이 왜 그런가. 서버가 준 까닭을 사람 말로 옮긴다.
+const REASON_LABEL = {
+  script: "대본 없음", image: "이미지 없음", voice: "음성 없음",
+  weak: "약한 매칭", shared: "같은 파일 사용",
+};
+
+function readinessDashboard(){
+  if(!preparation) return "";
+
+  const counts = preparation.counts || {};
+  const state = preparation.state;
+
+  return `<div class="dash ${state}">
+    <div class="dh"><b>무료 제작 준비</b>
+      <span class="muted">Scene ${preparation.total}개</span></div>
+    <div class="dcounts">${
+      ["ready", "review", "blocked"].map(key =>
+        `<span class="dc ${key} ${counts[key] ? "" : "zero"}">${
+          STATE_MARK[key]} ${STATE_LABEL[key]} ${counts[key] || 0}</span>`
+      ).join("")}
+    </div>
+    ${(preparation.scenes || [])
+      .filter(row => row.state !== "ready")
+      .map(dashboardRow).join("")}
+  </div>`;
+}
+
+// 누르면 그 Scene으로 간다. Timeline이 이미 가진 자리를 쓴다 -
+// 새 이동 방식을 만들지 않는다.
+function dashboardRow(row){
+  const reasons = (row.reasons || [])
+    .map(r => REASON_LABEL[r] || r).join(" · ");
+
+  return `<div class="drow ${row.state}" onclick="goToScene(${row.scene})">
+    <span>${STATE_MARK[row.state]} Scene ${row.scene}</span>
+    <span class="src">${escHtml(reasons)}</span>
+  </div>`;
+}
+
+function goToScene(number){
+  pickScene(number);
+
+  // Scene 카드에는 id가 없고 data-scene이 있다. 있는 것을 쓴다 -
+  // 이동하자고 카드에 새 id를 붙이지 않는다.
+  const card = document.querySelector(`.card[data-scene="${number}"]`);
+
+  if(card && card.scrollIntoView){
+    card.scrollIntoView({behavior: "smooth", block: "center"});
+  }
+}
+
 function preparationPanel(){
   // 무료 모드로 고른 프로젝트에서만 뜻이 있다. 그 밖에서는 이미지도
   // 음성도 API가 만들므로 내 자료가 모자란 것이 문제가 아니다.
@@ -2714,6 +2793,7 @@ function renderReview(state){
   renderCanvas(state);
   $("reviewProgress").innerHTML = reviewProgress(state);
   $("reviewBody").innerHTML = sceneTimeline(state)
+    + readinessDashboard()
     + preparationPanel()
     + REVIEW_STEPS.map(step => reviewSection(step, state)).join("")
     + publishPanel(state);
@@ -3430,6 +3510,7 @@ function renderFreeWizard(){
   // 검토 필요를 부족으로 처리하면 자동 실패가 된다 - 사람이 정할
   // 일이므로 버튼은 열어 두고 사실만 말한다.
   const state = preparation && preparation.state;
+  // Sprint160 - blocked만 막는다. review는 열어 두되 확인을 권한다.
   const ready = state === "ready" || state === "review";
 
   box.innerHTML = `
@@ -3474,6 +3555,11 @@ function renderFreeWizard(){
 
     ${wizHead(5, "준비 상태")}
     <div class="wcounts">${wizAssetLines()}</div>
+    ${preparation && preparation.counts ? `<div class="dcounts">${
+      ["ready", "review", "blocked"].map(key =>
+        `<span class="dc ${key} ${preparation.counts[key] ? "" : "zero"}">${
+          STATE_MARK[key]} ${STATE_LABEL[key]} ${
+          preparation.counts[key] || 0}</span>`).join("")}</div>` : ""}
     ${preparation && (preparation.missing || []).length
       ? `<div class="short">부족: ${preparation.missing.join(" · ")}</div>
          <p class="muted">무엇을 어디에 넣으면 되는지는 아래 검토 화면의
