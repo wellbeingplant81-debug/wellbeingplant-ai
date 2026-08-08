@@ -441,6 +441,14 @@ a{color:var(--accent)}
 .prep .short{margin-top:8px;color:#e07a7a;font-size:12px}
 .prep .dup,.wiz .dup{color:#c9a06a;font-size:11px;margin-left:6px}
 .prep .match{display:block;color:#7c8698;font-size:11px;margin-top:2px}
+.prep .thumb{display:block;width:64px;height:64px;object-fit:cover;
+  border-radius:6px;border:1px solid #2a3346;margin-bottom:4px;background:#0f141f}
+.prep .thumb.sm{width:40px;height:40px;margin:0}
+.prep .tiny{padding:2px 7px;font-size:11px;margin-top:4px}
+.altbox{padding:6px 0}
+.altitem{display:flex;align-items:center;gap:8px;padding:4px 6px;
+  border-radius:6px;cursor:pointer;font-size:12px}
+.altitem:hover{background:#1b2130}
 .prep .match.weak{color:#c9a06a}
 .reviewnote{margin-top:9px;padding:8px 10px;border:1px solid #4a3f2a;
   border-radius:8px;background:#1c1810;font-size:12px;color:#e8d5b0}
@@ -2445,7 +2453,9 @@ let preparation = null;
 // 지어내면 사람이 시킨 대로 넣어도 안 찾힌다.
 let requirements = null;
 
-const PREP_FROM = {made: "만들어 둠", workspace: "내 자료"};
+const PREP_FROM = {made: "만들어 둠", workspace: "내 자료",
+                   // Sprint158 - 사람이 보고 정한 것.
+                   override: "직접 고름"};
 
 async function loadPreparation(projectId){
   if(!projectId){ preparation = null; requirements = null; return; }
@@ -2524,10 +2534,12 @@ function preparationPanel(){
       <tbody>${preparation.scenes.map(row => `<tr>
         <td>${row.scene}</td>
         <td>${prepMark(row.script)}</td>
-        <td>${prepCell(row.image)}</td>
+        <td>${assetPreview(row.image)}${prepCell(row.image)}${
+          row.image.ready ? `<button class="sm ghost tiny"
+            onclick="openAlternatives(${row.scene})">바꾸기</button>` : ""}</td>
         <td>${prepCell(row.voice)}</td>
         <td>${row.video ? prepMark(true) : '<span class="src">-</span>'}</td>
-      </tr>${needRow(row.scene)}`).join("")}</tbody>
+      </tr>${needRow(row.scene)}${alternativesRow(row)}`).join("")}</tbody>
     </table>
     ${prepReview()}
   </div>`;
@@ -2562,6 +2574,109 @@ function needRow(number){
       <span class="no">X</span> ${r.message}
       ${r.expected_path ? `<code>${r.expected_path}</code>` : ""}
     </div>`).join("")}</td></tr>`;
+}
+
+// Sprint158 - 고른 것을 눈으로 보고, 마음에 안 들면 바꾼다.
+//
+// 미리보기는 그 파일을 그대로 받아 그린다. 따로 썸네일을 만들지
+// 않는다 - 만들면 "읽기만 한다"던 자리가 파일을 쓰기 시작한다.
+// 영상은 kind를 보고 video 태그로 그린다.
+//
+// 바꾸는 것은 사람의 결정이라 서버가 적어 둔다. 우리가 자동으로
+// 다시 고르지 않는다.
+let altOpen = null;
+let altRows = null;
+
+function assetUrl(path){
+  return `/studio/api/review/${reviewProject}/asset?path=`
+    + encodeURIComponent(path);
+}
+
+function assetPreview(slot){
+  // 이미 만들어 둔 것은 프로젝트 안에 있어 이 경로로 못 준다 -
+  // 그 자리는 위 미리보기 카드가 이미 보여 준다.
+  if(!slot || !slot.ready || !slot.path || slot.from === "made") return "";
+
+  const url = assetUrl(slot.path);
+
+  return slot.kind === "videos"
+    ? `<video class="thumb" src="${url}" muted preload="metadata"></video>`
+    : `<img class="thumb" src="${url}" alt="${escHtml(slot.name || "")}">`;
+}
+
+async function openAlternatives(scene){
+  if(altOpen === scene){ altOpen = null; altRows = null; renderReview(reviewState); return; }
+
+  altOpen = scene;
+  altRows = null;
+  renderReview(reviewState);
+
+  const r = await fetch(
+    `/studio/api/review/${reviewProject}/scenes/${scene}/alternatives`);
+
+  altRows = r.ok ? await r.json() : {alternatives: []};
+  renderReview(reviewState);
+}
+
+async function chooseAsset(scene, path){
+  const r = await fetch(
+    `/studio/api/review/${reviewProject}/scenes/${scene}/asset`, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({path: path})});
+
+  if(!r.ok){
+    const d = await r.json().catch(() => ({}));
+    alert(d.detail || "그 파일을 쓸 수 없습니다.");
+    return;
+  }
+
+  altOpen = null;
+  altRows = null;
+  await refreshPreparation();
+}
+
+async function clearAsset(scene){
+  await fetch(`/studio/api/review/${reviewProject}/scenes/${scene}/asset`,
+              {method: "DELETE"});
+
+  altOpen = null;
+  altRows = null;
+  await refreshPreparation();
+}
+
+function altRow(scene, item){
+  return `<div class="altitem" onclick="chooseAsset(${scene}, ${
+    JSON.stringify(item.path).replace(/"/g, "&quot;")})">
+    ${item.kind === "videos"
+      ? `<video class="thumb sm" src="${assetUrl(item.path)}" muted
+                preload="metadata"></video>`
+      : `<img class="thumb sm" src="${assetUrl(item.path)}" alt="">`}
+    <span>${escHtml(item.file)}</span>
+    <span class="src">${item.matched_count} 단어</span>
+  </div>`;
+}
+
+function alternativesRow(row){
+  if(altOpen !== row.scene) return "";
+
+  if(!altRows){
+    return `<tr class="need"><td></td><td colspan="4">
+      <span class="muted">불러오는 중…</span></td></tr>`;
+  }
+
+  const rows = altRows.alternatives || [];
+
+  return `<tr class="need"><td></td><td colspan="4">
+    <div class="altbox">
+      <div class="muted">다른 파일 (누르면 이 Scene에 씁니다)</div>
+      ${rows.length ? rows.map(item => altRow(row.scene, item)).join("")
+        : '<div class="muted">내 자료에 다른 그림·영상이 없습니다.</div>'}
+      ${row.image.from === "override"
+        ? `<div class="rowbtns"><button class="sm ghost"
+             onclick="clearAsset(${row.scene})">자동 선택으로 되돌리기</button></div>`
+        : ""}
+    </div>
+  </td></tr>`;
 }
 
 function renderReview(state){

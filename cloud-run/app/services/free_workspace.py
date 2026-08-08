@@ -215,23 +215,30 @@ def _image_status(project_path: str, scene) -> dict:
                 "kind": None,
                 "path": os.path.join(project_path, "images",
                                      f"scene{number}.png"),
+                "chosen_by": None,
                 "matched_keywords": [], "matched_count": None,
                 "total_keywords": None, "weak": False}
 
     from app.providers import local_stock_provider
 
+    # Sprint158 - scene 번호를 함께 준다. 사람이 정해 둔 것이 있으면
+    # 그것이 온다.
     picked = local_stock_provider.match(
-        project_path, scene.get("image_prompt") or "",
+        project_path, scene.get("image_prompt") or "", number,
     )
 
     if picked is None:
         return {"ready": False, "from": None, "name": None, "kind": None,
-                "path": None, "matched_keywords": [], "matched_count": None,
+                "path": None, "chosen_by": None,
+                "matched_keywords": [], "matched_count": None,
                 "total_keywords": None, "weak": False}
 
     return {
         "ready": True,
-        "from": "workspace",
+        # Sprint158 - 사람이 정한 것과 우리가 고른 것을 갈라 적는다.
+        # 뭉치면 사람은 자기가 정한 것이 아직 쓰이는지 알 수 없다.
+        "from": "override" if picked["chosen_by"] == "user" else "workspace",
+        "chosen_by": picked["chosen_by"],
         "name": picked["file"],
         # Sprint156 - 어느 파일인지. 이름만으로는 폴더가 다른 같은
         # 이름을 구분하지 못한다.
@@ -313,7 +320,7 @@ def _shared_images(rows: list) -> dict:
     }
 
 
-def _review_notes(shared: dict, rows: list) -> list:
+def _review_notes(shared: dict, rows: list, gone: dict) -> list:
     """
     사람이 읽을 한 줄씩.
 
@@ -334,6 +341,12 @@ def _review_notes(shared: dict, rows: list) -> list:
         notes.append(
             f"{len(numbers)}개 Scene이 같은 이미지를 사용합니다: "
             f"{name} (Scene {', '.join(str(n) for n in numbers)})"
+        )
+
+    for number, path in sorted(gone.items(), key=lambda pair: pair[0]):
+        notes.append(
+            f"Scene {number}에 정해 둔 파일이 없어졌습니다: "
+            f"{os.path.basename(path)} - 지금은 자동으로 고른 것을 씁니다"
         )
 
     for row in rows:
@@ -415,7 +428,10 @@ def preparation(project_path: str, scenes: list) -> dict:
                 n for n in numbers if n != row["scene"]
             ]
 
-    review = _review_notes(shared, rows)
+    # Sprint158 - 사람이 정해 뒀는데 그 파일이 사라진 것들.
+    from app.services import asset_override
+
+    review = _review_notes(shared, rows, asset_override.missing(project_path))
 
     return {
         "scanned": scanned,

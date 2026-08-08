@@ -1028,6 +1028,11 @@ class LibraryScanRequest(BaseModel):
     root: str = ""
 
 
+class SceneAssetRequest(BaseModel):
+    # Sprint158 - 이 scene에 쓸 파일. 훑어 둔 목록에 있는 것이어야 한다.
+    path: str
+
+
 class WorkspaceRequest(BaseModel):
     # Sprint152 - 내 자료 폴더. 한 번 정하면 기억한다.
     root: str
@@ -1381,6 +1386,165 @@ def review_preparation(project_id: str):
     scenes = studio_review.state(path).get("scenes") or []
 
     return free_workspace.preparation(path, scenes)
+
+
+def _library_item(path: str, wanted: str):
+    """
+    훑어 둔 목록에서 그 경로를 찾는다. 없으면 None.
+
+    목록에 있는 것만 내주고 받는다 - 없으면 요청 하나로 이 컴퓨터의
+    아무 파일이나 읽어 갈 수 있다.
+    """
+
+    from app.services import local_library
+
+    if not wanted:
+        return None
+
+    target = os.path.normcase(os.path.abspath(wanted))
+
+    for item in local_library.load(path).get("items") or []:
+        if os.path.normcase(os.path.abspath(item["path"])) == target:
+            return item
+
+    return None
+
+
+@router.get("/api/review/{project_id}/asset")
+def review_asset(project_id: str, path: str = ""):
+    """
+    Sprint158 - 내 자료 파일 하나를 그대로 내준다. 미리보기용이다.
+
+    훑어 둔 목록에 있는 것만 내준다. 목록에 없는 경로는 404다 -
+    있는지 없는지도 알려 주지 않는다.
+    """
+
+    project = _project_path(project_id)
+    item = _library_item(project, path)
+
+    if item is None or not os.path.exists(item["path"]):
+        raise HTTPException(status_code=404, detail="그런 자료가 없습니다.")
+
+    return FileResponse(item["path"])
+
+
+@router.get("/api/review/{project_id}/scenes/{scene}/alternatives")
+def review_scene_alternatives(project_id: str, scene: int):
+    """
+    Sprint158 - 이 scene에 쓸 수 있는 다른 파일들.
+
+    낱말이 겹치는 것을 위에 두되, 안 겹치는 것도 모두 준다 - 안
+    겹치는 것만 가진 사람이 바로 그것을 바꾸고 싶어 한다.
+
+    만들지 않는다. 고르지도 않는다 - 지금 무엇이 걸려 있는지와
+    무엇으로 바꿀 수 있는지만 말한다.
+    """
+
+    from app.providers import local_stock_provider
+    from app.services import local_library, studio_review
+
+    path = _project_path(project_id)
+
+    found = next(
+        (s for s in (studio_review.state(path).get("scenes") or [])
+         if s.get("scene") == scene),
+        None,
+    )
+
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"Scene {scene}이 없습니다.")
+
+    prompt = found.get("image_prompt") or ""
+    chosen = local_stock_provider.match(path, prompt, scene)
+
+    index = local_library.load(path)
+    words = local_stock_provider._keywords(prompt)
+
+    scored = {}
+
+    for kind in (local_library.IMAGES, local_library.VIDEOS):
+        for item, matched in local_library.search_scored(index, words, kind):
+            scored[os.path.normcase(item["path"])] = (item, matched)
+
+    rows = []
+
+    for item in index.get("items") or []:
+        if item["kind"] not in (local_library.IMAGES, local_library.VIDEOS):
+            continue
+
+        key = os.path.normcase(item["path"])
+
+        if chosen and key == os.path.normcase(chosen["path"]):
+            continue
+
+        matched = scored.get(key, (None, []))[1]
+
+        rows.append({
+            "file": item["name"],
+            "path": item["path"],
+            "kind": item["kind"],
+            "matched_keywords": matched,
+            "matched_count": len(matched),
+        })
+
+    rows.sort(key=lambda row: (-row["matched_count"], row["path"]))
+
+    return {
+        "scene": scene,
+        "total_keywords": len(words),
+        "chosen": None if chosen is None else {
+            "file": chosen["file"], "path": chosen["path"],
+            "kind": chosen["kind"],
+            "matched_keywords": chosen["matched_keywords"],
+            "matched_count": chosen["matched_count"],
+            "chosen_by": chosen["chosen_by"],
+        },
+        "alternatives": rows,
+    }
+
+
+@router.put("/api/review/{project_id}/scenes/{scene}/asset")
+def review_choose_asset(project_id: str, scene: int,
+                        request: SceneAssetRequest):
+    """
+    Sprint158 - 이 scene에는 이 파일을 쓰겠다.
+
+    사람의 결정만 적는다. 여기서 무엇을 만들지 않는다 - 실제로 놓는
+    것은 예전과 같이 이미지 생성 단계가 한다.
+    """
+
+    from app.services import asset_override, local_library
+
+    path = _project_path(project_id)
+    item = _library_item(path, request.path)
+
+    if item is None:
+        raise HTTPException(
+            status_code=400,
+            detail="훑어 둔 내 자료에 없는 파일입니다.",
+        )
+
+    if item["kind"] not in (local_library.IMAGES, local_library.VIDEOS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"그림이나 영상이어야 합니다: {item['name']}",
+        )
+
+    asset_override.save(path, scene, item["path"])
+
+    return {"scene": scene, "file": item["name"], "path": item["path"],
+            "kind": item["kind"]}
+
+
+@router.delete("/api/review/{project_id}/scenes/{scene}/asset")
+def review_clear_asset(project_id: str, scene: int):
+    """Sprint158 - 정한 것을 지운다. 자동으로 고른 것으로 돌아간다."""
+
+    from app.services import asset_override
+
+    asset_override.clear(_project_path(project_id), scene)
+
+    return {"scene": scene, "cleared": True}
 
 
 @router.get("/api/review/{project_id}/requirements")

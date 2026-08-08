@@ -512,9 +512,17 @@ class NoExternalProviderTest(unittest.TestCase):
                 local_stock_provider.generate_image).parameters),
             ["prompt", "output_file"])
 
-        self.assertEqual(
-            list(inspect.signature(local_stock_provider.find).parameters),
-            ["project_path", "image_prompt"])
+        # Sprint158이 scene 번호를 더했다. 선택 인자라 예전 호출자는
+        # 한 글자도 바뀌지 않는다 - 앞의 둘이 그대로이고 뒤엣것에
+        # 기본값이 있는지를 본다.
+        found = inspect.signature(local_stock_provider.find).parameters
+
+        self.assertEqual(list(found)[:2], ["project_path", "image_prompt"])
+
+        for name in list(found)[2:]:
+            with self.subTest(name=name):
+                self.assertIsNot(
+                    found[name].default, inspect.Parameter.empty)
 
 
 if __name__ == "__main__":

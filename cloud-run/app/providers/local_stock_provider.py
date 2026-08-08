@@ -28,6 +28,7 @@ videos 폴더의 파일이 걸리면 첫 프레임을 뽑아 쓴다 - 스톡 영
 """
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -144,7 +145,59 @@ def _first_frame(video_path: str, output_file: str) -> None:
         )
 
 
-def match(project_path: str, image_prompt: str):
+def _info(item, matched, words, chosen_by) -> dict:
+    """고른 것과 그 까닭. 한 자리에서만 짓는다."""
+
+    return {
+        "file": item["name"],
+        "path": item["path"],
+        "kind": item["kind"],
+        "item": item,
+        # Sprint158 - 미리 볼 것. 따로 만들지 않는다 - 만들면
+        # "읽기만 한다"던 자리가 파일을 쓰기 시작한다. 영상은 화면이
+        # kind를 보고 video 태그로 그리면 된다.
+        "thumbnail_path": item["path"],
+        "matched_keywords": matched,
+        "matched_count": len(matched),
+        "total_keywords": len(words),
+        # match  우리가 낱말로 골랐다
+        # user   사람이 보고 정했다
+        "chosen_by": chosen_by,
+    }
+
+
+def _chosen(project_path: str, index: dict, scene_number):
+    """
+    사람이 정해 둔 파일. 없거나 사라졌으면 None.
+
+    목록에 있는 것만 돌려준다 - 훑은 적 없는 경로를 쓰면 그 파일이
+    무엇인지(종류·낱말) 우리가 모른다.
+    """
+
+    if scene_number is None:
+        return None
+
+    from app.services import asset_override
+
+    wanted = asset_override.for_scene(project_path, scene_number)
+
+    if not wanted:
+        return None
+
+    for item in index.get("items") or []:
+        if os.path.normcase(item["path"]) != os.path.normcase(wanted):
+            continue
+
+        if item["kind"] not in (local_library.IMAGES, local_library.VIDEOS):
+            continue
+
+        # 목록에 남아 있어도 파일이 사라졌을 수 있다.
+        return item if os.path.exists(item["path"]) else None
+
+    return None
+
+
+def match(project_path: str, image_prompt: str, scene_number=None):
     """
     Sprint157 - 무엇을 고르고, 왜 골랐는가.
 
@@ -175,6 +228,20 @@ def match(project_path: str, image_prompt: str):
     index = local_library.load(project_path)
     words = _keywords(image_prompt)
 
+    # Sprint158 - 사람이 정한 것이 먼저다. 우리가 고른 것보다 사람이
+    # 고른 것이 낫다는 뜻이 아니라, 사람이 이미 보고 정했기 때문이다.
+    #
+    # scene 번호는 프롬프트에 없다. 그래서 호출자가 알려 주는 대신
+    # 여기서는 "이 프롬프트가 몇 번 scene의 것인가"를 모른다 - 대신
+    # generate_image가 자리 이름에서 번호를 읽어 넘긴다.
+    picked = _chosen(project_path, index, scene_number)
+
+    if picked is not None:
+        tags = set(picked.get("tags") or [])
+
+        return _info(picked, [w for w in words if w in tags], words,
+                     chosen_by="user")
+
     # 그림을 먼저 보고, 없으면 영상을 본다 - 영상은 프레임을 꺼내야
     # 하므로 손이 더 간다.
     for kind in (local_library.IMAGES, local_library.VIDEOS):
@@ -185,29 +252,33 @@ def match(project_path: str, image_prompt: str):
 
         item, matched = found[0]
 
-        return {
-            "file": item["name"],
-            "path": item["path"],
-            "kind": item["kind"],
-            "item": item,
-            "matched_keywords": matched,
-            "matched_count": len(matched),
-            "total_keywords": len(words),
-        }
+        return _info(item, matched, words, chosen_by="match")
 
     return None
 
 
-def find(project_path: str, image_prompt: str):
+def find(project_path: str, image_prompt: str, scene_number=None):
     """
     이 scene에 쓸 파일을 고른다. 없으면 None.
 
     고르는 일은 match()가 한다 - 여기서 다시 고르면 두 답이 생긴다.
+
+    Sprint158 - scene 번호를 주면 사람이 정해 둔 것을 먼저 본다.
+    주지 않으면 예전 그대로다 - 기존 호출자는 한 글자도 바뀌지 않는다.
     """
 
-    found = match(project_path, image_prompt)
+    found = match(project_path, image_prompt, scene_number)
 
     return found["item"] if found else None
+
+
+def _scene_number(output_file: str):
+    """놓을 자리의 이름에서 scene 번호를 읽는다. scene3.png -> 3."""
+
+    stem = os.path.splitext(os.path.basename(output_file or ""))[0]
+    found = re.search(r"(\d+)$", stem)
+
+    return int(found.group(1)) if found else None
 
 
 def generate_image(prompt: str, output_file: str) -> str:
@@ -227,7 +298,9 @@ def generate_image(prompt: str, output_file: str) -> str:
             "내 PC 자료 목록이 비어 있습니다. 폴더를 먼저 훑으십시오."
         )
 
-    picked = find(project_path, prompt)
+    # Sprint158 - 몇 번 scene인지는 놓을 자리의 이름이 들고 있다.
+    # audio 쪽(local_voice)이 쓰는 그 방식과 같다.
+    picked = find(project_path, prompt, _scene_number(output_file))
 
     if picked is None:
         raise LocalStockUnavailable(

@@ -179,7 +179,13 @@ class MatchReasonTest(Base):
         self.assertEqual(info["matched_count"], 2)
 
     def test_the_contract_did_not_change(self):
-        """부르는 모양은 그대로다. 새 함수가 하나 늘었을 뿐이다."""
+        """
+        부르는 모양은 그대로다.
+
+        Sprint158이 find/match에 scene 번호를 더했지만 선택 인자라
+        예전 호출자는 한 글자도 바뀌지 않는다 - 앞의 둘이 그대로이고
+        뒤엣것에 기본값이 있는지를 본다.
+        """
 
         import inspect
 
@@ -188,9 +194,15 @@ class MatchReasonTest(Base):
                 local_stock_provider.generate_image).parameters),
             ["prompt", "output_file"])
 
-        self.assertEqual(
-            list(inspect.signature(local_stock_provider.find).parameters),
-            ["project_path", "image_prompt"])
+        found = inspect.signature(local_stock_provider.find).parameters
+
+        self.assertEqual(list(found)[:2], ["project_path", "image_prompt"])
+
+        for name in list(found)[2:]:
+            with self.subTest(name=name):
+                self.assertIsNot(
+                    found[name].default, inspect.Parameter.empty,
+                    f"{name}에 기본값이 없으면 예전 호출자가 깨진다")
 
 
 class MatchScoreDisplayTest(Base):

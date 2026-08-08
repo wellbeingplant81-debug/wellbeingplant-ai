@@ -39,6 +39,9 @@ PROJECT_ID = "20260805_120000"
 # Sprint150 - 실제로 있는 폴더가 필요한 자리에 쓴다.
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Sprint158 - 실제로 있는 파일이 필요한 자리에 쓴다.
+REAL_FILE = os.path.join(REPO_ROOT, "app", "static", "studio.html")
+
 
 # (method, path, 유효 payload, autospec으로 패치할 서비스 경로들)
 ENDPOINTS = [
@@ -158,6 +161,37 @@ ENDPOINTS = [
     # Sprint154 - 붙여넣을 요청문을 만든다. 글자만 만든다 - 모델을
     # 부르지 않으므로 패치할 것이 없다.
     ("POST", "/studio/api/script-prompt", {"topic": "40대 허리 건강 운동"}, []),
+    # Sprint158 - 미리보기와 직접 고르기.
+    #
+    # 셋 다 훑어 둔 목록을 먼저 본다. 목록에 없는 경로는 내주지도
+    # 받지도 않으므로, 계약만 보려면 그 판정을 패치한다.
+    ("GET", "/studio/api/review/{project_id}/asset", None,
+     ["app.routers.studio._library_item"],
+     f"/studio/api/review/{PROJECT_ID}/asset?path=x",
+     # 실제로 있는 파일을 가리켜야 200이 온다 - 없으면 404이고,
+     # 그것은 계약이 아니라 파일 유무를 보는 것이 된다.
+     {"app.routers.studio._library_item":
+          {"path": REAL_FILE, "name": "studio.html", "kind": "images"}}),
+    ("GET", "/studio/api/review/{project_id}/scenes/{scene}/alternatives",
+     None,
+     ["app.services.studio_review.state",
+      "app.services.local_library.load",
+      "app.providers.local_stock_provider.match"],
+     f"/studio/api/review/{PROJECT_ID}/scenes/1/alternatives",
+     {"app.services.studio_review.state":
+          {"scenes": [{"scene": 1, "image_prompt": "무릎"}]},
+      "app.services.local_library.load": {"items": []},
+      "app.providers.local_stock_provider.match": None}),
+    ("PUT", "/studio/api/review/{project_id}/scenes/{scene}/asset",
+     {"path": "x"},
+     ["app.routers.studio._library_item",
+      "app.services.asset_override.save"],
+     f"/studio/api/review/{PROJECT_ID}/scenes/1/asset",
+     {"app.routers.studio._library_item":
+          {"path": "x", "name": "x.png", "kind": "images"}}),
+    ("DELETE", "/studio/api/review/{project_id}/scenes/{scene}/asset", None,
+     ["app.services.asset_override.clear"],
+     f"/studio/api/review/{PROJECT_ID}/scenes/1/asset"),
     # Sprint153 - 무엇이 필요하고 어디에 두면 되는가. 순수 읽기다 -
     # 만드는 함수는 하나도 부르지 않는다.
     ("GET", "/studio/api/review/{project_id}/requirements", None,
@@ -292,10 +326,15 @@ class RouterContractTestCase(unittest.TestCase):
 
         # Sprint121 - PUT이 생겼다. 메서드를 그대로 보내지 않으면 405가
         # 나고, 서비스가 안 불린 것을 계약 위반으로 잘못 읽는다.
+        # Sprint158 - DELETE도 생겼다. 빠뜨리면 POST로 보내게 되고,
+        # 그러면 405가 나 서비스가 안 불린 것을 계약 위반으로 잘못
+        # 읽는다(PUT 때와 같은 모양이다).
         if method == "GET":
             response = self.client.get(path)
         elif method == "PUT":
             response = self.client.put(path, json=payload)
+        elif method == "DELETE":
+            response = self.client.delete(path)
         else:
             response = self.client.post(path, json=payload)
 
