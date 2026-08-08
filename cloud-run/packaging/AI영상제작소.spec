@@ -76,6 +76,30 @@ datas = [
 ]
 
 
+def _given_music():
+    """
+    함께 묶을 배경 음악. 가리키지 않으면 넣지 않는다.
+
+    렌더는 BGM을 반드시 하나 고르므로, 없으면 묶은 프로그램은 영상을
+    끝까지 만들지 못한다(Sprint171 실측). 그런데 저장소의 assets/music은
+    2.9GB이고 남의 이름이 붙은 트랙들이다 - 그것을 남에게 재배포하는
+    일은 묶기 스크립트가 대신 정할 수 있는 것이 아니다.
+
+    그래서 문만 만들어 둔다. PACKAGING_BGM에 폴더를 주면 그 폴더가
+    assets/music이 된다. 무엇을 넣을지는 주는 사람이 정한다.
+
+    없으면 넣지 않고, 프로그램이 켜질 때 없다고 말한다 - 있는 척하지
+    않는다.
+    """
+
+    given = os.environ.get("PACKAGING_BGM")
+
+    return [(given, "assets/music")] if given and os.path.isdir(given) else []
+
+
+datas += _given_music()
+
+
 def _metadata(*names):
     """
     패키지가 제 판번호를 물어볼 때 필요한 것.
@@ -133,6 +157,20 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
+
+# Sprint171 - 안에 든 ffmpeg를 뺀다.
+#
+# imageio_ffmpeg에는 PyInstaller가 스스로 붙이는 훅이 있어서, 우리가
+# binaries에 아무것도 적지 않아도 제 ffmpeg(87MB)를 함께 넣는다.
+# Sprint170은 "안에 넣지 않고 옆에 둔다"고 했는데 실제로는 양쪽에 있었고,
+# 그 결과 tools/ffmpeg.exe를 지워도 프로그램은 아무 말도 하지 않았다 -
+# 없는 것을 없다고 말하기로 한 약속이 조용히 깨져 있었다(Sprint171 실측).
+#
+# 모듈 자체는 뺄 수 없다 - moviepy가 들인다. 딸려 온 실행 파일만 뺀다.
+a.binaries = TOC([
+    entry for entry in a.binaries
+    if "imageio_ffmpeg" not in os.path.normpath(entry[0]).split(os.sep)
+])
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 

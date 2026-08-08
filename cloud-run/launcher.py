@@ -138,6 +138,73 @@ def _report_tools() -> list:
     return missing
 
 
+def _report_music() -> str:
+    """
+    배경 음악이 있는가. 없으면 그 자리를 돌려준다.
+
+    왜 켤 때 보는가
+    ---------------
+    렌더는 BGM을 반드시 하나 고른다. 없으면 몇 분을 쓴 뒤 마지막
+    단계에서 죽고, 그때의 문장은 사람이 읽어도 무엇을 해야 하는지
+    알 수 없다(Sprint171 실측: 묶은 프로그램은 이 이유로 단 한 번도
+    렌더를 끝내지 못했다).
+
+    개발 중에는 저장소의 assets/music이 그대로 잡히므로 아무 말도
+    하지 않는다.
+
+    받는 사람이 채울 수 있는 자리가 아니다
+    --------------------------------------
+    그 폴더는 묶인 프로그램 안이라 켤 때마다 새로 풀린다. 그래서
+    "여기에 넣으십시오"라고 하지 않는다 - 묶는 사람이 할 일이다.
+    """
+
+    from app.tools.music_review import DEFAULT_MUSIC_ROOT
+
+    for base, _, names in os.walk(DEFAULT_MUSIC_ROOT):
+        if any(name.lower().endswith(".mp3") for name in names):
+            return None
+
+    print()
+    print("  [알림] 이 묶음에는 배경 음악이 없어 영상을 만들 수 "
+          "없습니다.")
+    print("         자료 준비와 검사까지는 됩니다.")
+    print("         묶는 사람이 PACKAGING_BGM 으로 함께 넣어야 합니다.")
+
+    return DEFAULT_MUSIC_ROOT
+
+
+def use_our_ffmpeg():
+    """
+    엔진이 들어오기 전에, 우리가 찾은 ffmpeg를 imageio에게 알려 준다.
+    찾지 못하면 None.
+
+    왜 필요한가
+    -----------
+    moviepy는 들이는 순간 imageio_ffmpeg.get_ffmpeg_exe()를 부르고,
+    없으면 RuntimeError를 던진다 - 화면이 뜨기도 전이다.
+
+    imageio는 제 것을 따로 들고 다니는데, 그러면 같은 ffmpeg가 두 벌
+    실린다(Sprint171 실측: exe 안에 87MB, tools/에 또 87MB). 그래서
+    번들에서 그것을 빼고, 대신 tools/의 것을 쓰라고 가리킨다.
+
+    IMAGEIO_FFMPEG_EXE는 imageio가 스스로 정해 둔 문이다 - 우리가
+    남의 내부를 뒤지는 것이 아니다.
+
+    이미 사람이 정해 둔 값이 있으면 건드리지 않는다.
+    """
+
+    from app.services import media_tools
+
+    found = media_tools.available()[media_tools.FFMPEG]
+
+    if not found:
+        return None
+
+    os.environ.setdefault("IMAGEIO_FFMPEG_EXE", found)
+
+    return found
+
+
 def _open_browser(url: str):
     """
     잠시 뒤에 브라우저를 연다. 띄운 스레드를 돌려준다.
@@ -181,6 +248,7 @@ def _serve(argv) -> int:
     print(f"  내 것  {home}")
 
     _report_tools()
+    _report_music()
 
     print()
     print("  끄려면 이 창을 닫거나 Ctrl+C 를 누르십시오.")
@@ -193,6 +261,21 @@ def _serve(argv) -> int:
 
     wanted = ("--no-browser" not in argv
               and settings.load().get(settings.OPEN_BROWSER, True))
+
+    # 엔진을 들이기 전에 봐야 한다. moviepy는 들이는 순간 ffmpeg를
+    # 찾고, 없으면 라이브러리의 RuntimeError로 끝난다 - 그 문장에는
+    # 무엇을 어디에 넣으라는 말이 없다.
+    if use_our_ffmpeg() is None:
+        from app.services import media_tools
+
+        print("  ffmpeg 가 없어 시작할 수 없습니다.")
+        print(f"  프로그램 옆 {media_tools.BESIDE_DIRNAME} 폴더에 "
+              "ffmpeg.exe 를 넣고 다시 켜십시오.")
+        print("  이 폴더는 통째로 두어야 합니다.")
+
+        sys.stdout.flush()
+
+        return 1
 
     if wanted:
         _open_browser(url)

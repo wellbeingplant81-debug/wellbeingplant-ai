@@ -21,6 +21,7 @@ Sprint169 - Python 없이도 켤 수 있게 (Epic 58, Phase 1).
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -262,10 +263,19 @@ class FfmpegTest(unittest.TestCase):
         with open(spec, encoding="utf-8") as f:
             body = f.read()
 
+        # 설명글과 주석은 빼고 본다.
+        #
+        # 이 저장소는 같은 함정에 여러 번 걸렸다 - 무엇을 하지 말라는
+        # 규칙을 소스 텍스트로 검사하면, 그 규칙을 설명하는 제 주석에
+        # 걸린다. Sprint171에서 실제로 그랬다: 자리가 어긋났던 일을
+        # 적어 둔 주석 안의 "tools/ffmpeg.exe"가 위반으로 잡혔다.
+        code = re.sub(r'"""[\s\S]*?"""', "", body)
+        code = re.sub(r"(?m)#.*$", "", code)
+
         for invented in ("ffmpeg/ffprobe.exe", "ffmpeg/ffmpeg.exe",
                          "ffmpeg\\\\ffprobe.exe", "tools/ffmpeg.exe"):
             with self.subTest(invented=invented):
-                self.assertNotIn(invented, body)
+                self.assertNotIn(invented, code)
 
     def test_it_says_what_is_missing_instead_of_pretending(self):
         with patch.object(media_tools, "resolve", return_value="없는것"), \
