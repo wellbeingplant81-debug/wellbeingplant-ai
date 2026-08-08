@@ -443,6 +443,12 @@ a{color:var(--accent)}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
   border-radius:4px;margin-left:4px}
+.pbuild{margin:0 0 10px}
+.pbuild .sminput{background:#131926;border:1px solid #2a3346;border-radius:7px;
+  color:#dbe3f0;padding:6px 9px;font-size:12px;min-width:150px}
+.promptbox{width:100%;min-height:170px;font-family:ui-monospace,monospace;
+  font-size:11.5px;line-height:1.5;background:#0f141f;border:1px solid #2a3346;
+  border-radius:8px;color:#c8d2e2;padding:9px}
 </style>
 </head>
 <body>
@@ -3083,13 +3089,104 @@ function renderCurrentProviders(){
 }
 
 // 대본을 붙여넣기/직접 작성으로 고른 경우에만 입력 자리를 연다.
+// Sprint154 - Gemini 채팅에 붙여넣을 요청문.
+//
+// 서버가 만든다. 화면이 문장을 짓지 않는다 - 요청문은 엔진이 Gemini
+// API에 보내는 그것과 같아야 하고, 그 사실은 서버가 들고 있다.
+//
+// 우리가 대신 물어봐 주지 않는다. 부르는 순간 돈이 들고, 그러면
+// 무료 모드가 아니다.
+let scriptPrompt = null;
+
+// 요청문에는 사용자가 적은 말투·타겟이 섞여 든다. 그대로 HTML에
+// 넣으면 "<"가 태그로 읽혀 글이 잘리거나 페이지가 깨진다.
+function escHtml(text){
+  return String(text)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+async function buildScriptPrompt(){
+  const topic = ($("topic").value || "").trim();
+
+  if(!topic){ alert("먼저 위에 주제를 적어 주세요."); return; }
+
+  const r = await fetch("/studio/api/script-prompt", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      topic: topic,
+      style: ($("promptStyle") || {value: ""}).value,
+      audience: ($("promptAudience") || {value: ""}).value,
+    })});
+
+  if(!r.ok){
+    const detail = await r.json().catch(() => ({}));
+    alert(detail.detail || "요청문을 만들지 못했습니다.");
+    return;
+  }
+
+  scriptPrompt = await r.json();
+  renderScriptPrompt();
+}
+
+async function copyScriptPrompt(){
+  if(!scriptPrompt) return;
+
+  try {
+    await navigator.clipboard.writeText(scriptPrompt.prompt);
+    $("promptCopied").textContent = "복사했습니다. Gemini 채팅창에 붙여넣으세요.";
+  } catch(e) {
+    // 클립보드를 막아 둔 브라우저가 있다. 그때는 직접 고르게 둔다 -
+    // 되는 척하지 않는다.
+    const box = $("promptText");
+    if(box && box.select){ box.select(); }
+    $("promptCopied").textContent =
+      "브라우저가 복사를 막았습니다. 위 글을 직접 선택해 복사해 주세요.";
+  }
+}
+
+function renderScriptPrompt(){
+  const box = $("promptResult");
+  if(!box) return;
+
+  if(!scriptPrompt){ box.innerHTML = ""; return; }
+
+  box.innerHTML = `
+    <p class="muted" style="margin:10px 0 4px">생성할 요청문
+      <span class="src">Scene ${scriptPrompt.scene_count}개 ·
+        약 ${scriptPrompt.target_duration}초</span></p>
+    <textarea id="promptText" class="promptbox" readonly
+      >${escHtml(scriptPrompt.prompt)}</textarea>
+    <div class="rowbtns">
+      <button class="sm" onclick="copyScriptPrompt()">복사</button>
+      <span class="muted" id="promptCopied"></span>
+    </div>
+    <p class="muted" style="margin:6px 0 0">${
+      escHtml(scriptPrompt.how_to_use)}</p>`;
+}
+
 function renderScriptBox(){
   const chosen = optionOf("script", uiPick.script);
+
+  // 칸을 새로 그리면 앞서 만든 요청문은 버린다 - 그대로 두면 다른
+  // 주제로 만든 글이 남아 있게 된다.
+  scriptPrompt = null;
 
   if(chosen.mode === "import"){
     $("scriptBox").innerHTML = `<div class="modebox" style="display:block">
       <p class="muted">${chosen.tool}에서 만든 대본을 그대로 붙여넣으세요.
         API를 호출하지 않아 비용이 들지 않습니다.</p>
+
+      <!-- Sprint154 - 무엇을 물어야 할지부터 알려 준다. 잘못 물으면
+           답이 와도 파서가 못 읽는다. -->
+      <div class="pbuild">
+        <div class="rowbtns" style="margin-top:0">
+          <input id="promptStyle" class="sminput" placeholder="말투·스타일 (선택)">
+          <input id="promptAudience" class="sminput" placeholder="보는 사람 (선택)">
+          <button class="sm ghost" onclick="buildScriptPrompt()">요청문 만들기</button>
+        </div>
+        <div id="promptResult"></div>
+      </div>
+
       <textarea id="importRaw" placeholder="여기에 붙여넣기"></textarea>
       <div class="rowbtns">
         <button class="sm" onclick="runImport('importRaw')">가져오기</button>

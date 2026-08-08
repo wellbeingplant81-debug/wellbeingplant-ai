@@ -689,6 +689,38 @@ async def production_voice(
     }
 
 
+class ScriptPromptRequest(BaseModel):
+    # Sprint154 - 무엇에 대한 영상인가. 나머지는 비우면 엔진 기본값이다.
+    topic: str
+    target_duration: int = 0
+    scene_count: int = 0
+    style: str = ""
+    audience: str = ""
+
+
+@router.post("/api/script-prompt")
+def script_prompt(request: ScriptPromptRequest):
+    """
+    Sprint154 - Gemini 채팅에 붙여넣을 요청문을 만든다.
+
+    부르지 않는다. 글자를 만들 뿐이다 - 우리가 대신 물어봐 주면 그
+    순간 돈이 들고, 그러면 무료 모드가 아니다.
+    """
+
+    from app.services import script_prompt_builder
+
+    try:
+        return script_prompt_builder.build(
+            request.topic,
+            target_duration=request.target_duration,
+            scene_count=request.scene_count,
+            style=request.style,
+            audience=request.audience,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/api/production/import")
 def production_import(request: ChatImportRequest):
     """

@@ -155,6 +155,9 @@ ENDPOINTS = [
      "/studio/api/workspace",
      {"app.services.free_workspace.remember": {"root": REPO_ROOT},
       "app.services.free_workspace.status": {"root": REPO_ROOT}}),
+    # Sprint154 - 붙여넣을 요청문을 만든다. 글자만 만든다 - 모델을
+    # 부르지 않으므로 패치할 것이 없다.
+    ("POST", "/studio/api/script-prompt", {"topic": "40대 허리 건강 운동"}, []),
     # Sprint153 - 무엇이 필요하고 어디에 두면 되는가. 순수 읽기다 -
     # 만드는 함수는 하나도 부르지 않는다.
     ("GET", "/studio/api/review/{project_id}/requirements", None,
