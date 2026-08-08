@@ -192,6 +192,18 @@ ENDPOINTS = [
     ("DELETE", "/studio/api/review/{project_id}/scenes/{scene}/asset", None,
      ["app.services.asset_override.clear"],
      f"/studio/api/review/{PROJECT_ID}/scenes/1/asset"),
+    # Sprint161 - 봤고 괜찮다. 판정은 준비 상태에서 그대로 읽으므로
+    # 그 한 줄만 흉내 내면 계약을 볼 수 있다.
+    ("POST", "/studio/api/review/{project_id}/scenes/{scene}/confirm", None,
+     ["app.routers.studio._scene_row",
+      "app.services.review_confirm.save"],
+     f"/studio/api/review/{PROJECT_ID}/scenes/1/confirm",
+     {"app.routers.studio._scene_row":
+          {"scene": 1, "state": "review", "reasons": ["weak"],
+           "image": {"path": "x"}}}),
+    ("DELETE", "/studio/api/review/{project_id}/scenes/{scene}/confirm", None,
+     ["app.services.review_confirm.clear"],
+     f"/studio/api/review/{PROJECT_ID}/scenes/1/confirm"),
     # Sprint153 - 무엇이 필요하고 어디에 두면 되는가. 순수 읽기다 -
     # 만드는 함수는 하나도 부르지 않는다.
     ("GET", "/studio/api/review/{project_id}/requirements", None,

@@ -363,7 +363,7 @@ REVIEW = "review"
 BLOCKED = "blocked"
 
 
-def _scene_state(row: dict) -> tuple:
+def _scene_state(row: dict, override_gone: bool = False) -> tuple:
     """
     이 Scene 하나는 어떤 상태인가. (상태, 까닭들).
 
@@ -392,6 +392,14 @@ def _scene_state(row: dict) -> tuple:
         return BLOCKED, blocked
 
     review = []
+
+    # Sprint161 - 정해 둔 파일이 사라진 것도 Scene의 사실이다.
+    #
+    # Sprint158은 이것을 메모 목록에만 적었다. 그러면 전체 상태가
+    # 메모와 Scene별 판정 두 갈래에서 나오고, 확인해도 풀리지 않는
+    # 것이 생긴다. 까닭 하나로 모은다.
+    if override_gone:
+        review.append("override_gone")
 
     if image.get("asset_source") != OVERRIDE:
         if image.get("weak"):
@@ -537,7 +545,11 @@ def preparation(project_path: str, scenes: list) -> dict:
     # Sprint158 - 사람이 정해 뒀는데 그 파일이 사라진 것들.
     from app.services import asset_override
 
-    review = _review_notes(shared, rows, asset_override.missing(project_path))
+    # Sprint161 - 사람이 보고 괜찮다고 한 것.
+    from app.services import review_confirm
+
+    confirmations = review_confirm.load(project_path)
+    gone = asset_override.missing(project_path)
 
     # Sprint160 - Scene 하나씩 판정하고, 전체는 그것을 센다. 두 곳에서
     # 따로 세면 화면에 뜬 숫자가 표와 달라지고, 사람은 어느 쪽을
@@ -545,17 +557,44 @@ def preparation(project_path: str, scenes: list) -> dict:
     counts = {READY: 0, REVIEW: 0, BLOCKED: 0}
 
     for row in rows:
-        state, reasons = _scene_state(row)
+        state, reasons = _scene_state(row, str(row["scene"]) in gone)
+
+        confirmed = confirmations.get(str(row["scene"]))
+
+        # 확인은 "무엇을"에 묶인다. 파일이 바뀌었거나 새 까닭이
+        # 생겼으면 그 확인은 지금 상황을 덮지 못한다.
+        if state == REVIEW and review_confirm.covers(
+            confirmed, (row["image"] or {}).get("path"), reasons,
+        ):
+            state = READY
+        else:
+            confirmed = None
 
         row["state"] = state
-        row["reasons"] = reasons
+        # 볼 것이 없어진 것이 아니라 사람이 봤다는 뜻이다 - 까닭을
+        # 지우지 않는다.
+        row["reasons"] = [] if confirmed else reasons
+        row["confirmed"] = confirmed
         counts[state] += 1
+
+    # 메모는 판정이 난 뒤에 짓는다 - 확인한 Scene의 것은 빼고 적는다.
+    # 사람이 이미 본 것을 다시 늘어놓으면 "검토 필요 0"과 어긋난다.
+    review = _review_notes(
+        {path: [r for r in found if not r.get("confirmed")]
+         for path, found in shared.items()
+         if any(not r.get("confirmed") for r in found)},
+        [row for row in rows if not row.get("confirmed")],
+        gone,
+    )
 
     if counts[BLOCKED] or not rows:
         # Scene이 없으면 만들 것이 없다. 빈 것을 "준비 완료"라고 하면
         # 제작 버튼이 열리고, 눌러도 아무 일도 일어나지 않는다.
         state = BLOCKED
-    elif counts[REVIEW] or review:
+    elif counts[REVIEW]:
+        # Sprint161 - 센 것만 본다. 메모 목록을 함께 보면 사람이
+        # 확인해도 풀리지 않는 상태가 생긴다 - 메모는 까닭을 사람
+        # 말로 옮긴 것이고, 판정은 Scene별 상태에서 나온다.
         state = REVIEW
     else:
         state = READY

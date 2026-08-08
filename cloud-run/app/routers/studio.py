@@ -1547,6 +1547,76 @@ def review_clear_asset(project_id: str, scene: int):
     return {"scene": scene, "cleared": True}
 
 
+def _scene_row(path: str, scene: int):
+    """
+    준비 상태에서 그 Scene 한 줄을 꺼낸다.
+
+    판정을 여기서 다시 하지 않는다 - 화면이 보는 그 값을 그대로
+    본다. 두 곳에서 따로 재면 확인 버튼이 눌리는 조건과 화면에 뜬
+    상태가 갈린다.
+    """
+
+    from app.services import free_workspace, studio_review
+
+    scenes = studio_review.state(path).get("scenes") or []
+    report = free_workspace.preparation(path, scenes)
+
+    for row in report["scenes"]:
+        if row["scene"] == scene:
+            return row
+
+    return None
+
+
+@router.post("/api/review/{project_id}/scenes/{scene}/confirm")
+def review_confirm_scene(project_id: str, scene: int):
+    """
+    Sprint161 - 봤고 괜찮다.
+
+    무엇도 바꾸지 않는다. 사람이 본 것을 적을 뿐이다 - 확인했다고
+    우리가 더 나은 파일로 바꿔 주면, 사람이 확인한 것과 실제로
+    쓰이는 것이 달라진다.
+    """
+
+    from app.services import free_workspace, review_confirm
+
+    path = _project_path(project_id)
+    row = _scene_row(path, scene)
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Scene {scene}이 없습니다.")
+
+    if row["state"] == free_workspace.BLOCKED:
+        raise HTTPException(
+            status_code=400,
+            detail=(f"Scene {scene}은 아직 없는 것이 있습니다. "
+                    "없는 것은 확인으로 넘길 수 없습니다."),
+        )
+
+    if row["state"] != free_workspace.REVIEW:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Scene {scene}은 검토할 것이 없습니다.",
+        )
+
+    review_confirm.save(
+        path, scene, row["image"]["path"], row["reasons"],
+    )
+
+    return {"scene": scene, "confirmed": True, "reasons": row["reasons"]}
+
+
+@router.delete("/api/review/{project_id}/scenes/{scene}/confirm")
+def review_unconfirm_scene(project_id: str, scene: int):
+    """Sprint161 - 확인을 지운다. 다시 검토 필요가 된다."""
+
+    from app.services import review_confirm
+
+    review_confirm.clear(_project_path(project_id), scene)
+
+    return {"scene": scene, "confirmed": False}
+
+
 @router.get("/api/review/{project_id}/requirements")
 def review_requirements(project_id: str):
     """

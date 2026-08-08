@@ -474,6 +474,9 @@ a{color:var(--accent)}
 .drow:hover{background:#1b2130}
 .drow.review{color:#c9a06a}
 .drow.blocked{color:#e07a7a}
+.drow .dact{display:flex;gap:5px}
+.okline{display:flex;align-items:center;gap:8px;color:#5fd08a;font-size:12px;
+  margin:2px 0}
 .prep tr.need td{border-bottom:1px solid #1e2534;padding-top:0}
 .prep .needline{color:#c9a06a;font-size:12px;margin:2px 0}
 .prep .needline code{color:#e8d5b0;background:#1b2130;padding:1px 5px;
@@ -2571,7 +2574,35 @@ const STATE_LABEL = {ready: "준비 완료", review: "검토 필요", blocked: "
 const REASON_LABEL = {
   script: "대본 없음", image: "이미지 없음", voice: "음성 없음",
   weak: "약한 매칭", shared: "같은 파일 사용",
+  // Sprint161 - 정해 둔 파일이 없어진 것도 Scene의 사실이다.
+  override_gone: "정한 파일 없어짐",
 };
+
+// Sprint161 - 봤고 괜찮다.
+//
+// 무엇도 바꾸지 않는다. 사람이 본 것을 적을 뿐이다 - 확인했다고
+// 우리가 더 나은 파일로 바꿔 주면, 사람이 확인한 것과 실제로 쓰이는
+// 것이 달라진다.
+async function confirmScene(number){
+  const r = await fetch(
+    `/studio/api/review/${reviewProject}/scenes/${number}/confirm`,
+    {method: "POST"});
+
+  if(!r.ok){
+    const d = await r.json().catch(() => ({}));
+    alert(d.detail || "확인할 수 없습니다.");
+    return;
+  }
+
+  await refreshPreparation();
+}
+
+async function unconfirmScene(number){
+  await fetch(`/studio/api/review/${reviewProject}/scenes/${number}/confirm`,
+              {method: "DELETE"});
+
+  await refreshPreparation();
+}
 
 function readinessDashboard(){
   if(!preparation) return "";
@@ -2600,9 +2631,19 @@ function dashboardRow(row){
   const reasons = (row.reasons || [])
     .map(r => REASON_LABEL[r] || r).join(" · ");
 
+  // 확인은 검토 필요일 때만 뜬다. 없는 것은 확인으로 넘길 수 없다 -
+  // 넘기면 렌더가 막히는데 화면은 준비 완료라고 말한다.
+  const actions = row.state === "review"
+    ? `<button class="sm tiny" onclick="event.stopPropagation();
+         confirmScene(${row.scene})">확인</button>
+       <button class="sm ghost tiny" onclick="event.stopPropagation();
+         openAlternatives(${row.scene})">파일 변경</button>`
+    : "";
+
   return `<div class="drow ${row.state}" onclick="goToScene(${row.scene})">
     <span>${STATE_MARK[row.state]} Scene ${row.scene}</span>
     <span class="src">${escHtml(reasons)}</span>
+    <span class="dact">${actions}</span>
   </div>`;
 }
 
@@ -2647,7 +2688,8 @@ function preparationPanel(){
             onclick="openAlternatives(${row.scene})">바꾸기</button>` : ""}</td>
         <td>${prepCell(row.voice)}</td>
         <td>${row.video ? prepMark(true) : '<span class="src">-</span>'}</td>
-      </tr>${needRow(row.scene)}${alternativesRow(row)}`).join("")}</tbody>
+      </tr>${confirmedRow(row)}${needRow(row.scene)}${
+        alternativesRow(row)}`).join("")}</tbody>
     </table>
     ${prepReview()}
   </div>`;
@@ -2667,6 +2709,28 @@ function prepReview(){
     ${notes.map(n => `<div>${escHtml(n)}</div>`).join("")}
     <div class="muted">틀린 것은 아닙니다. 이대로 만들 수 있습니다.</div>
   </div>`;
+}
+
+// Sprint161 - 사람이 봤다는 표시. 무엇을 봤는지 함께 적는다.
+//
+// 볼 것이 없어진 것이 아니라 사람이 봤다는 뜻이므로, 되돌릴 수
+// 있어야 한다.
+function confirmedRow(row){
+  const found = row.confirmed;
+  if(!found) return "";
+
+  const reasons = (found.reasons || [])
+    .map(r => REASON_LABEL[r] || r).join(" · ");
+
+  return `<tr class="need"><td></td><td colspan="4">
+    <div class="okline">
+      <span class="yes">O</span> 확인함 · ${escHtml(reasons)}
+      ${found.confirmed_at ? `<span class="src">${
+        escHtml(found.confirmed_at)}</span>` : ""}
+      <button class="sm ghost tiny"
+              onclick="unconfirmScene(${row.scene})">확인 취소</button>
+    </div>
+  </td></tr>`;
 }
 
 // Sprint153 - 그 Scene에 무엇을 넣으면 되는지. 없을 때만 뜬다.
