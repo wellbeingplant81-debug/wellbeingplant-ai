@@ -273,6 +273,20 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-snapshot")
+def beta_snapshot_card():
+    """
+    Sprint192 - 지금을 한 장으로.
+
+    저장하지 않는다. 읽은 것을 그대로 내줄 뿐이고, 그 사실을 답이
+    직접 말한다 - 안 그러면 사람이 나중에 그 파일을 찾는다.
+    """
+
+    from app.services import beta_snapshot
+
+    return beta_snapshot.build()
+
+
 @router.get("/api/beta-readiness")
 def beta_readiness_card():
     """

@@ -551,6 +551,9 @@ a{color:var(--accent)}
   <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
   <!-- Sprint184 - 베타 현황. 로그인은 없다 - 이 서버는 127.0.0.1에만
        열려 있고 그것이 지금 유일한 경계다. -->
+  <button class="tag" id="openSnapshot" onclick="showSnapshot()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="지금을 한 장으로">Beta Snapshot</button>
   <button class="tag" id="openSummary" onclick="showSummary()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="베타 운영 정보를 한 장으로">Beta Summary</button>
@@ -4089,6 +4092,58 @@ const BETA_STAGE = {
 //
 // 서버가 기록을 한 번만 읽고 다섯에게 나눠 준 결과다. 화면이 다시
 // 세지 않는다 - 세면 한 장 안에서 숫자가 서로 어긋난다.
+// Sprint192 - 지금을 한 장으로.
+//
+// 저장되지 않는다. 그 사실을 서버가 note로 함께 주고 화면이 그대로
+// 띄운다 - 안 그러면 사람이 나중에 그 파일을 찾는다.
+async function showSnapshot(){
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-snapshot")).json();
+  }catch(err){
+    alert("Beta Snapshot 을 읽지 못했습니다.");
+    return;
+  }
+
+  const flow = (found.flow || []).map(row =>
+    `<span class="dc"><b>${escHtml(row.label)}</b> ${row.count}</span>`)
+    .join("");
+
+  const mark = row => row.ok === true ? '<span class="ok">O</span>'
+    : (row.ok === false ? '<span class="no">X</span>'
+                        : '<span class="src">?</span>');
+
+  const checks = (found.readiness.checks || []).map(row =>
+    `<li>${mark(row)} ${escHtml(row.label)}</li>`).join("");
+
+  const warned = (found.warnings || []).length
+    ? `<p class="muted" style="margin:8px 0 2px"><b>주의사항</b></p>
+       <ul class="muted" style="margin:0 0 0 16px">`
+      + found.warnings.map(w => `<li>${escHtml(w)}</li>`).join("")
+      + `</ul>`
+    : "";
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>Beta Snapshot</b>
+      <span class="src">확인 시점 ${escHtml(found.taken_at)}</span></div>
+    <p class="muted" style="margin:6px 0 2px"><b>Readiness</b>
+      O ${found.readiness.passed} · X ${found.readiness.failed}
+      · ? ${found.readiness.unknown}</p>
+    <ul class="muted" style="margin:0 0 0 16px">${checks}</ul>
+    <p class="muted" style="margin:10px 0 2px"><b>Flow</b>
+      <span class="src">설치본 ${found.installations}벌</span></p>
+    <div class="fsum">${flow}</div>
+    ${warned}
+    <p class="muted" style="margin:8px 0 0">${
+      escHtml(found.readiness.caution)}</p>
+    <p class="muted" style="margin:2px 0 0">${escHtml(found.note)}</p>`;
+
+  box.style.display = "block";
+}
+
 async function showSummary(){
   let found;
 

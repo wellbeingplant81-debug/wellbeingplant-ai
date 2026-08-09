@@ -193,6 +193,9 @@ ENDPOINTS = [
     # Sprint191 - 지금 확인되는 것들. 이미 있는 자리에 물어보기만
     # 하므로 패치할 것이 없다.
     ("GET", "/studio/api/beta-readiness", None, []),
+    # Sprint192 - 지금을 한 장으로. 앞의 두 자리가 낸 답을 담기만
+    # 하므로 패치할 것이 없다.
+    ("GET", "/studio/api/beta-snapshot", None, []),
     # Sprint185 - 무엇부터 고칠 것인가. dashboard가 낸 숫자만 읽으므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-insights", None, []),

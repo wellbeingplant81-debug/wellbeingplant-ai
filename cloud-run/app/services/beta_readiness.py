@@ -73,18 +73,24 @@ def _test_report() -> dict:
     return {"ok": said.startswith("OK"), "detail": said[:120]}
 
 
-def build() -> dict:
+def build(summary: dict = None) -> dict:
     """
     지금 확인되는 것들. 읽기만 한다.
 
     통과 기준을 새로 만들지 않는다 - 각 줄은 이미 있는 자리에
     물어본 답이다.
+
+    Sprint192 - 이미 만들어 둔 summary를 받을 수 있다. 한 장 안에서
+    여럿이 볼 때 각자 다시 읽으면 그 사이에 기록이 바뀌고, 숫자가
+    서로 어긋난다.
     """
 
     from app import app_info, runtime_paths
     from app.services import beta_summary, diagnostic_report, media_tools
 
-    summary = beta_summary.build()
+    if summary is None:
+        summary = beta_summary.build()
+
     funnel = {row["key"]: row["count"] for row in summary["funnel"]["steps"]}
 
     home = runtime_paths.home()
