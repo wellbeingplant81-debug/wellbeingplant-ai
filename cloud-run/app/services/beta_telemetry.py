@@ -269,6 +269,20 @@ def summary() -> dict:
     }
 
 
+def events() -> list:
+    """
+    적힌 사건들. 적힌 그대로 옮긴다.
+
+    Sprint177 - 보낼 꾸러미를 만드는 쪽이 쓰는 창구다. 그쪽이 파일을
+    직접 열면 울타리를 우회하게 되므로, 울타리를 들고 있는 여기서만
+    내준다.
+
+    베끼기다 - 받은 쪽이 손대도 적힌 것은 그대로다.
+    """
+
+    return [dict(entry) for entry in _read()["events"]]
+
+
 def report() -> str:
     """
     붙여 넣을 글. 서버가 짓는다.

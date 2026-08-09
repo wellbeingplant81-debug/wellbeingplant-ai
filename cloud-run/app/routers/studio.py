@@ -168,6 +168,27 @@ def about():
     return found
 
 
+@router.get("/api/beta-feedback")
+def beta_feedback_package():
+    """
+    Sprint177 - 보내 주실 것 한 덩이.
+
+    화면의 [베타 피드백 복사]가 읽는다. 개인의 것은 들어 있지 않다 -
+    beta_telemetry가 애초에 그런 것을 적지 않고, 꾸러미는 그 안에 있는
+    것만 옮긴다.
+
+    붙여 넣을 글도 여기서 짓는다. 화면이 제 나름대로 조립하면 받아
+    보는 글의 모양이 사람마다 달라진다.
+    """
+
+    from app.services import beta_feedback
+
+    found = beta_feedback.package()
+    found["report"] = beta_feedback.report()
+
+    return found
+
+
 def _workflow_store() -> str:
     # Sprint92 - 경로 정의는 studio_upload 한 곳에만 둔다. 파이프라인도
     # 같은 것을 본다.

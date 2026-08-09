@@ -536,7 +536,15 @@ a{color:var(--accent)}
   <button class="tag" id="copyAbout" onclick="copyAbout()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="판번호와 지금 상태를 복사합니다">정보 복사</button>
-  <span class="tag" id="contactTag">문의 {{APP_CONTACT}}</span>
+  <!-- Sprint177 - 묻기 전에 무엇을 보내면 되는지 먼저 말한다.
+       문의처만 보여 주면 사람은 "안 돼요"라고만 보내고, 우리는
+       되물어야 한다. -->
+  <span class="tag" id="contactTag">문의 {{APP_CONTACT}} ·
+    아래 [베타 피드백 복사] 내용을 함께 보내주시면 확인이 빠릅니다</span>
+  <button class="tag" id="copyBeta" onclick="copyBetaFeedback()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="버전과 사용 흐름을 한 덩이로 복사합니다"
+          >베타 피드백 복사</button>
   <!-- Sprint175 - 어디까지 갔는지. 값은 서버가 준다(/studio/api/about).
        개인의 것은 애초에 적히지 않는다. -->
   <span class="tag" id="usageTag">사용 기록 —</span>
@@ -3950,6 +3958,24 @@ async function showUsage(){
     "사용 기록 " + found.launch_count + "회"
     + " · " + (found.last_launch_at || "—")
     + " · " + last;
+}
+
+// Sprint177 - 보내 주실 것 한 덩이. 글은 서버가 짓는다.
+async function copyBetaFeedback(){
+  const button = $("copyBeta");
+
+  let text = "";
+
+  try{
+    const found = await (await fetch("/studio/api/beta-feedback")).json();
+    text = found.report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = "베타 피드백 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
 }
 
 async function copyUsage(){
