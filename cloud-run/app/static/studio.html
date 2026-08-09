@@ -4127,9 +4127,59 @@ async function showInsights(){
     <p class="muted" style="margin:10px 0 4px"><b>개선 후보</b></p>
     <ul class="muted" style="margin:0 0 0 16px">${
       (found.recommendations || [])
-        .map(r => `<li>${escHtml(r)}</li>`).join("")}</ul>`;
+        .map(r => `<li>${escHtml(r)}</li>`).join("")}</ul>
+    <div class="rowbtns" id="betaActionRow"></div>`;
 
   box.style.display = "block";
+
+  showBetaAction();
+}
+
+// Sprint186 - 그래서 어느 안내를 열면 되는가.
+//
+// 무엇을 열지도 서버가 정한다. 화면이 고르면 "겹치면 고르지 않는다"는
+// 규칙이 여기서 조용히 깨진다.
+let betaAction = null;
+
+async function showBetaAction(){
+  const row = $("betaActionRow");
+  if(!row) return;
+
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-actions")).json();
+  }catch(err){
+    return;
+  }
+
+  betaAction = found;
+
+  if(!found.action){
+    row.innerHTML = `<span class="muted">${escHtml(found.title)}</span>`;
+    return;
+  }
+
+  row.innerHTML = `<span class="muted">${escHtml(found.title)}</span>
+    <button class="sm" onclick="openBetaAction()">도움말 보기</button>`;
+}
+
+function openBetaAction(){
+  const go = betaAction && betaAction.action;
+
+  if(!go) return;
+
+  // 여는 것은 이미 있는 화면이다. 새 안내를 만들지 않는다.
+  if(go.target === "troubleshooting"){
+    showTrouble();
+    return;
+  }
+
+  showGuide();
+
+  const box = $("guideBox");
+
+  if(box){ box.scrollIntoView({behavior: "smooth", block: "center"}); }
 }
 
 async function showBeta(){

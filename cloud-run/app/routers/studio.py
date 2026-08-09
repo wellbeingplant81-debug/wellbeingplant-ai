@@ -222,6 +222,24 @@ def diagnostic_report_package(project_id: str = ""):
     return diagnostic_report.build(_workspace_store(), path)
 
 
+@router.get("/api/beta-actions")
+def beta_actions_card():
+    """
+    Sprint186 - 그래서 어느 안내를 열면 되는가.
+
+    해결 방법을 새로 만들지 않는다. 이미 있는 안내가 어디 있는지를
+    가리키기만 한다.
+
+    가리키는 것은 '막힌 단계'가 아니라 '그 다음 걸음'이다 - 폴더를
+    이미 고른 사람에게 폴더 안내를 열어 주면 자기가 이미 한 일을
+    다시 읽게 된다.
+    """
+
+    from app.services import beta_actions
+
+    return beta_actions.build()
+
+
 @router.get("/api/beta-insights")
 def beta_insights_card():
     """
