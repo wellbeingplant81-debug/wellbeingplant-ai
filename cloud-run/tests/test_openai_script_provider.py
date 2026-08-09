@@ -660,6 +660,7 @@ class TestTheCatalogOffersIt(unittest.TestCase):
             [sys.executable, "-c", code],
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
 
         self.assertEqual(result.stdout.strip(), "0", result.stderr[-800:])

@@ -348,6 +348,7 @@ class TestNothingWasReimplemented(unittest.TestCase):
              "print(len([m for m in sys.modules if m.startswith('boto')]))\n"],
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
 
         self.assertEqual(result.returncode, 0, result.stderr[-400:])

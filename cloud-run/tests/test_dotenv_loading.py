@@ -50,6 +50,8 @@ class TestDotenvLoading(unittest.TestCase):
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         return result.stdout.strip()
@@ -87,6 +89,8 @@ class TestDotenvLoading(unittest.TestCase):
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         self.assertEqual(result.stdout.strip(), "from_real_process_env")

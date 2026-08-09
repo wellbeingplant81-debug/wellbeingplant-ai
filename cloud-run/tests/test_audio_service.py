@@ -185,6 +185,7 @@ class RealAudioMixTestCase(unittest.TestCase):
                 "-c:a", codec, path,
             ],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return path
@@ -203,6 +204,7 @@ class RealAudioMixTestCase(unittest.TestCase):
         result = subprocess.run(
             ["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         for line in result.stderr.splitlines():
             if key in line:
@@ -280,18 +282,21 @@ class TestBgmDucking(RealAudioMixTestCase):
              "-i", "sine=frequency=440:sample_rate=44100",
              "-af", "volume=18dB", "-c:a", "pcm_s16le", loud_path],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         subprocess.run(
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{silence_seconds:.2f}",
              "-i", "anullsrc=r=24000:cl=mono",
              "-c:a", "pcm_s16le", silence_path],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         result = subprocess.run(
             ["ffmpeg", "-y", "-i", loud_path, "-i", silence_path,
              "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[out]",
              "-map", "[out]", "-c:a", "pcm_s16le", path],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return path
@@ -366,6 +371,7 @@ class TestBgmDucking(RealAudioMixTestCase):
                 "-c:a", "libmp3lame", isolated_path,
             ],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
 
         start, end = window
@@ -375,6 +381,7 @@ class TestBgmDucking(RealAudioMixTestCase):
         result = subprocess.run(
             ["ffmpeg", "-i", path, "-af", f"{af},volumedetect", "-f", "null", "-"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         for line in result.stderr.splitlines():
             if "mean_volume" in line:
@@ -386,6 +393,7 @@ class TestBgmDucking(RealAudioMixTestCase):
             ["ffmpeg", "-ss", f"{start}", "-t", f"{length}", "-i", path,
              "-af", "volumedetect", "-f", "null", "-"],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         for line in result.stderr.splitlines():
             if key in line:
@@ -433,6 +441,7 @@ class TestMergeContainsBgm(RealAudioMixTestCase):
                 "-c:a", "pcm_s16le", voice_path,
             ],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 

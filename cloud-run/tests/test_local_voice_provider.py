@@ -62,6 +62,7 @@ def _probe(path):
          ":format=duration",
          "-of", "default=noprint_wrappers=1", path],
         capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
     )
 
     found = {}

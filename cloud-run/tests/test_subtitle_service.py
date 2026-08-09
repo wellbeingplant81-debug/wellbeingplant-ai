@@ -316,6 +316,7 @@ class TestCreateSubtitlePositionTags(unittest.TestCase):
                 ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
                  "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
                 capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -610,6 +611,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
                 ["ffmpeg", "-y", "-f", "lavfi", "-t", "2.0",
                  "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
                 capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
@@ -629,6 +631,7 @@ class TestCreateSubtitleFinalAudioSnapping(unittest.TestCase):
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
              "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", final_audio_path],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return final_audio_path
@@ -743,6 +746,7 @@ class TestCreateSubtitleSilenceAwareTiming(unittest.TestCase):
             ["ffmpeg", "-y", "-f", "lavfi", "-t", f"{duration_seconds}",
              "-i", "anullsrc=r=24000:cl=mono", "-c:a", "pcm_s16le", audio_path],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 

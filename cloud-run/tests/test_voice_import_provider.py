@@ -564,6 +564,7 @@ class TestRealConversion(unittest.TestCase):
              "stream=codec_name,sample_rate,channels",
              "-of", "default=noprint_wrappers=1", placed],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         ).stdout
 
         self.assertIn(audio_policy.NARRATION_PCM_CODEC, probe)

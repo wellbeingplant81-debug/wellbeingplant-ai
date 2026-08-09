@@ -152,7 +152,8 @@ def _mean_db(audio, start, length):
     out = subprocess.run(
         ["ffmpeg", "-v", "info", "-ss", str(start), "-t", str(length),
          "-i", audio, "-af", "volumedetect", "-f", "null", "-"],
-        capture_output=True, text=True)
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace")
 
     found = re.search(r"mean_volume:\s*(-?\d+\.?\d*) dB", out.stderr)
 
@@ -185,7 +186,8 @@ class TestRealRenderFollowsTimelineOrder(unittest.TestCase):
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "default=nw=1:nk=1", self.video],
-            capture_output=True, text=True)
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
 
         expected = sum(s["secs"] for s in SPEC.values())
 

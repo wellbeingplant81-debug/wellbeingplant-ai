@@ -154,6 +154,7 @@ class RealAudioTestCase(unittest.TestCase):
                 "-c:a", "pcm_s16le", path,
             ],
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return path
