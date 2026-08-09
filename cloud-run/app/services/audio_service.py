@@ -1,7 +1,17 @@
+import logging
 import os
 import subprocess
 
 from app.services import media_tools
+
+# Sprint197 - ffmpeg가 한 말은 여기로 보낸다. print로 찍으면
+# studio_jobs._Tee가 그것을 사용자 Console에 쌓는다 - 한 번에 26~55줄,
+# 그 안에 절대 경로가 들어 있고, 파이프라인이 남긴 진짜 메시지가
+# 400줄 상한에서 밀려난다.
+#
+# 없애는 것이 아니라 옮기는 것이다. 기본 설정에서 debug는 아무 데도
+# 나가지 않지만, 필요하면 레벨만 올려 되살릴 수 있다.
+logger = logging.getLogger(__name__)
 
 from app.services import audio_policy
 from app.services.bgm_service import select_bgm
@@ -75,8 +85,8 @@ def concat_scene_audio(scene_audio_paths, output_file):
         errors="replace",
     )
 
-    print(result.stdout)
-    print(result.stderr)
+    logger.debug("ffmpeg stdout: %s", result.stdout)
+    logger.debug("ffmpeg stderr: %s", result.stderr)
 
     os.remove(list_file)
 
@@ -154,8 +164,8 @@ def mix_audio(project_path: str, bgm_category: str = None):
         errors="replace",
     )
 
-    print(result.stdout)
-    print(result.stderr)
+    logger.debug("ffmpeg stdout: %s", result.stdout)
+    logger.debug("ffmpeg stderr: %s", result.stderr)
 
     if result.returncode != 0:
         raise Exception(result.stderr)

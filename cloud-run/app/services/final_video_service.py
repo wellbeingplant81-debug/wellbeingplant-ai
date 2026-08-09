@@ -1,8 +1,17 @@
+import logging
 import os
 import subprocess
 
 from app.services import media_tools
 from app.services import audio_policy
+
+# Sprint197 - ffmpeg가 한 말은 여기로 보낸다. print로 찍으면
+# studio_jobs._Tee가 그것을 사용자 Console에 쌓는다 - 최종 mp4 한 번에
+# 55줄이고 그 안에 절대 경로가 있다.
+#
+# 실패 이유는 이것으로 지켜지는 것이 아니다. raise Exception(result.stderr)
+# 가 나르고 studio_jobs가 job["error"]에 적는다 - 그 길은 그대로 둔다.
+logger = logging.getLogger(__name__)
 
 
 # Sprint62 - Master Quality Render Pipeline. 최종 인코딩 품질 목표.
@@ -113,8 +122,8 @@ def merge_video_audio(project_path: str):
         errors="replace",
     )
 
-    print(result.stdout)
-    print(result.stderr)
+    logger.debug("ffmpeg stdout: %s", result.stdout)
+    logger.debug("ffmpeg stderr: %s", result.stderr)
 
     if result.returncode != 0:
         raise Exception(result.stderr)
