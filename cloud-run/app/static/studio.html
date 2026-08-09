@@ -537,6 +537,12 @@ a{color:var(--accent)}
           style="cursor:pointer;background:none;color:var(--dim)"
           title="판번호와 지금 상태를 복사합니다">정보 복사</button>
   <span class="tag" id="contactTag">문의 {{APP_CONTACT}}</span>
+  <!-- Sprint175 - 어디까지 갔는지. 값은 서버가 준다(/studio/api/about).
+       개인의 것은 애초에 적히지 않는다. -->
+  <span class="tag" id="usageTag">사용 기록 —</span>
+  <button class="tag" id="copyUsage" onclick="copyUsage()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="실행 횟수와 마지막 상태를 복사합니다">사용 기록 복사</button>
   <span class="tag" id="dsTag">dataset —</span>
   <a href="/studio/queue" style="color:#4c9aff;font-size:12px;
      text-decoration:none">Production Queue</a>
@@ -3896,26 +3902,19 @@ function renderFreeHome(){
 // 복사에 실패해도 그냥 넘어가지 않는다 - 눌렀는데 아무 일도 안
 // 일어나면 사람은 프로그램이 고장 난 줄 안다. 그때는 글을 화면에
 // 띄워서 손으로 긁어 갈 수 있게 한다.
-async function copyAbout(){
-  const button = $("copyAbout");
+// Sprint175 - 붙여 넣을 글도, 보여 줄 값도 서버가 짓는다.
+//
+// 두 버튼이 같은 자리(/studio/api/about)를 본다 - 화면이 제 나름대로
+// 조립하면 받아 보는 글의 모양이 사람마다 달라진다.
+async function _clipboard(button, text, done){
   const before = button.textContent;
-
-  let text = "";
-
-  try{
-    const found = await (await fetch("/studio/api/about")).json();
-    text = found.report;
-  }catch(err){
-    button.textContent = "정보를 못 읽음";
-    setTimeout(() => { button.textContent = before; }, 2000);
-    return;
-  }
 
   try{
     await navigator.clipboard.writeText(text);
-    button.textContent = "복사했습니다";
+    button.textContent = done;
   }catch(err){
-    // 클립보드를 못 쓰는 자리가 있다. 글을 보여 주는 것이 낫다.
+    // 클립보드를 못 쓰는 자리가 있다. 글을 보여 주는 것이 낫다 -
+    // 눌렀는데 아무 일도 안 일어나면 고장 난 줄 안다.
     const area = document.createElement("textarea");
     area.value = text;
     area.style.cssText = "position:fixed;left:12px;top:12px;z-index:9999;"
@@ -3927,6 +3926,62 @@ async function copyAbout(){
   }
 
   setTimeout(() => { button.textContent = before; }, 2000);
+}
+
+async function _about(){
+  return await (await fetch("/studio/api/about")).json();
+}
+
+// 실행 횟수와 마지막에 무슨 일이 있었는지. 화면 위에 그대로 둔다.
+async function showUsage(){
+  let found;
+
+  try{
+    found = (await _about()).usage;
+  }catch(err){
+    return;
+  }
+
+  const last = found.last_error_kind
+    ? "오류 " + found.last_error_kind
+    : (found.last_event || "—");
+
+  $("usageTag").textContent =
+    "사용 기록 " + found.launch_count + "회"
+    + " · " + (found.last_launch_at || "—")
+    + " · " + last;
+}
+
+async function copyUsage(){
+  const button = $("copyUsage");
+
+  let text = "";
+
+  try{
+    text = (await _about()).usage_report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = "사용 기록 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
+}
+
+async function copyAbout(){
+  const button = $("copyAbout");
+
+  let text = "";
+
+  try{
+    text = (await _about()).report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = "정보 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
 }
 
 function toggleFreeWizard(){
@@ -4682,6 +4737,9 @@ wireDrop("voiceDrop", "voiceFiles", pickVoiceFiles, uploadVoice);
 
 (async () => {
   await loadProjects();
+  // Sprint175 - 어디까지 갔는지를 위에 걸어 둔다. 못 읽어도 화면은
+  // 그대로 돈다 - showUsage가 조용히 넘긴다.
+  showUsage();
   const wanted = new URLSearchParams(location.search).get("project");
   if(wanted){ await openProject(wanted); }
 })();

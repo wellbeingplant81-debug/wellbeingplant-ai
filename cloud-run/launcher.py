@@ -178,6 +178,18 @@ def _prepare_home() -> str:
 
     settings.ensure()
 
+    # Sprint175 - 켰다고 적는다. 몇 번째인지와 언제인지뿐이다 -
+    # 누가·무엇을은 적지 않는다.
+    #
+    # 못 적어도 켜진다. 관찰이 제품을 멈추게 하면 관찰을 켠 것이
+    # 잘못이 된다.
+    try:
+        from app.services import beta_telemetry
+
+        beta_telemetry.launched()
+    except Exception:
+        pass
+
     return runtime_paths.home()
 
 

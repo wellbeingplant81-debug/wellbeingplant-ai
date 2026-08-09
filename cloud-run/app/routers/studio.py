@@ -130,7 +130,7 @@ def about():
     """
 
     from app import app_info, runtime_paths
-    from app.services import media_tools
+    from app.services import beta_telemetry, media_tools
 
     tools = media_tools.available()
 
@@ -147,6 +147,10 @@ def about():
         "tools": tools,
         "music": {"ready": music_ready, "where": music_where},
         "feedback": runtime_paths.feedback_root(),
+        # Sprint175 - 어디까지 갔는가. 개인의 것은 들어 있지 않다 -
+        # beta_telemetry가 애초에 그런 것을 적지 않는다.
+        "usage": beta_telemetry.summary(),
+        "usage_report": beta_telemetry.report(),
     }
 
     lines = [
@@ -858,15 +862,26 @@ def production_create_project(request: ImportProjectRequest):
     except ChatImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    from app.services import beta_telemetry
+
     try:
-        return create_from_script(
+        made = create_from_script(
             script,
             request.topic or script["title"],
             request.channel,
             request.source,
         )
     except ValueError as exc:
+        beta_telemetry.note_failure(exc)
+
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Sprint175 - 대본이 들어왔다는 사실만. 대본 내용도 제목도 적지
+    # 않는다.
+    beta_telemetry.note(beta_telemetry.SCRIPT_READY,
+                        once=made.get("project_id"))
+
+    return made
 
 
 @router.post("/api/projects/{project_id}/upload")
@@ -1065,6 +1080,20 @@ def job(job_id: str, console_from: int = 0):
         studio_service.stage_progress(path) if path
         else studio_service.stage_progress("")
     )
+
+    # Sprint175 - 만들기가 끝났는가. 화면이 이 자리를 1초마다 물어보므로
+    # 작업마다 한 번만 적는다.
+    #
+    # 왜 여기인가: 만드는 일은 다른 실에서 돌고, 그쪽은 이번 스프린트가
+    # 손대지 말라고 한 자리다. 화면이 결과를 알게 되는 유일한 길이
+    # 여기이므로 여기서 본다. 아무도 물어보지 않으면 적히지 않는다 -
+    # 그 한계를 숨기지 않는다.
+    from app.services import beta_telemetry
+
+    if result.get("state") == "done":
+        beta_telemetry.note(beta_telemetry.RENDER_COMPLETED, once=job_id)
+    elif result.get("state") == "failed":
+        beta_telemetry.note(beta_telemetry.RENDER_FAILED, once=job_id)
 
     return result
 
@@ -1429,10 +1458,18 @@ def workspace_choose(request: WorkspaceRequest):
 
     from app.services import free_workspace
 
+    from app.services import beta_telemetry
+
     try:
         free_workspace.remember(_workspace_store(), request.root)
     except free_workspace.WorkspaceError as exc:
+        beta_telemetry.note_failure(exc)
+
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # Sprint175 - 어디까지 갔는지만 적는다. 어느 폴더를 골랐는지는
+    # 적지 않는다 - 그것은 사람의 것이다.
+    beta_telemetry.note(beta_telemetry.WORKSPACE_SELECTED)
 
     return free_workspace.status(_workspace_store())
 
@@ -1446,12 +1483,20 @@ def review_preparation(project_id: str):
     말한다 - 렌더를 누르고 몇 분 뒤에 아는 것보다 낫다.
     """
 
-    from app.services import free_workspace, studio_review
+    from app.services import beta_telemetry, free_workspace, studio_review
 
     path = _project_path(project_id)
     scenes = studio_review.state(path).get("scenes") or []
 
-    return free_workspace.preparation(path, scenes)
+    found = free_workspace.preparation(path, scenes)
+
+    # Sprint175 - 준비가 됐다는 사실만. 어느 파일이 걸렸는지는 적지
+    # 않는다. 프로젝트마다 한 번이다 - 화면이 이 자리를 여러 번 본다.
+    if found.get("state") == "ready":
+        beta_telemetry.note(beta_telemetry.PREPARATION_READY,
+                            once=project_id)
+
+    return found
 
 
 def _library_item(path: str, wanted: str):
@@ -1713,12 +1758,20 @@ def review_output_check(project_id: str):
     빠졌는지 영영 모른 채 다음에도 같은 자리에서 걸린다.
     """
 
-    from app.services import output_check, studio_review
+    from app.services import beta_telemetry, output_check, studio_review
 
     path = _project_path(project_id)
     scenes = studio_review.state(path).get("scenes") or []
 
-    return output_check.build(path, scenes)
+    found = output_check.build(path, scenes)
+
+    # Sprint175 - 검사에서 걸렸다는 사실만. 무엇이 걸렸는지(scene 번호,
+    # 파일 이름)는 적지 않는다.
+    if found.get("state") == output_check.FAILED:
+        beta_telemetry.note(beta_telemetry.OUTPUT_CHECK_FAILED,
+                            once=project_id)
+
+    return found
 
 
 @router.get("/api/review/{project_id}/final-check")
@@ -1904,7 +1957,13 @@ def review_render(project_id: str):
     state = studio_review.state(path)
     problems = scene_order.render_problems(path, state.get("scenes") or [])
 
+    from app.services import beta_telemetry
+
     if problems:
+        # 무엇이 막았는지는 적지 않는다 - 그 문장에는 scene 번호와
+        # 파일 이름이 들어 있다.
+        beta_telemetry.note_failure("render_blocked")
+
         raise HTTPException(status_code=400, detail=" · ".join(problems))
 
     job_id = studio_review.render(
@@ -1912,6 +1971,8 @@ def review_render(project_id: str):
         project_id,
         meta.get("channel") or "wellbeing",
     )
+
+    beta_telemetry.note(beta_telemetry.RENDER_STARTED, once=job_id)
 
     return {"job_id": job_id}
 
