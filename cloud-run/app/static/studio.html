@@ -4138,9 +4138,62 @@ async function showSummary(){
       <b>오류 종류</b> ${errors}</p>
     ${(found.notes || []).map(n =>
         `<p class="muted" style="margin:4px 0 0">${escHtml(n)}</p>`)
-      .join("")}`;
+      .join("")}
+    <div id="readyBox"></div>`;
 
   box.style.display = "block";
+
+  showReadiness();
+}
+
+// Sprint191 - 지금 확인되는 것들.
+//
+// O / X / ? 를 서버가 정한다. 모르는 것은 X가 아니라 ? 다 - X는
+// "실패했다"로 읽힌다.
+async function showReadiness(){
+  const box = $("readyBox");
+  if(!box) return;
+
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-readiness")).json();
+  }catch(err){
+    return;
+  }
+
+  const groups = {};
+
+  (found.checks || []).forEach(row => {
+    (groups[row.group] = groups[row.group] || []).push(row);
+  });
+
+  const mark = row => row.ok === true ? '<span class="ok">O</span>'
+    : (row.ok === false ? '<span class="no">X</span>'
+                        : '<span class="src">?</span>');
+
+  const body = Object.entries(groups).map(([name, rows]) => `
+    <p class="muted" style="margin:8px 0 2px"><b>${escHtml(name)}</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${
+      rows.map(row => `<li>${mark(row)} ${escHtml(row.label)}
+        <span class="src">${escHtml(row.detail)}</span></li>`).join("")}
+    </ul>`).join("");
+
+  const warned = (found.warnings || []).length
+    ? `<p class="muted" style="margin:8px 0 2px"><b>주의</b></p>
+       <ul class="muted" style="margin:0 0 0 16px">`
+      + found.warnings.map(w => `<li>${escHtml(w)}</li>`).join("")
+      + `</ul>`
+    : "";
+
+  box.innerHTML = `
+    <div class="dh" style="margin-top:10px">
+      <b>AI영상제작소 Beta Readiness</b>
+      <span class="src">${escHtml(found.version)} · O ${found.passed}
+        · X ${found.failed} · ? ${found.unknown}</span></div>
+    ${body}
+    ${warned}
+    <p class="muted" style="margin:8px 0 0">${escHtml(found.caution)}</p>`;
 }
 
 async function showInsights(){

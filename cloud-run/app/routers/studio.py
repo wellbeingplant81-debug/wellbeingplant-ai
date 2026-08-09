@@ -273,6 +273,23 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-readiness")
+def beta_readiness_card():
+    """
+    Sprint191 - 지금 확인되는 것들.
+
+    통과 기준을 새로 만들지 않는다. 각 줄은 이미 있는 자리에 물어본
+    답이고, 모르는 것은 O도 X도 아닌 '모름'으로 낸다.
+
+    전부 O여도 "내보내도 된다"는 뜻이 아니다 - 그 말을 답이 직접
+    한다(caution).
+    """
+
+    from app.services import beta_readiness
+
+    return beta_readiness.build()
+
+
 @router.get("/api/beta-summary")
 def beta_summary_card():
     """
