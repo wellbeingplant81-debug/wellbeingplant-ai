@@ -222,6 +222,28 @@ def diagnostic_report_package(project_id: str = ""):
     return diagnostic_report.build(_workspace_store(), path)
 
 
+@router.get("/api/first-run-guide")
+def first_run_guide_card(project_id: str = ""):
+    """
+    Sprint183 - 처음 쓰는 사람의 여섯 걸음.
+
+    새로 판정하지 않는다. onboarding_state가 낸 답을 처음 쓰는 사람이
+    읽을 수 있는 낱말로 옮긴 것을 그대로 내준다.
+    """
+
+    from app.services import first_run_guide
+
+    path = None
+
+    if project_id:
+        try:
+            path = _project_path(project_id)
+        except Exception:
+            path = None
+
+    return first_run_guide.build(_workspace_store(), path)
+
+
 @router.get("/api/troubleshooting")
 def troubleshooting_center(project_id: str = ""):
     """

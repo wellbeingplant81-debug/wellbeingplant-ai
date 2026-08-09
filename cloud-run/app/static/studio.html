@@ -3874,6 +3874,9 @@ function freeHome(){
     <!-- Sprint180 - 지금 어디에서 막혔는가. 서버가 이어 붙인 것을
          그대로 그린다 - 화면이 다시 세면 "준비됨"이라는데 버튼이
          막히는 일이 생긴다. -->
+    <!-- Sprint183 - 처음 쓰는 사람에게는 상태 이름이 낯설다.
+         여섯 걸음으로 다시 적은 것을 위에 둔다. -->
+    <div id="guideBox"></div>
     <div id="onboardBox"></div>
     <div id="troubleBox" class="panel" style="display:none;margin-top:8px"></div>
     <div class="rowbtns">
@@ -3883,6 +3886,44 @@ function freeHome(){
   </div>`;
 
   showOnboarding();
+  showGuide();
+}
+
+// Sprint183 - 처음이신가요. 여섯 걸음 중 지금 어디인지.
+//
+// 걸음도 문장도 서버가 정한다 - 화면이 제 나름대로 세면 진행 표시와
+// 다른 걸음을 가리킨다.
+async function showGuide(){
+  const box = $("guideBox");
+  if(!box) return;
+
+  let found;
+
+  try{
+    const where = reviewProject
+      ? "?project_id=" + encodeURIComponent(reviewProject) : "";
+    found = await (await fetch(
+      "/studio/api/first-run-guide" + where)).json();
+  }catch(err){
+    return;
+  }
+
+  const lines = (found.steps || []).map(step => `
+    <span class="dc"><b>${step.step}. ${escHtml(step.title)}</b>
+      ${step.completed ? '<span class="ok">O</span>'
+        : (step.step === found.current
+            ? '<span class="no">지금</span>'
+            : '<span class="src">-</span>')}</span>`).join("");
+
+  const now = (found.steps || []).find(s => s.step === found.current);
+
+  box.innerHTML = `
+    <div class="dh"><b>처음이신가요</b>
+      <span class="src">여섯 걸음</span></div>
+    <p class="muted" style="margin:6px 0 0">${escHtml(found.headline)}</p>
+    <div class="fsum">${lines}</div>
+    ${now ? `<p class="muted" style="margin:6px 0 0">다음에 하실 일
+        <b>${escHtml(now.action)}</b></p>` : ""}`;
 }
 
 // Sprint180 - 여섯 줄과 다음에 할 일.

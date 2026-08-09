@@ -175,6 +175,9 @@ ENDPOINTS = [
     # Sprint181 - 무엇이 문제이고 어떻게 하면 되는가. 이미 나온 답을
     # 옮기기만 하므로 패치할 것이 없다.
     ("GET", "/studio/api/troubleshooting", None, []),
+    # Sprint183 - 처음 쓰는 사람의 여섯 걸음. 이미 나온 답을 옮기기만
+    # 하므로 패치할 것이 없다.
+    ("GET", "/studio/api/first-run-guide", None, []),
     # Sprint182 - 문의용 한 덩이. 이미 나온 답을 묶기만 하므로 패치할
     # 것이 없다.
     ("GET", "/studio/api/diagnostic-report", None, []),
