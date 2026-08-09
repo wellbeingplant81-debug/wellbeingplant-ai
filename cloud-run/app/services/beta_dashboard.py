@@ -183,14 +183,23 @@ def build() -> dict:
     # 종류만 적힌다. beta_telemetry가 애초에 메시지를 담지 않는다.
     kinds = {}
 
+    # Sprint189 - 어느 단계에서 무슨 오류가 났는가.
+    #
+    # 기록 한 벌 안에 "어디까지 갔는가"와 "마지막에 무엇에 걸렸는가"가
+    # 함께 적혀 있다. 그 둘을 한 벌 안에서 읽는 것은 사람을 가려내는
+    # 일이 아니다.
+    by_stage = {stage: {} for stage in STAGES}
+
     for record in records:
         kind = record.get("last_error_kind")
 
-        if kind:
-            kinds[kind] = kinds.get(kind, 0) + 1
-
         events = record.get("events") or []
         names = [entry.get("event") for entry in events]
+        stage = _reached(events)
+
+        if kind:
+            kinds[kind] = kinds.get(kind, 0) + 1
+            by_stage[stage][kind] = by_stage[stage].get(kind, 0) + 1
 
         launches += int(record.get("launch_count") or 0)
 
@@ -198,7 +207,7 @@ def build() -> dict:
             if name in names:
                 counted[name] += 1
 
-        blocked[_reached(events)] += 1
+        blocked[stage] += 1
 
     return {
         "installations": len(records),
@@ -212,6 +221,7 @@ def build() -> dict:
         "render_failed": counted[beta_telemetry.RENDER_FAILED],
         "blocked_stage": blocked,
         "error_kinds": kinds,
+        "error_by_stage": by_stage,
         # 받아 온 것을 어디에 넣으면 되는지. 화면이 그대로 보여 준다.
         "collected_dirname": COLLECTED_DIRNAME,
     }

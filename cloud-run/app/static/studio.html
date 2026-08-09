@@ -4253,11 +4253,47 @@ async function showBeta(){
     <div class="fsum">${rows}</div>
     <p class="muted" style="margin:10px 0 4px"><b>어디에서 멈췄는가</b></p>
     <ul class="muted" style="margin:0 0 0 16px">${stages}</ul>
-    <div id="funnelBox"></div>`;
+    <div id="funnelBox"></div>
+    <div id="loopBox"></div>`;
 
   box.style.display = "block";
 
   showFunnel();
+  showFeedbackLoop();
+}
+
+// Sprint189 - 단계마다 무엇이 붙는가.
+//
+// "의견 n건"이라고 쓰지 않는다. 있는 것은 "그 단계에서 멈춘 설치본
+// n벌"이다 - 서버가 그 차이를 notes로 함께 준다.
+async function showFeedbackLoop(){
+  const box = $("loopBox");
+  if(!box) return;
+
+  let found;
+
+  try{
+    found = await (await fetch(
+      "/studio/api/beta-feedback-insights")).json();
+  }catch(err){
+    return;
+  }
+
+  const rows = (found.stages || []).map(row => {
+    const errors = (row.errors || [])
+      .map(e => `${escHtml(e.kind)} ${e.count}`).join(", ");
+
+    return `<li>${escHtml(row.label)} · 멈춤 <b>${row.stopped}</b>${
+      errors ? ` <span class="src">${errors}</span>` : ""}</li>`;
+  }).join("");
+
+  box.innerHTML = `
+    <p class="muted" style="margin:10px 0 4px"><b>피드백 현황</b>
+      <span class="src">내 글 ${found.feedback_files}개</span></p>
+    <ul class="muted" style="margin:0 0 0 16px">${rows}</ul>
+    ${(found.notes || []).map(n =>
+        `<p class="muted" style="margin:4px 0 0">${escHtml(n)}</p>`)
+      .join("")}`;
 }
 
 // Sprint188 - 전체 흐름.

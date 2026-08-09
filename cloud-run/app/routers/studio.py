@@ -273,6 +273,22 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-feedback-insights")
+def beta_feedback_insights_card():
+    """
+    Sprint189 - 단계마다 무엇이 붙는가.
+
+    '단계별 의견 건수'는 만들지 않는다. 피드백 글에는 어느 단계에서
+    썼는지가 적히지 않고, 글과 기록을 짝지으면 그것이 곧 사용자
+    식별이다. 대신 실제로 있는 것(그 단계에서 멈춘 설치본 수, 그
+    단계에서 난 오류)을 붙이고, 그 차이를 답이 직접 말한다.
+    """
+
+    from app.services import beta_feedback_loop
+
+    return beta_feedback_loop.build()
+
+
 @router.get("/api/beta-funnel")
 def beta_funnel_card():
     """
