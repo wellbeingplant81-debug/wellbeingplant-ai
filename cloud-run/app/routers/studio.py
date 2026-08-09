@@ -222,6 +222,24 @@ def diagnostic_report_package(project_id: str = ""):
     return diagnostic_report.build(_workspace_store(), path)
 
 
+@router.get("/api/beta-dashboard")
+def beta_dashboard_panel():
+    """
+    Sprint184 - 베타가 어디에서 멈추는지.
+
+    세기만 한다. 기록은 설치본마다 하나이므로, 받아 온 것을
+    <관측 기록>/collected/ 에 넣어야 여럿이 세어진다 - 몇 벌을 보고
+    센 것인지(installations)를 함께 내주는 이유다.
+
+    로그인은 없다. 이 서버는 127.0.0.1에만 열려 있고, 그것이 지금
+    유일한 경계다 - "관리자 전용"이라고 부르지 않는다.
+    """
+
+    from app.services import beta_dashboard
+
+    return beta_dashboard.build()
+
+
 @router.get("/api/first-run-guide")
 def first_run_guide_card(project_id: str = ""):
     """

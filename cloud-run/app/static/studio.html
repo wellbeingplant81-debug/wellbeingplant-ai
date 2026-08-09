@@ -549,6 +549,11 @@ a{color:var(--accent)}
        개인의 것은 애초에 적히지 않는다. -->
   <span class="tag" id="usageTag">사용 기록 —</span>
   <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
+  <!-- Sprint184 - 베타 현황. 로그인은 없다 - 이 서버는 127.0.0.1에만
+       열려 있고 그것이 지금 유일한 경계다. -->
+  <button class="tag" id="openBeta" onclick="showBeta()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="베타가 어디에서 멈추는지">베타 현황</button>
   <button class="tag" id="openHelp" onclick="showTrouble()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="지금 무엇이 문제이고 어떻게 하면 되는지">문제 해결</button>
@@ -4046,6 +4051,64 @@ async function showTrouble(){
 }
 
 let troubleText = "";
+
+// Sprint184 - 베타 현황. 세는 일은 서버가 한다.
+//
+// 몇 벌을 보고 센 것인지(installations)를 반드시 함께 보여 준다 -
+// 내 것 하나만 보고 "사용자 1명"이라고 하면, 읽는 사람은 베타
+// 참가자가 한 명뿐이라고 오해한다.
+const BETA_ROWS = [
+  ["users_started", "실행한 설치본"],
+  ["launch_count", "총 실행 횟수"],
+  ["workspace_selected", "자료 연결"],
+  ["script_ready", "대본 준비"],
+  ["render_started", "제작 시작"],
+  ["render_completed", "렌더 완료"],
+  ["render_failed", "렌더 실패"],
+];
+
+const BETA_STAGE = {
+  start: "켜기만 함",
+  workspace_selected: "자료 연결에서 멈춤",
+  script_ready: "대본 준비에서 멈춤",
+  render_started: "제작 중 멈춤",
+  done: "끝까지 감",
+};
+
+async function showBeta(){
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-dashboard")).json();
+  }catch(err){
+    alert("베타 현황을 읽지 못했습니다.");
+    return;
+  }
+
+  const rows = BETA_ROWS.map(([key, label]) =>
+    `<span class="dc"><b>${label}</b> ${found[key]}</span>`).join("");
+
+  const stages = Object.entries(found.blocked_stage || {})
+    .map(([key, count]) =>
+      `<li>${escHtml(BETA_STAGE[key] || key)} · ${count}</li>`).join("");
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>베타 현황</b>
+      <span class="src">installations ${found.installations}벌</span></div>
+    <p class="muted" style="margin:6px 0 0">
+      기록은 설치본마다 하나입니다. 받아 오신 beta_usage.json 을
+      내 것 폴더의 .dataset\${escHtml(found.collected_dirname)} 에
+      넣으시면 함께 세어집니다.${
+        found.unreadable
+          ? ` 못 읽은 파일 ${found.unreadable}개.` : ""}</p>
+    <div class="fsum">${rows}</div>
+    <p class="muted" style="margin:10px 0 4px"><b>어디에서 멈췄는가</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${stages}</ul>`;
+
+  box.style.display = "block";
+}
 
 // Sprint182 - 문의용 한 덩이. 글은 서버가 짓는다.
 //
