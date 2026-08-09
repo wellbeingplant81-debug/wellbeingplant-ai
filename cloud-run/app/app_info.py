@@ -62,9 +62,25 @@ def build_date():
     return found.get("built_at") or None
 
 
+def label() -> str:
+    """이름과 판. 화면의 좁은 자리에 들어간다."""
+
+    return f"{NAME} {VERSION}"
+
+
 def title() -> str:
     """창과 로그의 첫 줄. 아는 것만 적는다."""
 
     made = build_date()
 
-    return f"{NAME} {VERSION}" + (f" ({made} 빌드)" if made else "")
+    return label() + (f" ({made} 빌드)" if made else "")
+
+
+# Sprint173 - 화면이 판번호를 말하는 자리.
+#
+# 화면에 판번호를 손으로 적지 않는다. 적으면 그 자리가 다음 판에
+# 뒤처지고, 실제로 그랬다 - 화면에는 "Studio v1"이라고 적혀 있었고
+# 프로그램은 0.1.0이었다.
+#
+# 화면은 이 표를 들고 있고, 내보낼 때 여기서 채운다.
+PAGE_TOKEN = "{{APP_VERSION}}"

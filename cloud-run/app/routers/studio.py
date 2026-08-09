@@ -89,13 +89,23 @@ def _project_path(project_id: str) -> str:
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
 def studio_page():
-    """Studio 화면."""
+    """
+    Studio 화면.
+
+    Sprint173 - 판번호를 여기서 채운다. 화면 파일에 적어 두면 그 자리가
+    다음 판에 뒤처진다 - 실제로 "Studio v1"이라고 적힌 채로 여러 판이
+    지나갔다. 값은 app_info 하나에서만 온다.
+    """
+
+    from app import app_info
 
     try:
         with open(_PAGE, "r", encoding="utf-8") as f:
-            return HTMLResponse(f.read())
+            page = f.read()
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="studio.html이 없습니다.")
+
+    return HTMLResponse(page.replace(app_info.PAGE_TOKEN, app_info.label()))
 
 
 def _workflow_store() -> str:

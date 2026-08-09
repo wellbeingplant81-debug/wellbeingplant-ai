@@ -526,7 +526,10 @@ a{color:var(--accent)}
 <body>
 <header>
   <h1>AI 영상제작소</h1>
-  <span class="tag">Studio v1</span>
+  <!-- Sprint173 - 내보낼 때 app_info가 채운다. 여기에 판번호를 손으로
+       적지 않는다 - 예전에 "Studio v1"이라고 적혀 있었고, 프로그램은
+       그 사이 여러 판을 지나 있었다. -->
+  <span class="tag" id="appVersion">{{APP_VERSION}}</span>
   <span class="tag" id="dsTag">dataset —</span>
   <a href="/studio/queue" style="color:#4c9aff;font-size:12px;
      text-decoration:none">Production Queue</a>
