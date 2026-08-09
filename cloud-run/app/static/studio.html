@@ -3867,11 +3867,83 @@ function freeHome(){
         : '<span class="src">-</span>'}
     </div>
     ${freeSummary()}
+    <!-- Sprint180 - 지금 어디에서 막혔는가. 서버가 이어 붙인 것을
+         그대로 그린다 - 화면이 다시 세면 "준비됨"이라는데 버튼이
+         막히는 일이 생긴다. -->
+    <div id="onboardBox"></div>
     <div class="rowbtns">
       <button class="sm" onclick="${next.action}">${next.label}</button>
       <span class="muted">${escHtml(next.why)}</span>
     </div>
   </div>`;
+
+  showOnboarding();
+}
+
+// Sprint180 - 여섯 줄과 다음에 할 일.
+//
+// 판정은 서버가 한다(/studio/api/onboarding). 여기서는 그린다.
+const ONBOARD_ACTION = {
+  FIRST_RUN: null,
+  WORKSPACE_REQUIRED: null,
+  SCRIPT_REQUIRED: null,
+  SCRIPT_CHECK_REQUIRED: null,
+  ASSET_REQUIRED: null,
+  RENDERING: null,
+  FAILED: null,
+  REVIEW_REQUIRED: () => openReview(reviewProject),
+  READY: () => openReview(reviewProject),
+  COMPLETED: () => openReview(reviewProject),
+};
+
+let onboardState = null;
+
+async function showOnboarding(){
+  const box = $("onboardBox");
+  if(!box) return;
+
+  let found;
+
+  try{
+    const where = reviewProject
+      ? "?project_id=" + encodeURIComponent(reviewProject) : "";
+    found = await (await fetch("/studio/api/onboarding" + where)).json();
+  }catch(err){
+    return;
+  }
+
+  onboardState = found;
+
+  const lines = (found.steps || []).map((step, at) => `
+    <span class="dc"><b>${at + 1}. ${escHtml(step.label)}</b>
+      ${step.done ? '<span class="ok">O</span>'
+                  : '<span class="src">-</span>'}</span>`).join("");
+
+  const why = (found.reasons || []).length
+    ? `<ul class="muted" style="margin:6px 0 0 16px">`
+      + found.reasons.slice(0, 5)
+          .map(r => `<li>${escHtml(r)}</li>`).join("")
+      + `</ul>`
+    : "";
+
+  // 누를 수 없는 자리에는 버튼을 띄우지 않는다 - 띄우면 사람은
+  // 그것을 누르고 아무 일도 안 일어나는 것을 본다.
+  const button = found.can_continue
+    ? `<button class="sm" onclick="onboardGo()">${
+         escHtml(found.next_action)}</button>`
+    : `<span class="muted">${escHtml(found.next_action)}</span>`;
+
+  box.innerHTML = `<div class="fsum">${lines}</div>
+    <p class="muted" style="margin:8px 0 0">
+      <b>${escHtml(found.title)}</b> ${escHtml(found.message)}</p>
+    ${why}
+    <div class="rowbtns">${button}</div>`;
+}
+
+function onboardGo(){
+  const go = onboardState && ONBOARD_ACTION[onboardState.state];
+
+  if(go){ go(); }
 }
 
 // 만들고 난 뒤의 요약. 무엇으로 만들어졌는지는 completion이 안다 -

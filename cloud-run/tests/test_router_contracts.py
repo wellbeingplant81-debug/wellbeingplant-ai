@@ -169,6 +169,9 @@ ENDPOINTS = [
     # Sprint177 - 보내 주실 것 한 덩이. 적혀 있는 것을 옮기기만 하므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-feedback", None, []),
+    # Sprint180 - 지금 어디에서 막혔는가. 이미 있는 답을 이어 붙여
+    # 내주기만 하므로 패치할 것이 없다.
+    ("GET", "/studio/api/onboarding", None, []),
     # Sprint179 - 붙여넣기 전에 읽어 본다. 읽고 말할 뿐이라 패치할
     # 것이 없다.
     ("POST", "/studio/api/script-check", {"raw": ""}, []),

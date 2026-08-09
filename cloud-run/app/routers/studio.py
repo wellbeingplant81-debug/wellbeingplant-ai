@@ -168,6 +168,35 @@ def about():
     return found
 
 
+@router.get("/api/onboarding")
+def onboarding(project_id: str = ""):
+    """
+    Sprint180 - 지금 어디에서 막혔는가.
+
+    새로 판정하지 않는다. 이미 있는 서비스가 낸 답을 이어 붙인 것을
+    그대로 내준다 - 여기서 다시 세면 화면이 "준비됨"이라는데 버튼을
+    누르면 막히는 일이 생긴다.
+
+    없는 프로젝트를 물어도 404를 던지지 않는다. 던지면 첫 화면이
+    통째로 비어 버린다 - 그 화면이 바로 "무엇을 해야 하는가"를
+    말해 줘야 하는 자리다.
+    """
+
+    from app.services import onboarding_state
+
+    path = None
+
+    if project_id:
+        # 다른 엔드포인트가 쓰는 그 자리를 그대로 쓴다 - 여기서만
+        # 다른 길로 찾으면 화면이 보는 프로젝트와 어긋난다.
+        try:
+            path = _project_path(project_id)
+        except Exception:
+            path = None
+
+    return onboarding_state.build(_workspace_store(), path)
+
+
 @router.get("/api/beta-feedback")
 def beta_feedback_package():
     """
