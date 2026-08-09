@@ -4335,6 +4335,53 @@ async function buildScriptPrompt(){
   renderScriptPrompt();
 }
 
+// Sprint179 - 붙여넣기 전에 대본을 읽어 본다.
+//
+// 판정은 서버가 한다. 화면이 제 나름대로 세면 "여기서는 됐다는데
+// 저기서 걸린다"가 되고, 그러면 사람이 검사를 믿지 않게 된다.
+//
+// 고쳐 주지 않는다 - 이유만 보여 준다.
+const SCRIPT_QUALITY = {ready: "준비됨", needs_work: "수정 필요"};
+
+async function checkScript(fromId, intoId){
+  const box = $(intoId);
+  const raw = ($(fromId) || {value: ""}).value;
+
+  if(!box) return;
+
+  box.innerHTML = `<p class="muted">읽어 보는 중…</p>`;
+
+  let found;
+
+  try{
+    const r = await fetch("/studio/api/script-check", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({raw: raw})});
+    found = await r.json();
+  }catch(err){
+    box.innerHTML = `<p class="muted">확인하지 못했습니다.</p>`;
+    return;
+  }
+
+  const word = SCRIPT_QUALITY[found.state] || found.state;
+  const ok = found.state === "ready";
+
+  const facts = found.scene_count
+    ? `<span class="src">Scene ${found.scene_count}개 ·
+         약 ${found.estimated_seconds}초</span>`
+    : "";
+
+  const why = (found.reasons || []).length
+    ? `<ul class="muted" style="margin:6px 0 0 16px">`
+      + found.reasons.map(r => `<li>${escHtml(r)}</li>`).join("")
+      + `</ul>`
+    : "";
+
+  box.innerHTML = `<p class="muted" style="margin:8px 0 0">
+      <b style="color:${ok ? "#4caf50" : "#ffb74d"}">${word}</b> ${facts}
+    </p>${why}`;
+}
+
 async function copyScriptPrompt(){
   if(!scriptPrompt) return;
 
@@ -4399,8 +4446,15 @@ function renderScriptBox(){
 
       <textarea id="importRaw" placeholder="여기에 붙여넣기"></textarea>
       <div class="rowbtns">
+        <!-- Sprint179 - 가져오기 전에 한 번 읽어 본다. 고쳐 주지
+             않는다 - 무엇이 잘못됐는지는 사람이 알아야 다음에도
+             같은 자리에서 걸리지 않는다. -->
+        <button class="sm ghost"
+                onclick="checkScript('importRaw','importQuality')"
+                >대본 품질 확인</button>
         <button class="sm" onclick="runImport('importRaw')">가져오기</button>
       </div>
+      <div id="importQuality"></div>
       <div id="importPreview"></div>
     </div>`;
     renderScriptWays();
@@ -4415,8 +4469,12 @@ function renderScriptBox(){
       <textarea id="manualRaw" placeholder="script.json 내용 또는 직접 작성"
                 style="margin-top:8px"></textarea>
       <div class="rowbtns">
+        <button class="sm ghost"
+                onclick="checkScript('manualRaw','manualQuality')"
+                >대본 품질 확인</button>
         <button class="sm" onclick="runImport('manualRaw')">가져오기</button>
       </div>
+      <div id="manualQuality"></div>
       <div id="manualPreview"></div>
     </div>`;
     return;

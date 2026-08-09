@@ -169,6 +169,9 @@ ENDPOINTS = [
     # Sprint177 - 보내 주실 것 한 덩이. 적혀 있는 것을 옮기기만 하므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-feedback", None, []),
+    # Sprint179 - 붙여넣기 전에 읽어 본다. 읽고 말할 뿐이라 패치할
+    # 것이 없다.
+    ("POST", "/studio/api/script-check", {"raw": ""}, []),
     # Sprint158 - 미리보기와 직접 고르기.
     #
     # 셋 다 훑어 둔 목록을 먼저 본다. 목록에 없는 경로는 내주지도

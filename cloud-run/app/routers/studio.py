@@ -818,6 +818,45 @@ def script_prompt(request: ScriptPromptRequest):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+class ScriptCheckRequest(BaseModel):
+    # Sprint179 - 붙여넣기 전에 읽어 볼 것 그대로.
+    raw: str = ""
+
+
+@router.post("/api/script-check")
+def script_check(request: ScriptCheckRequest):
+    """
+    Sprint179 - 붙여넣기 전에 대본을 읽어 본다.
+
+    고치지 않는다. 읽고 말할 뿐이다 - 우리가 대신 고치면 사람은
+    무엇이 잘못됐는지 영영 모르고, 다음에도 같은 자리에서 걸린다.
+
+    못 읽는 대본도 400으로 던지지 않는다. 던지면 화면은 "실패"라고만
+    하고, 무엇을 고쳐야 하는지는 사라진다.
+    """
+
+    from app.production.chat_script_parser import ChatImportError
+    from app.production.providers.chat_import import ChatImportScriptProvider
+    from app.production.stage_request import StageRequest
+    from app.services import script_quality_check
+
+    # 읽는 일은 여기서 한다. app.production 은 이 라우터만 들인다 -
+    # 서비스가 들이면 test_production_architecture가 막는다(Sprint166이
+    # 같은 자리에서 걸렸다).
+    script, refused = None, None
+
+    if (request.raw or "").strip():
+        try:
+            script = ChatImportScriptProvider().import_content(
+                request.raw, StageRequest(topic=""))
+        except ChatImportError as exc:
+            refused = str(exc)
+        except Exception as exc:
+            refused = f"대본을 읽지 못했습니다: {exc}"
+
+    return script_quality_check.check(script, refused=refused)
+
+
 @router.post("/api/production/import")
 def production_import(request: ChatImportRequest):
     """
