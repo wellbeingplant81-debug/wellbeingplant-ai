@@ -144,3 +144,117 @@ def workflow_root() -> str:
     """사람이 내린 결정들이 사는 곳(승인·내 자료 폴더)."""
 
     return os.path.join(home(), ".workflow")
+
+
+# Sprint172 - 배경 음악.
+#
+# 사용자 자리에서 이 이름으로 찾는다. 사람이 탐색기에서 열어 mp3를
+# 떨어뜨릴 자리다.
+MUSIC_DIRNAME = "music"
+
+# 분류하지 않은 곡이 들어가는 자리. 고르는 쪽(bgm_service)이 정한
+# 이름이고, 여기서 새로 짓지 않는다 - 두 자리가 다른 이름을 쓰면
+# 넣어 둔 곳과 찾는 곳이 어긋난다.
+#
+# 그 합의는 test_release_candidate가 못으로 박아 둔다.
+MUSIC_INBOX = "inbox"
+
+# 다른 자리를 쓰고 싶을 때 주는 환경변수.
+BGM_ENV = "AI_STUDIO_BGM"
+
+
+def _pickable(folder: str) -> bool:
+    """그 폴더 바로 아래에 mp3가 있는가."""
+
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return False
+
+    return any(
+        name.lower().endswith(".mp3")
+        and os.path.isfile(os.path.join(folder, name))
+        for name in names
+    )
+
+
+def _has_music(path: str) -> bool:
+    """
+    고르는 쪽이 여기서 한 곡이라도 고를 수 있는가.
+
+    "mp3가 어딘가 있는가"가 아니다 - 그렇게 세면 아무 데나 떨어뜨려
+    놓고 "있다"고 말한 뒤, 몇 분을 쓴 렌더가 마지막에 죽는다(실제로
+    한 번 그랬다). 고르는 쪽이 실제로 보는 자리만 센다.
+
+        <root>/inbox/*.mp3        분류하지 않은 것
+        <root>/<카테고리>/*.mp3   분류해 둔 것
+
+    아래로 더 파고들지 않는다 - 고르는 쪽도 그러지 않는다.
+    """
+
+    if _pickable(os.path.join(path, MUSIC_INBOX)):
+        return True
+
+    try:
+        names = os.listdir(path)
+    except OSError:
+        return False
+
+    return any(
+        _pickable(os.path.join(path, name))
+        for name in names
+        if os.path.isdir(os.path.join(path, name))
+    )
+
+
+def music_root() -> str:
+    """
+    배경 음악을 어디서 가져오는가.
+
+    왜 이 함수가 생겼는가
+    ---------------------
+    렌더는 마지막에 BGM을 반드시 하나 고른다. 그 자리가 여태 프로그램
+    안의 assets/music 하나뿐이었고, 묶으면 그것이 켤 때마다 새로 풀리는
+    임시 폴더가 된다 - 사람이 넣을 수 없는 자리다. 그래서 묶은
+    프로그램은 렌더를 단 한 번도 끝내지 못했다(Sprint171 실측).
+
+    무엇을 함께 보낼지는 우리가 정하지 않는다
+    -----------------------------------------
+    저장소의 assets/music은 2.9GB에 남의 이름이 붙은 트랙들이다.
+    그것을 남에게 재배포하는 일은 코드가 대신 정할 수 없고, 소리를
+    하나 지어 넣는 것도 하지 않는다 - 삐 소리를 배경 음악이라고
+    부르는 것은 되는 척이다.
+
+    대신 사람이 넣을 자리를 만들고, 켤 때 그 자리를 말한다.
+
+    보는 순서
+    ---------
+        1. AI_STUDIO_BGM            사람이 직접 가리킨 것
+        2. <사용자 자리>/music       사람이 넣어 둔 것
+        3. <프로그램>/assets/music   함께 묶여 온 것(PACKAGING_BGM)
+        4. <사용자 자리>/music       아직 없을 때 - 넣을 자리를 가리킨다
+
+    둘째가 셋째보다 앞이다 - 함께 보낸 것이 있더라도, 사람이 제 손으로
+    넣은 것을 우리가 덮지 않는다.
+
+    개발 중에는 예전 그대로다. 저장소의 assets/music에 이미 음악이
+    있으므로 셋째에서 잡힌다 - 여기서 자리가 바뀌면 어제까지 만들던
+    영상의 배경 음악이 통째로 사라진 것처럼 보인다.
+    """
+
+    given = os.environ.get(BGM_ENV)
+
+    if given:
+        return given
+
+    mine = os.path.join(home(), MUSIC_DIRNAME)
+
+    if _has_music(mine):
+        return mine
+
+    packed = os.path.join(bundle_root(), "assets", MUSIC_DIRNAME)
+
+    if _has_music(packed):
+        return packed
+
+    return mine

@@ -40,7 +40,18 @@ MUSIC_EXTENSION = ".mp3"
 
 _TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 _CLOUD_RUN_DIR = os.path.dirname(os.path.dirname(_TOOLS_DIR))
-DEFAULT_MUSIC_ROOT = os.path.join(_CLOUD_RUN_DIR, "assets", "music")
+
+# Sprint172 - 자리는 runtime_paths가 정한다.
+#
+# 여기에 __file__로 지어 두면 묶었을 때 그 자리가 켤 때마다 새로
+# 풀리는 임시 폴더가 된다. 사람이 넣을 수 없는 자리라, 묶은 프로그램은
+# 배경 음악을 영영 찾지 못했다(Sprint171 실측).
+#
+# 고르는 규칙은 한 글자도 바뀌지 않는다 - 어디를 보는가만 바뀐다.
+# 개발 중에는 예전과 같은 저장소의 assets/music이다.
+from app import runtime_paths
+
+DEFAULT_MUSIC_ROOT = runtime_paths.music_root()
 
 
 def resolve_key(key: str):

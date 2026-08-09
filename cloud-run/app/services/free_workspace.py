@@ -94,6 +94,15 @@ def remember(store_path: str, root: str) -> dict:
     없는 곳은 받지 않는다 - 적어 두면 나중에 조용히 빈 목록이 되고,
     사람은 자기가 폴더를 잘못 골랐다는 것을 모른 채 "자료가 없다"는
     말만 보게 된다.
+
+    Sprint172 - 열리지 않는 곳도 받지 않는다
+    ----------------------------------------
+    있기는 한데 읽을 수 없는 폴더가 그 규칙에서 빠져 있었다. 훑는
+    쪽(os.walk)이 권한 오류를 조용히 넘기기 때문에, 고른 사람은 위와
+    똑같이 "자료 0개"를 보게 된다 - 그리고 제 파일 이름이 잘못됐다고
+    생각하며 이름을 고치기 시작한다(Sprint171 실측).
+
+    까닭이 같으므로 자리도 같다. 여기서 한 번 열어 본다.
     """
 
     root = (root or "").strip()
@@ -103,6 +112,14 @@ def remember(store_path: str, root: str) -> dict:
 
     if not os.path.isdir(root):
         raise WorkspaceError(f"그런 폴더가 없습니다: {root}")
+
+    try:
+        os.listdir(root)
+    except OSError as failed:
+        raise WorkspaceError(
+            f"그 폴더를 읽을 수 없습니다: {root} "
+            f"({failed.strerror or failed})"
+        )
 
     directory = os.path.dirname(store_path)
 

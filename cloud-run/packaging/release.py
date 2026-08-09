@@ -84,11 +84,25 @@ def readme() -> str:
 
 없으면 켤 때 창이 알려 줍니다. 조용히 실패하지 않습니다.
 
+배경 음악을 먼저 넣으십시오
+---------------------------
+영상에는 배경 음악이 하나 깔립니다. 이 프로그램에는 음악이 들어 있지
+않습니다 - 남의 곡을 함께 배포할 수 없기 때문입니다.
+
+    %APPDATA%\\{runtime_paths.APP_DIRNAME}\\{runtime_paths.MUSIC_DIRNAME}\\{runtime_paths.MUSIC_INBOX}
+
+이 폴더에 mp3 를 넣으십시오. 한 곡이면 됩니다. 폴더는 처음 켤 때
+만들어져 있습니다.
+
+넣지 않으면 자료 준비와 검사까지는 되지만 영상은 만들어지지 않고,
+켤 때 창이 그 사실과 넣을 자리를 말합니다.
+
 내가 만든 것은 어디에 쌓입니까
 ------------------------------
 %APPDATA%\\{runtime_paths.APP_DIRNAME}
 
     output\\      만든 영상들
+    {runtime_paths.MUSIC_DIRNAME}\\       내가 넣은 배경 음악
     .workflow\\   내가 고른 자료 폴더, 확인해 둔 것
     .dataset\\    쌓인 기록
     logs\\        켜지지 않았을 때의 기록

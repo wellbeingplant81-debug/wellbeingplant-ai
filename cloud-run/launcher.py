@@ -116,6 +116,15 @@ def _prepare_home() -> str:
     runtime_paths.ensure(runtime_paths.workflow_root())
     runtime_paths.ensure(runtime_paths.dataset_root())
 
+    # Sprint172 - 배경 음악을 넣을 자리. 넣으라고 말해 놓고 그 폴더가
+    # 없으면, 사람은 만들어야 하는지 이름을 잘못 봤는지 알 수 없다.
+    #
+    # inbox까지 만든다 - 고르는 쪽이 보는 자리가 거기다. 위에만 만들면
+    # 사람은 거기에 떨어뜨리고, 렌더는 마지막에 못 찾는다.
+    runtime_paths.ensure(os.path.join(
+        runtime_paths.home(), runtime_paths.MUSIC_DIRNAME,
+        runtime_paths.MUSIC_INBOX))
+
     settings.ensure()
 
     return runtime_paths.home()
@@ -138,9 +147,9 @@ def _report_tools() -> list:
     return missing
 
 
-def _report_music() -> str:
+def _report_music():
     """
-    배경 음악이 있는가. 없으면 그 자리를 돌려준다.
+    배경 음악이 있는가. 없으면 넣을 자리를 돌려준다.
 
     왜 켤 때 보는가
     ---------------
@@ -149,28 +158,30 @@ def _report_music() -> str:
     알 수 없다(Sprint171 실측: 묶은 프로그램은 이 이유로 단 한 번도
     렌더를 끝내지 못했다).
 
-    개발 중에는 저장소의 assets/music이 그대로 잡히므로 아무 말도
-    하지 않는다.
+    Sprint172 - 넣을 자리를 알려 준다
+    ---------------------------------
+    예전에는 "묶는 사람이 넣어야 합니다"라고만 했다. 받은 사람이 할
+    수 있는 일이 없는 안내였다. 이제 그 자리는 사용자 자리 아래이고,
+    탐색기로 열어 mp3를 떨어뜨리면 된다.
 
-    받는 사람이 채울 수 있는 자리가 아니다
-    --------------------------------------
-    그 폴더는 묶인 프로그램 안이라 켤 때마다 새로 풀린다. 그래서
-    "여기에 넣으십시오"라고 하지 않는다 - 묶는 사람이 할 일이다.
+    개발 중에는 저장소의 assets/music이 잡히므로 아무 말도 하지 않는다.
     """
 
-    from app.tools.music_review import DEFAULT_MUSIC_ROOT
+    from app import runtime_paths
 
-    for base, _, names in os.walk(DEFAULT_MUSIC_ROOT):
-        if any(name.lower().endswith(".mp3") for name in names):
-            return None
+    where = runtime_paths.music_root()
+
+    if runtime_paths._has_music(where):
+        return None
+
+    inbox = os.path.join(where, runtime_paths.MUSIC_INBOX)
 
     print()
-    print("  [알림] 이 묶음에는 배경 음악이 없어 영상을 만들 수 "
-          "없습니다.")
-    print("         자료 준비와 검사까지는 됩니다.")
-    print("         묶는 사람이 PACKAGING_BGM 으로 함께 넣어야 합니다.")
+    print("  [알림] 배경 음악이 없어 영상을 만들 수 없습니다.")
+    print("         자료 준비와 검사까지는 그대로 됩니다.")
+    print(f"         이 폴더에 mp3 를 넣으십시오: {inbox}")
 
-    return DEFAULT_MUSIC_ROOT
+    return where
 
 
 def use_our_ffmpeg():

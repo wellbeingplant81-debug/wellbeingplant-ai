@@ -194,6 +194,23 @@ def scan(root: str) -> dict:
     items = []
     seen_paths = set()
 
+    # Sprint172 - 훑다가 못 읽은 자리들.
+    #
+    # os.walk는 권한 오류를 조용히 넘긴다(onerror가 없으면 그렇게
+    # 하기로 되어 있다). 그래서 열리지 않는 폴더의 파일들이 아무 말
+    # 없이 사라졌고, 화면은 "자료 0개"라고 말했다 - 고른 사람은 제
+    # 파일 이름이 잘못됐다고 생각하게 된다(Sprint171 실측).
+    #
+    # 여기서 세어 두면, 부른 쪽이 "몇 개 있다"와 "무엇을 못 봤다"를
+    # 함께 말할 수 있다.
+    unreadable = []
+
+    def _could_not_read(failed):
+        where = getattr(failed, "filename", None)
+
+        if where and where not in unreadable:
+            unreadable.append(where)
+
     for kind in KINDS:
         for folder_name in _folders(kind):
             folder = os.path.join(root, folder_name)
@@ -201,7 +218,8 @@ def scan(root: str) -> dict:
             if not os.path.isdir(folder):
                 continue
 
-            for base, _, names in os.walk(folder):
+            for base, _, names in os.walk(folder,
+                                          onerror=_could_not_read):
                 for name in sorted(names):
                     if not name.lower().endswith(EXTENSIONS[kind]):
                         continue
@@ -237,7 +255,8 @@ def scan(root: str) -> dict:
 
                     items.append(item)
 
-    return {"version": VERSION, "root": root, "items": items}
+    return {"version": VERSION, "root": root, "items": items,
+            "unreadable": unreadable}
 
 
 def save(project_path: str, index: dict) -> str:

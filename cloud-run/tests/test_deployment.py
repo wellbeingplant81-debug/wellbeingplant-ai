@@ -336,16 +336,32 @@ class DeploymentTest(unittest.TestCase):
         self.assertEqual(len(os.listdir(logs)), 1)
 
     # ── 2. 무료 제작 전체 흐름 ──────────────────────────────────
-    def test_full_free_mode_from_exe(self):
+    SCRIPT = {
+        "title": "아침 스트레칭 두 가지",
+        "hook": "일어나서 2분이면 됩니다",
+        "script": "무릎을 펴고 숨을 고릅니다. 그다음 허리를 세웁니다.",
+        "scenes": [
+            {"scene": 1, "narration": "무릎을 천천히 펴 주세요.",
+             "image_prompt": "무릎 스트레칭"},
+            {"scene": 2, "narration": "이제 허리를 곧게 세웁니다.",
+             "image_prompt": "허리 세우기"},
+        ],
+    }
+
+    def _ready_project(self):
         """
-        푼 폴더에서 대본을 넣고 영상이 나오기까지.
+        푼 폴더를 켜고, 내 자료로 이미지·음성까지 만들어 둔다.
+
+        두 검사가 이 자리까지 똑같이 온다. 한 번만 적는다 - 두 벌로
+        적으면 어느 날 한쪽만 고쳐진다.
 
         API 키를 하나도 주지 않는다 - 무료 모드가 정말 아무것도 부르지
-        않는다면 그래도 끝까지 간다.
+        않는다면 그래도 여기까지 온다.
         """
 
         folder = self._copy_release()
-        ffmpeg = os.path.join(folder, media_tools.BESIDE_DIRNAME, "ffmpeg.exe")
+        ffmpeg = os.path.join(folder, media_tools.BESIDE_DIRNAME,
+                              "ffmpeg.exe")
 
         self.assertTrue(os.path.isfile(ffmpeg), "함께 온 ffmpeg가 없다")
 
@@ -356,7 +372,8 @@ class DeploymentTest(unittest.TestCase):
 
         # 장면마다 다른 낱말이 걸리게 이름을 짓는다 - 같은 낱말을
         # 나눠 쓰면 한 파일이 두 장면에 걸려 검토가 된다.
-        for name, colour in (("무릎 스트레칭", "red"), ("허리 세우기", "blue")):
+        for name, colour in (("무릎 스트레칭", "red"),
+                             ("허리 세우기", "blue")):
             subprocess.run(
                 [ffmpeg, "-y", "-f", "lavfi",
                  "-i", f"color=c={colour}:s=1080x1920:d=1", "-frames:v", "1",
@@ -365,37 +382,33 @@ class DeploymentTest(unittest.TestCase):
 
         for number, seconds in ((1, 2.4), (2, 2.1)):
             subprocess.run(
-                [ffmpeg, "-y", "-f", "lavfi", "-i", f"sine=f=330:d={seconds}",
-                 "-ar", "24000", "-ac", "1",
+                [ffmpeg, "-y", "-f", "lavfi",
+                 "-i", f"sine=f=330:d={seconds}", "-ar", "24000", "-ac", "1",
                  os.path.join(workspace, "voices", f"scene{number}.wav")],
                 capture_output=True, check=True)
 
-        script = {
-            "title": "아침 스트레칭 두 가지",
-            "hook": "일어나서 2분이면 됩니다",
-            "script": "무릎을 펴고 숨을 고릅니다. 그다음 허리를 세웁니다.",
-            "scenes": [
-                {"scene": 1, "narration": "무릎을 천천히 펴 주세요.",
-                 "image_prompt": "무릎 스트레칭"},
-                {"scene": 2, "narration": "이제 허리를 곧게 세웁니다.",
-                 "image_prompt": "허리 세우기"},
-            ],
-        }
+        # Sprint172 - 배경 음악은 사람이 제 자리에 넣는 것이다.
+        #
+        # 프로그램에는 음악이 들어 있지 않다(남의 곡을 함께 배포할 수
+        # 없다). 받은 사람이 하는 그 일을 여기서 그대로 한다 - 여기서
+        # 쓰는 소리는 검사용으로 지은 것이지 배경 음악이 아니다.
+        music = os.path.join(self.home, runtime_paths.MUSIC_DIRNAME,
+                             runtime_paths.MUSIC_INBOX)
+        os.makedirs(music, exist_ok=True)
+
+        subprocess.run(
+            [ffmpeg, "-y", "-f", "lavfi", "-i", "sine=f=220:d=20",
+             "-filter:a", "volume=0.05", "-b:a", "96k",
+             os.path.join(music, "검사용 소리.mp3")],
+            capture_output=True, check=True)
 
         running = Running(os.path.join(folder, EXE_NAME), self.home)
         self.addCleanup(running.stop)
 
         self.assertIsNotNone(running.page())
 
-        # 배경 음악이 이 묶음에 있는가. 켤 때 프로그램이 스스로 말한다.
-        #
-        # 없으면 렌더는 마지막 단계에서 죽는다 - 그것을 여기서 실패로
-        # 적으면 "묶기가 깨졌다"로 읽히지만, 실제로는 무엇을 함께 보낼지
-        # 아직 정해지지 않은 것이다(저장소의 것은 2.9GB의 남의 트랙이다).
-        if "배경 음악이 없어" in running.rest(1.5):
-            self.skipTest(
-                "이 묶음에는 배경 음악이 없다 - 렌더까지 보려면 "
-                "PACKAGING_BGM 으로 함께 묶어야 한다")
+        # 음악이 있으므로 없다는 말을 하지 않는다.
+        self.assertNotIn("배경 음악이 없어", running.rest(1.5))
 
         chosen = running.call("/api/workspace", {"root": workspace}, "PUT")
 
@@ -404,8 +417,8 @@ class DeploymentTest(unittest.TestCase):
 
         made = running.call(
             "/api/production/project",
-            {"raw": json.dumps(script, ensure_ascii=False),
-             "topic": script["title"], "channel": "wellbeing"}, "POST")
+            {"raw": json.dumps(self.SCRIPT, ensure_ascii=False),
+             "topic": self.SCRIPT["title"], "channel": "wellbeing"}, "POST")
 
         project_id = made.get("project_id")
 
@@ -433,6 +446,36 @@ class DeploymentTest(unittest.TestCase):
 
             self.assertNotIn("__error__", answer,
                              f"{step}에서 멈췄다: {answer}")
+
+        return running, project_id
+
+    def test_full_free_mode_from_exe(self):
+        """
+        푼 폴더에서 대본을 넣고 만들 수 있는 상태까지.
+
+        영상을 실제로 뽑는 것은 test_render_complete_from_release_bundle이
+        본다 - 여기서도 뽑으면 한 번 돌 때마다 4분이 두 번 든다.
+        """
+
+        running, project_id = self._ready_project()
+
+        # 만들기 전에 막는 것이 없다. 렌더 버튼이 보는 그 판정이다.
+        final = running.call(f"/api/review/{project_id}/final-check")
+
+        self.assertEqual(final["state"], "ready",
+                         f"아직 막는 것이 있다: {final}")
+
+    # ── 2. 렌더 완주 ────────────────────────────────────────────
+    def test_render_complete_from_release_bundle(self):
+        """
+        푼 폴더에서 MP4가 나온다.
+
+        Sprint171까지 이 자리를 지나간 적이 없었다 - 화면과 자료
+        준비까지만 보았고, 정작 묶은 프로그램은 배경 음악을 찾지 못해
+        렌더를 끝내지 못하고 있었다.
+        """
+
+        running, project_id = self._ready_project()
 
         job = running.call(f"/api/review/{project_id}/render", {}, "POST")
 
@@ -462,10 +505,20 @@ class DeploymentTest(unittest.TestCase):
         self.assertTrue(check["video"]["exists"])
         self.assertGreater(check["video"]["seconds"] or 0, 0)
 
-        # 만든 것은 사람의 자리에 있다.
-        video = os.path.join(self.home, "output", project_id)
+        # 만든 것은 사람의 자리에 있고, 실제로 재생할 수 있는 크기다.
+        project = os.path.join(self.home, "output", project_id)
 
-        self.assertTrue(os.path.isdir(video))
+        self.assertTrue(os.path.isdir(project))
+
+        made = [
+            os.path.join(base, name)
+            for base, _, names in os.walk(project)
+            for name in names
+            if name.lower().endswith(".mp4")
+        ]
+
+        self.assertTrue(made, "MP4가 없다")
+        self.assertGreater(max(os.path.getsize(p) for p in made), 10_000)
 
     # ── 4. 오류 상황 ────────────────────────────────────────────
     def test_missing_tools_error(self):
@@ -513,17 +566,9 @@ class DeploymentTest(unittest.TestCase):
             self.assertIn("이미 쓰이고 있어", running.said)
             self.assertIsNotNone(running.page())
 
-    @unittest.expectedFailure
     def test_an_unreadable_workspace_is_reported_not_pretended(self):
         """
-        읽을 수 없는 폴더를 고르면 그렇다고 말해야 한다.
-
-        아직 그렇지 않다 - expectedFailure로 둔다
-        -----------------------------------------
-        고치는 것은 무료 모드를 건드리는 일이고, 이번 스프린트가 그것을
-        금지했다. 지운 채로 두면 다음 사람이 이 결함을 모른다. 그래서
-        "알고 있고 아직 안 고쳤다"로 남긴다 - 고치면 여기가 뜻밖의
-        성공으로 뜨고, 그때 이 표시를 떼면 된다.
+        읽을 수 없는 폴더를 고르면 그렇다고 말한다.
 
         Sprint171 실측에서 이것이 깨져 있었다 - C:\\Windows\\System32\\
         config 는 listdir이 PermissionError를 내는 폴더인데, 훑는 쪽이
@@ -532,8 +577,8 @@ class DeploymentTest(unittest.TestCase):
         고른 사람은 제 파일 이름이 잘못됐다고 생각하고 이름을 고치기
         시작한다. 실제로는 그 폴더를 읽을 수 없었을 뿐이다.
 
-        무료 모드를 고치는 것은 이번 스프린트가 금지했으므로, 여기서는
-        그 사실만 못으로 박아 둔다. 고치면 이 테스트가 초록이 된다.
+        Sprint172에서 고쳤다 - 없는 폴더를 거절하던 그 자리에서 함께
+        본다. expectedFailure 표시를 뗀 자리가 여기다.
         """
 
         blocked = r"C:\Windows\System32\config"
