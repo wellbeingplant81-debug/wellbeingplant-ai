@@ -197,6 +197,31 @@ def onboarding(project_id: str = ""):
     return onboarding_state.build(_workspace_store(), path)
 
 
+@router.get("/api/diagnostic-report")
+def diagnostic_report_package(project_id: str = ""):
+    """
+    Sprint182 - 문의할 때 그대로 보낼 한 덩이.
+
+    새로 판정하지 않는다. troubleshooting이 낸 답에 판번호와 갖춰진
+    것을 얹어 내준다.
+
+    도구는 있다/없다만 담는다 - 이 글은 밖으로 나가므로 어디 있는지를
+    담으면 남의 PC 구조가 함께 나간다. [정보 복사]와 다른 자리다.
+    """
+
+    from app.services import diagnostic_report
+
+    path = None
+
+    if project_id:
+        try:
+            path = _project_path(project_id)
+        except Exception:
+            path = None
+
+    return diagnostic_report.build(_workspace_store(), path)
+
+
 @router.get("/api/troubleshooting")
 def troubleshooting_center(project_id: str = ""):
     """

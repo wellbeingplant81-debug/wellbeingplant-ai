@@ -3993,6 +3993,10 @@ async function showTrouble(){
     ${how}
     <div class="rowbtns">
       <button class="sm" onclick="copyTrouble()">문의하기 (내용 복사)</button>
+      <!-- Sprint182 - 경로가 들어가지 않는 진단 글. 밖으로 나가는
+           것이라 도구는 있다/없다만 적힌다. -->
+      <button class="sm ghost" onclick="copyDiagnostic()"
+              >진단 정보 복사</button>
       <span class="muted" id="troubleCopied"></span>
     </div>`;
 
@@ -4001,6 +4005,36 @@ async function showTrouble(){
 }
 
 let troubleText = "";
+
+// Sprint182 - 문의용 한 덩이. 글은 서버가 짓는다.
+//
+// 복사가 막히면 화면에 띄운다 - 눌렀는데 아무 일도 안 일어나면
+// 사람은 고장 난 줄 안다.
+async function copyDiagnostic(){
+  let text = "";
+
+  try{
+    const where = reviewProject
+      ? "?project_id=" + encodeURIComponent(reviewProject) : "";
+    text = (await (await fetch(
+      "/studio/api/diagnostic-report" + where)).json()).report;
+  }catch(err){
+    $("troubleCopied").textContent = "진단 정보를 읽지 못했습니다.";
+    return;
+  }
+
+  try{
+    await navigator.clipboard.writeText(text);
+    $("troubleCopied").textContent = "복사했습니다. 문의처로 보내 주십시오.";
+  }catch(err){
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.cssText = "width:100%;height:200px;margin-top:8px";
+    $("troubleBox").appendChild(area);
+    area.select();
+    $("troubleCopied").textContent = "직접 복사하십시오.";
+  }
+}
 
 async function copyTrouble(){
   if(!troubleText) return;
