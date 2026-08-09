@@ -1081,19 +1081,12 @@ def job(job_id: str, console_from: int = 0):
         else studio_service.stage_progress("")
     )
 
-    # Sprint175 - 만들기가 끝났는가. 화면이 이 자리를 1초마다 물어보므로
-    # 작업마다 한 번만 적는다.
+    # Sprint176 - 결과는 여기서 적지 않는다.
     #
-    # 왜 여기인가: 만드는 일은 다른 실에서 돌고, 그쪽은 이번 스프린트가
-    # 손대지 말라고 한 자리다. 화면이 결과를 알게 되는 유일한 길이
-    # 여기이므로 여기서 본다. 아무도 물어보지 않으면 적히지 않는다 -
-    # 그 한계를 숨기지 않는다.
-    from app.services import beta_telemetry
-
-    if result.get("state") == "done":
-        beta_telemetry.note(beta_telemetry.RENDER_COMPLETED, once=job_id)
-    elif result.get("state") == "failed":
-        beta_telemetry.note(beta_telemetry.RENDER_FAILED, once=job_id)
+    # Sprint175는 여기서 적었다. 아무도 물어보지 않으면 아무것도 안
+    # 적혔고, 창을 닫아 두고 기다린 사람의 렌더는 기록에 없었다.
+    # 이제 만드는 실이 끝나는 자리(studio_jobs)에서 직접 적는다 -
+    # 두 자리가 적으면 한 번 돈 렌더가 두 번으로 보인다.
 
     return result
 
@@ -1972,7 +1965,7 @@ def review_render(project_id: str):
         meta.get("channel") or "wellbeing",
     )
 
-    beta_telemetry.note(beta_telemetry.RENDER_STARTED, once=job_id)
+    # 시작도 만드는 실이 적는다(Sprint176) - 여기서 또 적으면 두 번이다.
 
     return {"job_id": job_id}
 

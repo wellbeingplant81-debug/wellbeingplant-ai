@@ -191,6 +191,23 @@ def _run_regeneration(job_id: str, project_path: str, scenes) -> None:
         sys.stdout = original
 
 
+def _project_path_of(result) -> str:
+    """
+    만든 것이 어디 있는가. 결과를 볼 때만 쓴다.
+
+    엔진이 제 입으로 알려 준 자리를 쓴다. 여기서 project_id로 경로를
+    다시 지으면 규칙이 두 벌이 되고, 그 둘은 언젠가 어긋난다 -
+    실제로 한 번 어긋났다. project_service.OUTPUT_ROOT는 들일 때
+    한 번 정해지는 값이라, 개발 중에는 작업 디렉터리 기준의 상대
+    경로다. 그것으로 지은 자리는 만든 것이 있는 자리가 아니었다.
+    """
+
+    if not isinstance(result, dict):
+        return None
+
+    return result.get("output") or result.get("project_path")
+
+
 def _run(job_id: str, topic: str, channel: str,
          project_id: str = None) -> None:
     import sys
@@ -199,8 +216,22 @@ def _run(job_id: str, topic: str, channel: str,
     # 오지 않게 한다(테스트가 가벼워진다).
     from app.services.factory_service import generate_short_video
 
+    # Sprint176 - 베타 사용 기록. 여기가 만들기의 가장 바깥 자리다.
+    #
+    # 예전에는 화면이 이 작업을 물어볼 때 결과를 적었다. 아무도
+    # 물어보지 않으면 아무것도 안 적혔고, 창을 닫아 두고 기다린
+    # 사람의 렌더는 기록에 없었다 - 우리가 알고 싶은 것이 정확히
+    # 그 사람이다.
+    #
+    # 무엇을 적을지와 "됐다고 볼 수 있는가"는 beta_render_events가
+    # 정한다. 여기서는 부르기만 한다 - 이 파일은 작업을 굴리는
+    # 자리이지 판단하는 자리가 아니다.
+    from app.services import beta_render_events
+
     original = sys.stdout
     sys.stdout = _Tee(original, job_id)
+
+    beta_render_events.started()
 
     try:
         result = generate_short_video(
@@ -214,6 +245,8 @@ def _run(job_id: str, topic: str, channel: str,
                 job["project_id"] = result.get("project_id")
                 job["title"] = result.get("title")
 
+        beta_render_events.finished(_project_path_of(result))
+
     except Exception as exc:
         _append_line(job_id, f"[Studio] 생성 실패: {exc}")
         _append_line(job_id, traceback.format_exc())
@@ -223,6 +256,8 @@ def _run(job_id: str, topic: str, channel: str,
             if job is not None:
                 job["state"] = "failed"
                 job["error"] = str(exc)
+
+        beta_render_events.crashed(exc)
 
     finally:
         sys.stdout = original
