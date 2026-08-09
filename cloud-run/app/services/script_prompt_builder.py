@@ -103,18 +103,30 @@ def _extra(style: str, audience: str) -> str:
     )
 
 
-def how_to_use() -> str:
-    """받은 답을 어떻게 하면 되는가. 한 줄로."""
+# Sprint154가 보던 창. 고르지 않으면 이것이다.
+DEFAULT_WINDOW = "Gemini"
+
+
+def how_to_use(window: str = DEFAULT_WINDOW) -> str:
+    """
+    받은 답을 어떻게 하면 되는가. 한 줄로.
+
+    Sprint178 - 어느 창인지 받는다. 안내가 "Gemini 채팅창에"라고
+    고정돼 있으면, Claude를 고른 사람은 엉뚱한 창을 찾는다.
+
+    고르지 않으면 예전 문장 그대로다.
+    """
 
     return (
-        "Gemini 채팅창에 위 요청문을 붙여넣고, 돌아온 답 전체를 그대로 "
+        f"{window} 채팅창에 위 요청문을 붙여넣고, 돌아온 답 전체를 그대로 "
         f"복사해 아래 '가져오기' 칸에 붙여넣으십시오. "
         f"파일로 남기려면 내 자료 폴더의 {SAVE_TO} 에 저장하십시오."
     )
 
 
 def build(topic: str, target_duration: int = None, scene_count: int = None,
-          style: str = "", audience: str = "") -> dict:
+          style: str = "", audience: str = "",
+          window: str = DEFAULT_WINDOW) -> dict:
     """
     붙여넣을 요청문을 만든다. 아무것도 부르지 않는다.
 
@@ -160,5 +172,5 @@ def build(topic: str, target_duration: int = None, scene_count: int = None,
         "audience": (audience or "").strip(),
         "prompt": prompt + _extra(style, audience),
         "save_to": SAVE_TO,
-        "how_to_use": how_to_use(),
+        "how_to_use": how_to_use(window),
     }

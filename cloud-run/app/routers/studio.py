@@ -782,27 +782,33 @@ async def production_voice(
 
 class ScriptPromptRequest(BaseModel):
     # Sprint154 - 무엇에 대한 영상인가. 나머지는 비우면 엔진 기본값이다.
-    topic: str
+    #
+    # Sprint178 - 직접 입력은 물어볼 창이 없으므로 주제도 없다.
+    topic: str = ""
     target_duration: int = 0
     scene_count: int = 0
     style: str = ""
     audience: str = ""
+    # Sprint178 - 어느 채팅창에 넣을 글인가. 비우면 Sprint154 그대로다.
+    provider: str = ""
 
 
 @router.post("/api/script-prompt")
 def script_prompt(request: ScriptPromptRequest):
     """
-    Sprint154 - Gemini 채팅에 붙여넣을 요청문을 만든다.
+    Sprint154 - 채팅창에 붙여넣을 요청문을 만든다.
+    Sprint178 - 어느 창인지는 고른 사람이 정한다(script_provider).
 
     부르지 않는다. 글자를 만들 뿐이다 - 우리가 대신 물어봐 주면 그
     순간 돈이 들고, 그러면 무료 모드가 아니다.
     """
 
-    from app.services import script_prompt_builder
+    from app.services import script_provider
 
     try:
-        return script_prompt_builder.build(
-            request.topic,
+        return script_provider.build(
+            request.provider,
+            topic=request.topic,
             target_duration=request.target_duration,
             scene_count=request.scene_count,
             style=request.style,

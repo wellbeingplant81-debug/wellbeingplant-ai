@@ -49,6 +49,10 @@ _ALIASES = {
         "image_prompt", "imageprompt", "prompt", "이미지프롬프트", "이미지",
         "image",
     ),
+    # Sprint178 - 목소리 지시. Claude 요청문이 이 이름으로 달라고 한다.
+    "voice_prompt": (
+        "voice_prompt", "voiceprompt", "목소리", "음성프롬프트", "보이스",
+    ),
     "subject": ("subject", "인물", "대상", "피사체"),
     "action": ("action", "동작", "행동"),
     "environment": ("environment", "배경", "환경", "장소"),
@@ -187,6 +191,19 @@ def _scene_from_dict(payload: dict, index: int) -> dict:
     prompt = mapped.get("image_prompt")
     if prompt:
         scene["image_prompt"] = _clean(prompt)
+
+    # Sprint178 - 목소리 지시. 적혀 있으면 남긴다.
+    #
+    # Claude 요청문이 이것을 내라고 한다. 달라고 해 놓고 여기서
+    # 버리면 사람에게 쓸모없는 일을 시킨 것이 된다.
+    #
+    # 아직 아무도 읽지 않는다 - 지금 이것을 쓰는 자리는 없고,
+    # 그 사실을 감추지 않는다. SCENE_ELEMENTS에 넣지 않는 것도
+    # 그래서다. 그쪽은 이미지 프롬프트를 짓는 요소들이라 여기가
+    # 끼면 그림 묘사에 목소리 이야기가 섞인다.
+    voice = mapped.get("voice_prompt")
+    if voice:
+        scene["voice_prompt"] = _clean(voice)
 
     return scene
 

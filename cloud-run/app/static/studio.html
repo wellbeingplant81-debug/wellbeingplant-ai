@@ -4260,6 +4260,50 @@ function renderCurrentProviders(){
 // 무료 모드가 아니다.
 let scriptPrompt = null;
 
+// Sprint178 - 어느 채팅창에 물어볼 것인가.
+//
+// 이름은 서버(script_provider)가 정한 것을 그대로 쓴다 - 화면이
+// 제 나름의 이름을 지으면 서버가 모르는 값을 보내게 된다.
+const SCRIPT_WAYS = [
+  {name: "claude_chat", label: "Claude 채팅", button: "Claude 요청문 만들기"},
+  {name: "gemini_chat", label: "Gemini 채팅", button: "Gemini 요청문 만들기"},
+  {name: "manual", label: "직접 입력", button: "JSON 붙여넣기"},
+];
+
+let scriptWay = "gemini_chat";
+
+function pickScriptWay(name){
+  scriptWay = name;
+  scriptPrompt = null;
+  renderScriptWays();
+  renderScriptPrompt();
+}
+
+function scriptWayOf(name){
+  return SCRIPT_WAYS.find(w => w.name === name) || SCRIPT_WAYS[1];
+}
+
+// 고른 것에 따라 버튼 하나만 보여 준다. 셋을 다 띄우면 무엇을
+// 눌러야 하는지가 사라진다.
+function renderScriptWays(){
+  const box = $("scriptWays");
+  if(!box) return;
+
+  const chosen = scriptWayOf(scriptWay);
+
+  box.innerHTML = SCRIPT_WAYS.map(way => `
+    <label class="muted" style="margin-right:10px">
+      <input type="radio" name="scriptWay" value="${way.name}"
+             ${way.name === scriptWay ? "checked" : ""}
+             onchange="pickScriptWay('${way.name}')"> ${way.label}
+    </label>`).join("")
+    + (scriptWay === "manual"
+        ? `<span class="muted">아래 칸에 대본을 붙여넣고 '가져오기'를
+             누르십시오.</span>`
+        : `<button class="sm ghost" onclick="buildScriptPrompt()"
+             >${chosen.button}</button>`);
+}
+
 // 요청문에는 사용자가 적은 말투·타겟이 섞여 든다. 그대로 HTML에
 // 넣으면 "<"가 태그로 읽혀 글이 잘리거나 페이지가 깨진다.
 function escHtml(text){
@@ -4276,6 +4320,7 @@ async function buildScriptPrompt(){
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       topic: topic,
+      provider: scriptWay,
       style: ($("promptStyle") || {value: ""}).value,
       audience: ($("promptAudience") || {value: ""}).value,
     })});
@@ -4295,7 +4340,8 @@ async function copyScriptPrompt(){
 
   try {
     await navigator.clipboard.writeText(scriptPrompt.prompt);
-    $("promptCopied").textContent = "복사했습니다. Gemini 채팅창에 붙여넣으세요.";
+    $("promptCopied").textContent =
+      "복사했습니다. " + scriptWayOf(scriptWay).label + "창에 붙여넣으세요.";
   } catch(e) {
     // 클립보드를 막아 둔 브라우저가 있다. 그때는 직접 고르게 둔다 -
     // 되는 척하지 않는다.
@@ -4341,10 +4387,12 @@ function renderScriptBox(){
       <!-- Sprint154 - 무엇을 물어야 할지부터 알려 준다. 잘못 물으면
            답이 와도 파서가 못 읽는다. -->
       <div class="pbuild">
-        <div class="rowbtns" style="margin-top:0">
+        <!-- Sprint178 - 어느 채팅창에 물어볼 것인지 먼저 고른다. -->
+        <p class="muted" style="margin:0 0 4px">대본 생성 방식</p>
+        <div id="scriptWays" class="rowbtns" style="margin-top:0"></div>
+        <div class="rowbtns">
           <input id="promptStyle" class="sminput" placeholder="말투·스타일 (선택)">
           <input id="promptAudience" class="sminput" placeholder="보는 사람 (선택)">
-          <button class="sm ghost" onclick="buildScriptPrompt()">요청문 만들기</button>
         </div>
         <div id="promptResult"></div>
       </div>
@@ -4355,6 +4403,7 @@ function renderScriptBox(){
       </div>
       <div id="importPreview"></div>
     </div>`;
+    renderScriptWays();
     return;
   }
 
