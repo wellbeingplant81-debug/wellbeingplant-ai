@@ -551,6 +551,9 @@ a{color:var(--accent)}
   <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
   <!-- Sprint184 - 베타 현황. 로그인은 없다 - 이 서버는 127.0.0.1에만
        열려 있고 그것이 지금 유일한 경계다. -->
+  <button class="tag" id="openInsights" onclick="showInsights()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="무엇부터 고칠 것인가">베타 분석</button>
   <button class="tag" id="openBeta" onclick="showBeta()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="베타가 어디에서 멈추는지">베타 현황</button>
@@ -4074,6 +4077,60 @@ const BETA_STAGE = {
   render_started: "제작 중 멈춤",
   done: "끝까지 감",
 };
+
+// Sprint185 - 무엇부터 고칠 것인가.
+//
+// 겹치면 하나를 고르지 않고, 기록이 적으면 적다고 말한다. 그 판단도
+// 서버가 한다 - 화면이 제 나름대로 고르면 근거 없는 순위가 뜬다.
+async function showInsights(){
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-insights")).json();
+  }catch(err){
+    alert("베타 분석을 읽지 못했습니다.");
+    return;
+  }
+
+  const top = found.top_blocked_stage
+    ? escHtml(BETA_STAGE[found.top_blocked_stage]
+              || found.top_blocked_stage)
+    : (found.tied
+        ? "겹칩니다 (" + found.top_candidates
+            .map(s => escHtml(BETA_STAGE[s] || s)).join(", ") + ")"
+        : "막힌 곳이 보이지 않습니다");
+
+  const counts = Object.entries(found.stage_counts || {})
+    .map(([key, count]) =>
+      `<span class="dc"><b>${escHtml(BETA_STAGE[key] || key)}</b>
+         ${count}</span>`).join("");
+
+  const failures = (found.common_failures || []).length
+    ? `<p class="muted" style="margin:10px 0 4px"><b>자주 난 오류</b></p>
+       <ul class="muted" style="margin:0 0 0 16px">`
+      + found.common_failures.map(f =>
+          `<li>${escHtml(f.kind)} · ${f.count}건</li>`).join("")
+      + `</ul>`
+    : "";
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>베타 분석</b>
+      <span class="src">${found.installations}벌${
+        found.thin ? " · 적음" : ""}</span></div>
+    <p class="muted" style="margin:6px 0 0">
+      <b>가장 많이 막힌 단계</b> ${top}</p>
+    <p class="muted" style="margin:10px 0 4px"><b>단계별</b></p>
+    <div class="fsum">${counts}</div>
+    ${failures}
+    <p class="muted" style="margin:10px 0 4px"><b>개선 후보</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${
+      (found.recommendations || [])
+        .map(r => `<li>${escHtml(r)}</li>`).join("")}</ul>`;
+
+  box.style.display = "block";
+}
 
 async function showBeta(){
   let found;

@@ -222,6 +222,24 @@ def diagnostic_report_package(project_id: str = ""):
     return diagnostic_report.build(_workspace_store(), path)
 
 
+@router.get("/api/beta-insights")
+def beta_insights_card():
+    """
+    Sprint185 - 무엇부터 고칠 것인가.
+
+    세지 않는다. beta_dashboard가 낸 숫자만 읽는다 - 두 자리가 각각
+    세면 화면마다 다른 숫자가 뜬다.
+
+    겹치면 하나를 고르지 않고, 기록이 적으면 적다고 말한다 - 두
+    벌짜리에서 "가장 많이 막힌 곳"을 단정하면 그것은 자료가 아니라
+    우연이다.
+    """
+
+    from app.services import beta_insights
+
+    return beta_insights.build()
+
+
 @router.get("/api/beta-dashboard")
 def beta_dashboard_panel():
     """

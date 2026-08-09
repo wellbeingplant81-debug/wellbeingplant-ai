@@ -124,9 +124,14 @@ def _mine() -> dict:
     말해 주지 않는다.
     """
 
+    summary = beta_telemetry.summary()
+
     found = {
-        "launch_count": beta_telemetry.summary()["launch_count"],
+        "launch_count": summary["launch_count"],
         "events": beta_telemetry.events(),
+        # Sprint185 - 내 것의 오류 종류도 함께 센다. 빼 두면 보내온
+        # 것만 세어져서 내 PC에서 난 오류가 통계에서 사라진다.
+        "last_error_kind": summary.get("last_error_kind"),
     }
 
     return found if found["launch_count"] or found["events"] else None
@@ -172,7 +177,18 @@ def build() -> dict:
     blocked = {stage: 0 for stage in STAGES}
     launches = 0
 
+    # Sprint185 - 무엇에 걸렸는지도 센다. 세는 일은 이 한 자리에서만
+    # 한다 - 두 자리가 각각 세면 화면마다 다른 숫자가 뜬다.
+    #
+    # 종류만 적힌다. beta_telemetry가 애초에 메시지를 담지 않는다.
+    kinds = {}
+
     for record in records:
+        kind = record.get("last_error_kind")
+
+        if kind:
+            kinds[kind] = kinds.get(kind, 0) + 1
+
         events = record.get("events") or []
         names = [entry.get("event") for entry in events]
 
@@ -195,6 +211,7 @@ def build() -> dict:
         "render_completed": counted[beta_telemetry.RENDER_COMPLETED],
         "render_failed": counted[beta_telemetry.RENDER_FAILED],
         "blocked_stage": blocked,
+        "error_kinds": kinds,
         # 받아 온 것을 어디에 넣으면 되는지. 화면이 그대로 보여 준다.
         "collected_dirname": COLLECTED_DIRNAME,
     }
