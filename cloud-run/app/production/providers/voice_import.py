@@ -111,7 +111,8 @@ def _normalize(source: str, target: str) -> None:
     command = [FFMPEG, "-y", "-i", source] + audio_policy.pcm_output_args()
     command.append(target)
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
 
     if result.returncode != 0 or not os.path.exists(target):
         raise VoiceImportError(

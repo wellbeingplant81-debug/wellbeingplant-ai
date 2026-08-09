@@ -146,6 +146,8 @@ def _write_policy_audio(audio_bytes: bytes, output_file: str):
             + [output_file],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         )
 
         if result.returncode != 0:

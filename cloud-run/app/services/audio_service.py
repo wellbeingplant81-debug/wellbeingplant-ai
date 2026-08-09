@@ -71,6 +71,8 @@ def concat_scene_audio(scene_audio_paths, output_file):
         command,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     print(result.stdout)
@@ -148,6 +150,8 @@ def mix_audio(project_path: str, bgm_category: str = None):
         command,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     print(result.stdout)

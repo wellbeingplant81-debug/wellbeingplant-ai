@@ -242,6 +242,8 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
         command,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     if result.returncode != 0:

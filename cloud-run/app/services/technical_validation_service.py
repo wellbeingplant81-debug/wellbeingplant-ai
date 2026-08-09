@@ -35,6 +35,8 @@ def _ffprobe_duration(path):
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     text = result.stdout.strip()

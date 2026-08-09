@@ -121,7 +121,10 @@ class TestAssetIntegrationService(unittest.TestCase):
             content=b"fake video bytes",
         )
 
-        def _ffmpeg_side_effect(command, capture_output, text):
+        # Sprint196 - 넘어오는 키워드를 다 받는다. 무엇을 주는지
+        # 여기서 고정하면, 부르는 쪽이 인코딩 하나를 밝히는 것만으로도
+        # 이 테스트가 깨진다. 여기서 보는 것은 첫 프레임이 나오는가다.
+        def _ffmpeg_side_effect(command, **asked):
             output_path = command[-1]
             with open(output_path, "wb") as f:
                 f.write(b"fake frame bytes")

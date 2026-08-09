@@ -25,7 +25,10 @@ app/ 는 여기서 고치지 않았다
 
 import ast
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(
@@ -39,18 +42,11 @@ SKIP = {".venv", "__pycache__", ".git", "output", "dist", "build"}
 
 MAKERS = {"run", "Popen", "check_output", "call", "check_call"}
 
-# Sprint195에서 손대지 않기로 한 자리. 전부 ffmpeg/ffprobe를 부르는
-# Provider/Render 계열이다. 고치려면 그 동작을 건드려도 된다는 허락이
-# 먼저 있어야 한다.
-LEFT_IN_APP = {
-    "app/production/providers/voice_import.py": 1,
-    "app/providers/elevenlabs_provider.py": 1,
-    "app/services/asset_integration_service.py": 1,
-    "app/services/audio_service.py": 2,
-    "app/services/duration_optimizer.py": 3,
-    "app/services/final_video_service.py": 1,
-    "app/services/technical_validation_service.py": 1,
-}
+# Sprint196에서 열 곳을 모두 고쳤으므로 남은 것이 없다.
+#
+# 비워 두는 것에 뜻이 있다. 하나라도 새로 생기면 이 원장이 어긋나고,
+# 그러면 누군가 새 호출을 넣으면서 이 결함을 같이 들여왔다는 뜻이다.
+LEFT_IN_APP = {}
 
 
 def _is_true(node):
@@ -195,6 +191,104 @@ class TestWhatWeLeftInApp(unittest.TestCase):
 
     def test_the_ledger_still_matches(self):
         self.assertEqual(found_in("app"), LEFT_IN_APP)
+
+
+def _have_ffmpeg() -> bool:
+    from app.services import media_tools
+
+    return bool(shutil.which(media_tools.resolve(media_tools.FFMPEG))
+                or os.path.exists(media_tools.resolve(media_tools.FFMPEG)))
+
+
+@unittest.skipUnless(
+    _have_ffmpeg(),
+    "ffmpeg이 없습니다 - 이 자리에서는 위의 AST 검사만 남습니다")
+class TestKoreanPathsComeBackWhole(unittest.TestCase):
+    """
+    Sprint196 - 진짜 ffmpeg에게 한글 경로를 준다.
+
+    소스를 검사하는 것만으로는 부족하다. Sprint195에서 겪은 그대로다 -
+    검사 도구가 무엇을 못 보는지 모르면 통과가 곧 안전이 아니다.
+
+    주제명이 폴더 이름이 되는 자리가 실제로 있다. 평범한 한국어 주제
+    하나면 이 조건이 갖춰진다.
+    """
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+
+        # 주제명이 폴더가 되는 그 모양 그대로.
+        self.korean = os.path.join(self.home, "무릎 통증 완화 스트레칭")
+        os.makedirs(self.korean, exist_ok=True)
+
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+
+    def test_a_failure_says_why_instead_of_none(self):
+        """
+        실패한 그 순간이 이유가 가장 필요한 순간이다.
+
+        읽는 스레드가 죽으면 stderr가 None이 되고, 올라가는 것은
+        Exception(None)이다. 렌더는 깨졌는데 무엇 때문인지 알 길이
+        없다.
+        """
+
+        from app.services import duration_optimizer
+
+        missing = os.path.join(self.korean, "없는파일.wav")
+        target = os.path.join(self.korean, "결과.wav")
+
+        with self.assertRaises(Exception) as caught:
+            duration_optimizer.append_silence(missing, 0.2, target)
+
+        said = str(caught.exception)
+
+        self.assertNotEqual(said.strip(), "None")
+        self.assertTrue(said.strip(), "실패 이유가 비어 있습니다")
+
+        # 경로의 한글이 그대로 실려 와야 한다 - 그것이 어느 파일에서
+        # 났는지 말해 주는 유일한 단서다.
+        self.assertIn("무릎 통증 완화 스트레칭", said)
+
+    def test_a_korean_path_file_still_measures(self):
+        """
+        고친 뒤에도 평소 읽기는 그대로여야 한다.
+
+        이 자리는 stdout이 숫자뿐이라 원래도 무사했다. 무사한 채로
+        남아 있는지 본다.
+        """
+
+        from app.services import duration_optimizer
+
+        source = os.path.join(self.korean, "장면1_나레이션.wav")
+
+        subprocess.run(
+            [duration_optimizer.FFMPEG, "-y", "-f", "lavfi", "-t", "0.50",
+             "-i", "anullsrc=r=24000:cl=mono", source],
+            capture_output=True, encoding="utf-8", errors="replace")
+
+        self.assertAlmostEqual(
+            duration_optimizer.get_audio_duration(source), 0.50, places=1)
+
+    def test_making_something_in_a_korean_folder_still_works(self):
+        """
+        산출물이 달라지지 않았는지 - 만들어지고 길이가 맞는지 본다.
+        """
+
+        from app.services import duration_optimizer
+
+        source = os.path.join(self.korean, "장면2_나레이션.wav")
+        target = os.path.join(self.korean, "장면2_무음포함.wav")
+
+        subprocess.run(
+            [duration_optimizer.FFMPEG, "-y", "-f", "lavfi", "-t", "0.50",
+             "-i", "anullsrc=r=24000:cl=mono", source],
+            capture_output=True, encoding="utf-8", errors="replace")
+
+        duration_optimizer.append_silence(source, 0.30, target)
+
+        self.assertTrue(os.path.exists(target))
+        self.assertAlmostEqual(
+            duration_optimizer.get_audio_duration(target), 0.80, places=1)
 
 
 if __name__ == "__main__":

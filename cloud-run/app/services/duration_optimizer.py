@@ -55,6 +55,8 @@ def get_audio_duration(path: str) -> float:
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
 
     text = result.stdout.strip()
@@ -90,7 +92,8 @@ def append_silence(audio_path: str, pause_seconds: float, output_path: str) -> s
         output_path,
     ]
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
 
     if result.returncode != 0:
         raise Exception(result.stderr)
@@ -112,7 +115,8 @@ def speed_up_audio(audio_path: str, rate: float, output_path: str) -> str:
         output_path,
     ]
 
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
 
     if result.returncode != 0:
         raise Exception(result.stderr)
