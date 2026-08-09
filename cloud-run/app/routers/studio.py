@@ -273,6 +273,22 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-funnel")
+def beta_funnel_card():
+    """
+    Sprint188 - 몇 벌이 시작해서 몇 벌이 끝냈는가.
+
+    세지 않는다. beta_dashboard가 낸 숫자를 늘어놓고 뺄셈만 한다.
+
+    앞 칸보다 큰 칸이 나와도 다듬지 않는다 - 사건이 칸마다 따로
+    적히기 때문이고, 다듬으면 그것은 자료가 아니라 그림이다.
+    """
+
+    from app.services import beta_funnel
+
+    return beta_funnel.build()
+
+
 @router.get("/api/beta-dashboard")
 def beta_dashboard_panel():
     """

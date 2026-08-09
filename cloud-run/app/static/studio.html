@@ -4252,9 +4252,46 @@ async function showBeta(){
           ? ` 못 읽은 파일 ${found.unreadable}개.` : ""}</p>
     <div class="fsum">${rows}</div>
     <p class="muted" style="margin:10px 0 4px"><b>어디에서 멈췄는가</b></p>
-    <ul class="muted" style="margin:0 0 0 16px">${stages}</ul>`;
+    <ul class="muted" style="margin:0 0 0 16px">${stages}</ul>
+    <div id="funnelBox"></div>`;
 
   box.style.display = "block";
+
+  showFunnel();
+}
+
+// Sprint188 - 전체 흐름.
+//
+// 서버가 준 count를 그대로 그린다. 화면이 다시 세면 두 숫자가 어느
+// 날 어긋난다 - 앞 칸보다 큰 칸도 다듬지 않고 그대로 둔다.
+async function showFunnel(){
+  const box = $("funnelBox");
+  if(!box) return;
+
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-funnel")).json();
+  }catch(err){
+    return;
+  }
+
+  const rows = (found.steps || []).map(row => `
+    <li>${escHtml(row.label)} · <b>${row.count}</b>${
+      row.dropped ? ` <span class="no">-${row.dropped}</span>` : ""}</li>`)
+    .join("");
+
+  const rate = found.success_rate === null
+    ? "—"
+    : Math.round(found.success_rate * 1000) / 10 + "%";
+
+  box.innerHTML = `
+    <p class="muted" style="margin:10px 0 4px"><b>전체 흐름</b>
+      <span class="src">끝까지 ${rate}</span></p>
+    <ul class="muted" style="margin:0 0 0 16px">${rows}</ul>
+    ${(found.notes || []).map(n =>
+        `<p class="muted" style="margin:4px 0 0">${escHtml(n)}</p>`)
+      .join("")}`;
 }
 
 // Sprint182 - 문의용 한 덩이. 글은 서버가 짓는다.
