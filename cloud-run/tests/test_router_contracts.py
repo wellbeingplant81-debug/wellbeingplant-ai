@@ -187,6 +187,9 @@ ENDPOINTS = [
     # Sprint186 - 어느 안내를 열면 되는가. 가리키기만 하므로 패치할
     # 것이 없다.
     ("GET", "/studio/api/beta-actions", None, []),
+    # Sprint187 - 가리킨 걸음에 닿았는가. 적힌 것을 읽기만 하므로
+    # 패치할 것이 없다.
+    ("GET", "/studio/api/beta-action-progress", None, []),
     # Sprint182 - 문의용 한 덩이. 이미 나온 답을 묶기만 하므로 패치할
     # 것이 없다.
     ("GET", "/studio/api/diagnostic-report", None, []),

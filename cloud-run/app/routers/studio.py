@@ -222,6 +222,21 @@ def diagnostic_report_package(project_id: str = ""):
     return diagnostic_report.build(_workspace_store(), path)
 
 
+@router.get("/api/beta-action-progress")
+def beta_action_progress():
+    """
+    Sprint187 - 도움말이 가리킨 걸음에 닿았는가.
+
+    새 기록을 적지 않는다. 도움말을 언제 열었는지 모르므로 "도움말
+    때문에 넘어갔다"고 말할 수 없다 - 답에 그 사실(caution)을 함께
+    담아 화면이 '효과'로 읽지 않게 한다.
+    """
+
+    from app.services import beta_action_tracking
+
+    return beta_action_tracking.build()
+
+
 @router.get("/api/beta-actions")
 def beta_actions_card():
     """

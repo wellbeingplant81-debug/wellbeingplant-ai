@@ -4161,7 +4161,47 @@ async function showBetaAction(){
   }
 
   row.innerHTML = `<span class="muted">${escHtml(found.title)}</span>
-    <button class="sm" onclick="openBetaAction()">도움말 보기</button>`;
+    <button class="sm" onclick="openBetaAction()">도움말 보기</button>
+    <button class="sm ghost" onclick="showBetaProgress()"
+            >도움말 이후 진행</button>
+    <div id="betaProgress" class="muted" style="width:100%"></div>`;
+}
+
+// Sprint187 - 가리킨 걸음에 닿았는가.
+//
+// "도움말 덕분"이라고 쓰지 않는다. 언제 열었는지 적지 않으므로 그
+// 사이에 무슨 일이 있었는지 우리가 모른다 - 서버가 그 사실을
+// caution으로 함께 준다.
+async function showBetaProgress(){
+  const box = $("betaProgress");
+  if(!box) return;
+
+  let found;
+
+  try{
+    found = await (await fetch(
+      "/studio/api/beta-action-progress")).json();
+  }catch(err){
+    box.textContent = "진행을 읽지 못했습니다.";
+    return;
+  }
+
+  if(!found.target_event){
+    box.innerHTML = `<p style="margin:6px 0 0">잴 것이 없습니다 ·
+      ${escHtml(found.help.title)}</p>`;
+    return;
+  }
+
+  const word = found.reached
+    ? `닿았습니다 · ${escHtml(found.target_event)}`
+      + (found.reached_at ? ` (${escHtml(found.reached_at)})` : "")
+    : `아직 닿지 않았습니다 · ${escHtml(found.target_event)}`;
+
+  box.innerHTML = `
+    <p style="margin:6px 0 0"><b>도움말</b>
+      ${escHtml(found.help.title)}</p>
+    <p style="margin:2px 0 0"><b>결과</b> ${word}</p>
+    <p style="margin:2px 0 0" class="src">${escHtml(found.caution)}</p>`;
 }
 
 function openBetaAction(){
