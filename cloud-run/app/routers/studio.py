@@ -273,6 +273,20 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-summary")
+def beta_summary_card():
+    """
+    Sprint190 - 베타 운영 정보를 한 장으로.
+
+    새로 세지 않는다. 기록을 한 번만 읽고 그 하나를 다섯에게 나눠
+    준다 - 각자 읽으면 한 화면 안에서 숫자가 서로 어긋난다.
+    """
+
+    from app.services import beta_summary
+
+    return beta_summary.build()
+
+
 @router.get("/api/beta-feedback-insights")
 def beta_feedback_insights_card():
     """

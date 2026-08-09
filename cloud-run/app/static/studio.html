@@ -551,6 +551,9 @@ a{color:var(--accent)}
   <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
   <!-- Sprint184 - 베타 현황. 로그인은 없다 - 이 서버는 127.0.0.1에만
        열려 있고 그것이 지금 유일한 경계다. -->
+  <button class="tag" id="openSummary" onclick="showSummary()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="베타 운영 정보를 한 장으로">Beta Summary</button>
   <button class="tag" id="openInsights" onclick="showInsights()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="무엇부터 고칠 것인가">베타 분석</button>
@@ -4082,6 +4085,64 @@ const BETA_STAGE = {
 //
 // 겹치면 하나를 고르지 않고, 기록이 적으면 적다고 말한다. 그 판단도
 // 서버가 한다 - 화면이 제 나름대로 고르면 근거 없는 순위가 뜬다.
+// Sprint190 - 한 장으로 본 베타 현황.
+//
+// 서버가 기록을 한 번만 읽고 다섯에게 나눠 준 결과다. 화면이 다시
+// 세지 않는다 - 세면 한 장 안에서 숫자가 서로 어긋난다.
+async function showSummary(){
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-summary")).json();
+  }catch(err){
+    alert("Beta Summary 를 읽지 못했습니다.");
+    return;
+  }
+
+  const rows = (found.funnel.steps || []).map(row =>
+    `<span class="dc"><b>${escHtml(row.label)}</b> ${row.count}</span>`)
+    .join("");
+
+  const top = found.top_blocked_stage
+    ? escHtml(BETA_STAGE[found.top_blocked_stage]
+              || found.top_blocked_stage)
+    : (found.insights.tied ? "겹칩니다" : "보이지 않습니다");
+
+  const errors = (found.error_kinds || []).length
+    ? found.error_kinds
+        .map(e => `${escHtml(e.kind)} ${e.count}`).join(", ")
+    : "없음";
+
+  const next = found.next_action
+    ? escHtml(found.next_action.label)
+    : escHtml(found.action.title);
+
+  const rate = found.success_rate === null
+    ? "—"
+    : Math.round(found.success_rate * 1000) / 10 + "%";
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>AI영상제작소 Beta Summary</b>
+      <span class="src">설치본 ${found.installations}벌</span></div>
+    <p class="muted" style="margin:6px 0 0">
+      시작 <b>${found.started}</b> · 끝 <b>${found.finished}</b>
+      · 끝까지 ${rate}</p>
+    <div class="fsum">${rows}</div>
+    <p class="muted" style="margin:10px 0 0">
+      <b>가장 많이 멈춘 단계</b> ${top}</p>
+    <p class="muted" style="margin:2px 0 0">
+      <b>다음 행동</b> ${next}</p>
+    <p class="muted" style="margin:2px 0 0">
+      <b>오류 종류</b> ${errors}</p>
+    ${(found.notes || []).map(n =>
+        `<p class="muted" style="margin:4px 0 0">${escHtml(n)}</p>`)
+      .join("")}`;
+
+  box.style.display = "block";
+}
+
 async function showInsights(){
   let found;
 

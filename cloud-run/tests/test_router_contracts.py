@@ -187,6 +187,9 @@ ENDPOINTS = [
     # Sprint189 - 단계마다 무엇이 붙는가. 이미 센 것을 붙이기만 하므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-feedback-insights", None, []),
+    # Sprint190 - 한 장으로 본 베타 현황. 다섯이 낸 답을 담기만 하므로
+    # 패치할 것이 없다.
+    ("GET", "/studio/api/beta-summary", None, []),
     # Sprint185 - 무엇부터 고칠 것인가. dashboard가 낸 숫자만 읽으므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-insights", None, []),

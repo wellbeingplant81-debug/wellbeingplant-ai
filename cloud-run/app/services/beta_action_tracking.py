@@ -90,15 +90,21 @@ def _target(help_card: dict):
     return REACHED_BY.get(action.get("step"))
 
 
-def build() -> dict:
+def build(help_card: dict = None) -> dict:
     """
     도움말이 가리킨 걸음에 닿았는가. 읽기만 한다.
 
     닿았다는 것과 도움말 덕분이라는 것은 다르다 - caution이 그 말을
     함께 들고 다닌다.
+
+    Sprint190 - 이미 만들어 둔 카드를 받을 수 있다. 한 화면에서
+    여럿이 볼 때 각자 다시 읽으면 그 사이에 기록이 바뀌고, 숫자가
+    서로 어긋난다.
     """
 
-    help_card = beta_actions.build()
+    if help_card is None:
+        help_card = beta_actions.build()
+
     event = _target(help_card)
     there, when = reached(event)
 
