@@ -14,9 +14,104 @@ Sprint80 - UI에서 생성을 돌리고 진행을 보여 주기 위한 작업 �
 """
 
 import io
+import os
+import re
 import threading
 import traceback
 import uuid
+
+
+# Sprint198 - 실패했을 때 화면에 뜨는 글에서 경로를 가린다.
+#
+# 예외를 던지는 자리는 Render Engine과 Provider라 건드리지 않는다.
+# 대신 화면으로 나갈 때만 가린다 - 예외 객체는 원문을 그대로 들고
+# 있으므로 로그와 터미널에서는 전체 경로를 볼 수 있다. 보는 사람이
+# 다르면 보이는 것도 달라야 한다.
+#
+# 드라이브 문자로 시작해 구분자로 이어지는 조각들을 한 덩이로 본다.
+# 조각 안에 공백이 있어도 된다 - 이 저장소의 경로에는 주제명이 들어가
+# "무릎 통증 완화 스트레칭" 같은 폴더가 실제로 생긴다. \S+ 로 끊으면
+# "무릎"까지만 지우고 나머지가 남는다.
+#
+# 따옴표·꺾쇠는 조각에 넣지 않는다. traceback의 File "..." 과 ffmpeg의
+# '...' 이 그 문자로 끝나기 때문이다.
+_A_PATH = re.compile(
+    r"[A-Za-z]:[\\/](?:[^\\/\r\n\"'<>|*?:]*[\\/])*[^\\/\r\n\"'<>|*?:]*"
+)
+
+# 경로 뒤에 붙은 문장 부호. 파일 이름에 눌어붙지 않게 떼었다 붙인다.
+_TRAILING = " \t.,;:)]}-"
+
+
+def _places():
+    """
+    가릴 자리들. 긴 것부터 본다.
+
+    짧은 것을 먼저 맞춰 보면 그 안에 든 긴 것이 영영 안 걸린다 -
+    내 자료 폴더는 사용자 홈 아래에 있다.
+    """
+
+    from app import runtime_paths
+
+    found = []
+
+    for tag, get in (("<data_path>", runtime_paths.home),
+                     ("<app_path>", runtime_paths.program_dir),
+                     ("<app_path>", runtime_paths.bundle_root),
+                     ("<user_path>", lambda: os.path.expanduser("~"))):
+        try:
+            where = get()
+        except Exception:
+            # 가리기가 실패의 길을 막으면 안 된다. 못 알아본 자리는
+            # 아래 <path>가 받는다.
+            continue
+
+        if where:
+            found.append((os.path.normpath(where).rstrip("\\/"), tag))
+
+    return sorted(found, key=lambda pair: len(pair[0]), reverse=True)
+
+
+def _tag_for(path: str, places) -> str:
+    lowered = os.path.normpath(path).lower()
+
+    for where, tag in places:
+        if lowered.startswith(where.lower()):
+            return tag
+
+    return "<path>"
+
+
+def _masked(text: str) -> str:
+    """
+    화면으로 나갈 글에서 절대 경로를 가린다. 파일 이름은 남긴다.
+
+    어느 파일에서 났는지는 알 수 있어야 고칠 수 있다. 지우는 것은
+    그 파일이 어디에 있는가뿐이다.
+    """
+
+    if not text:
+        return ""
+
+    places = _places()
+
+    def swap(found):
+        whole = found.group(0)
+        tail = ""
+
+        while whole and whole[-1] in _TRAILING:
+            tail = whole[-1] + tail
+            whole = whole[:-1]
+
+        if not whole:
+            return found.group(0)
+
+        name = re.split(r"[\\/]", whole)[-1]
+        tag = _tag_for(whole, places)
+
+        return (f"{tag}\\{name}" if name else tag) + tail
+
+    return _A_PATH.sub(swap, text)
 
 
 # Console에 남길 줄 수. 무한히 쌓으면 긴 생성에서 메모리가 계속 는다.
@@ -178,14 +273,14 @@ def _run_regeneration(job_id: str, project_path: str, scenes) -> None:
                 job["state"] = "done"
 
     except Exception as exc:
-        _append_line(job_id, f"[Studio] 재생성 실패: {exc}")
-        _append_line(job_id, traceback.format_exc())
+        _append_line(job_id, _masked(f"[Studio] 재생성 실패: {exc}"))
+        _append_line(job_id, _masked(traceback.format_exc()))
 
         with _lock:
             job = _jobs.get(job_id)
             if job is not None:
                 job["state"] = "failed"
-                job["error"] = str(exc)
+                job["error"] = _masked(str(exc))
 
     finally:
         sys.stdout = original
@@ -248,14 +343,14 @@ def _run(job_id: str, topic: str, channel: str,
         beta_render_events.finished(_project_path_of(result))
 
     except Exception as exc:
-        _append_line(job_id, f"[Studio] 생성 실패: {exc}")
-        _append_line(job_id, traceback.format_exc())
+        _append_line(job_id, _masked(f"[Studio] 생성 실패: {exc}"))
+        _append_line(job_id, _masked(traceback.format_exc()))
 
         with _lock:
             job = _jobs.get(job_id)
             if job is not None:
                 job["state"] = "failed"
-                job["error"] = str(exc)
+                job["error"] = _masked(str(exc))
 
         beta_render_events.crashed(exc)
 
@@ -355,14 +450,14 @@ def _run_upload(job_id: str, target_fn) -> None:
                 job["upload"] = result
 
     except Exception as exc:
-        _append_line(job_id, f"[Studio] 업로드 실패: {exc}")
-        _append_line(job_id, traceback.format_exc())
+        _append_line(job_id, _masked(f"[Studio] 업로드 실패: {exc}"))
+        _append_line(job_id, _masked(traceback.format_exc()))
 
         with _lock:
             job = _jobs.get(job_id)
             if job is not None:
                 job["state"] = "failed"
-                job["error"] = str(exc)
+                job["error"] = _masked(str(exc))
 
     finally:
         sys.stdout = original
@@ -388,14 +483,14 @@ def _run_oauth(job_id: str, target_fn) -> None:
                 }
 
     except Exception as exc:
-        _append_line(job_id, f"[Studio] OAuth 실패: {exc}")
-        _append_line(job_id, traceback.format_exc())
+        _append_line(job_id, _masked(f"[Studio] OAuth 실패: {exc}"))
+        _append_line(job_id, _masked(traceback.format_exc()))
 
         with _lock:
             job = _jobs.get(job_id)
             if job is not None:
                 job["state"] = "failed"
-                job["error"] = str(exc)
+                job["error"] = _masked(str(exc))
 
     finally:
         sys.stdout = original
