@@ -162,6 +162,18 @@ MUSIC_INBOX = "inbox"
 # 다른 자리를 쓰고 싶을 때 주는 환경변수.
 BGM_ENV = "AI_STUDIO_BGM"
 
+# Sprint174 - 겪은 일을 적어 두는 자리.
+#
+# 사용자 자리 아래다. 프로그램 폴더에 두면 새 판을 덮어씌울 때 함께
+# 사라지고, 그때 사라지는 것은 우리가 아직 못 읽은 이야기다.
+FEEDBACK_DIRNAME = "feedback"
+
+
+def feedback_root() -> str:
+    """적어 둔 것이 사는 곳."""
+
+    return os.path.join(home(), FEEDBACK_DIRNAME)
+
 
 def _pickable(folder: str) -> bool:
     """그 폴더 바로 아래에 mp3가 있는가."""

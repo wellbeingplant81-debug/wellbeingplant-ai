@@ -105,7 +105,63 @@ def studio_page():
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="studio.html이 없습니다.")
 
-    return HTMLResponse(page.replace(app_info.PAGE_TOKEN, app_info.label()))
+    page = page.replace(app_info.PAGE_TOKEN, app_info.label())
+    page = page.replace(app_info.CONTACT_TOKEN, app_info.CONTACT)
+
+    return HTMLResponse(page)
+
+
+@router.get("/api/about")
+def about():
+    """
+    Sprint174 - 지금 무엇을 쓰고 있는가. 화면의 [정보 복사]가 읽는다.
+
+    왜 필요한가
+    -----------
+    막힌 사람에게 "어느 판이고 무엇이 없습니까"를 물으면, 그 사람은
+    창을 뒤져 옮겨 적어야 한다. 곤란해진 다음이라 대개 안 한다.
+
+    붙여 넣을 글도 여기서 짓는다
+    ----------------------------
+    화면이 제 나름대로 조립하면 받아 보는 글의 모양이 사람마다 달라
+    무엇이 빠졌는지 알 수 없다.
+
+    지어내지 않는다 - 전부 지금 이 프로그램이 실제로 보고 있는 값이다.
+    """
+
+    from app import app_info, runtime_paths
+    from app.services import media_tools
+
+    tools = media_tools.available()
+
+    music_where = os.path.join(runtime_paths.music_root(),
+                               runtime_paths.MUSIC_INBOX)
+    music_ready = runtime_paths._has_music(runtime_paths.music_root())
+
+    found = {
+        "name": app_info.NAME,
+        "version": app_info.VERSION,
+        "build": app_info.build_date(),
+        "contact": app_info.CONTACT,
+        "home": runtime_paths.home(),
+        "tools": tools,
+        "music": {"ready": music_ready, "where": music_where},
+        "feedback": runtime_paths.feedback_root(),
+    }
+
+    lines = [
+        app_info.title(),
+        f"내 것    {found['home']}",
+    ]
+
+    for name in (media_tools.FFMPEG, media_tools.FFPROBE):
+        lines.append(f"{name:<8} {tools[name] or '없음'}")
+
+    lines.append(f"배경음악 {'있음' if music_ready else '없음 · ' + music_where}")
+
+    found["report"] = "\n".join(lines)
+
+    return found
 
 
 def _workflow_store() -> str:

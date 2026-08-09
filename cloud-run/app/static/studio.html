@@ -530,6 +530,13 @@ a{color:var(--accent)}
        적지 않는다 - 예전에 "Studio v1"이라고 적혀 있었고, 프로그램은
        그 사이 여러 판을 지나 있었다. -->
   <span class="tag" id="appVersion">{{APP_VERSION}}</span>
+  <!-- Sprint174 - 막힌 사람이 창을 뒤져 옮겨 적지 않게 한다. 글은
+       서버(/studio/api/about)가 짓는다 - 화면마다 다른 모양으로 오면
+       무엇이 빠졌는지 알 수 없다. -->
+  <button class="tag" id="copyAbout" onclick="copyAbout()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="판번호와 지금 상태를 복사합니다">정보 복사</button>
+  <span class="tag" id="contactTag">문의 {{APP_CONTACT}}</span>
   <span class="tag" id="dsTag">dataset —</span>
   <a href="/studio/queue" style="color:#4c9aff;font-size:12px;
      text-decoration:none">Production Queue</a>
@@ -3879,6 +3886,47 @@ function freeSummary(){
 function renderFreeHome(){
   const box = $("freeHome");
   if(box) box.innerHTML = freeHome();
+}
+
+// Sprint174 - 지금 무엇을 쓰고 있는지 한 번에 복사한다.
+//
+// 글은 서버가 짓는다. 여기서 조립하면 사람마다 다른 모양이 오고,
+// 무엇이 빠졌는지 우리가 알 수 없다.
+//
+// 복사에 실패해도 그냥 넘어가지 않는다 - 눌렀는데 아무 일도 안
+// 일어나면 사람은 프로그램이 고장 난 줄 안다. 그때는 글을 화면에
+// 띄워서 손으로 긁어 갈 수 있게 한다.
+async function copyAbout(){
+  const button = $("copyAbout");
+  const before = button.textContent;
+
+  let text = "";
+
+  try{
+    const found = await (await fetch("/studio/api/about")).json();
+    text = found.report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = before; }, 2000);
+    return;
+  }
+
+  try{
+    await navigator.clipboard.writeText(text);
+    button.textContent = "복사했습니다";
+  }catch(err){
+    // 클립보드를 못 쓰는 자리가 있다. 글을 보여 주는 것이 낫다.
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.cssText = "position:fixed;left:12px;top:12px;z-index:9999;"
+      + "width:420px;height:160px";
+    document.body.appendChild(area);
+    area.select();
+    button.textContent = "직접 복사하십시오";
+    setTimeout(() => { area.remove(); }, 20000);
+  }
+
+  setTimeout(() => { button.textContent = before; }, 2000);
 }
 
 function toggleFreeWizard(){

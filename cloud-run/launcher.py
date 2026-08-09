@@ -40,6 +40,54 @@ HOST = "127.0.0.1"
 # 켜지자마자 열지 않는다. 서버가 뜨기 전에 열면 빈 화면이 뜬다.
 OPEN_AFTER_SECONDS = 1.5
 
+# Sprint174 - 피드백 폴더에 남겨 두는 안내.
+#
+# 빈 폴더는 무엇을 적으라는 말이 아니다. 무엇이 있어야 우리가 고칠
+# 수 있는지는 우리가 안다 - 사람이 짐작하게 두지 않는다.
+FEEDBACK_NOTE = "무엇을 적으면 되나요.txt"
+
+
+def _feedback_note(where: str) -> str:
+    """
+    적는 법을 적어 둔다. 이미 있으면 손대지 않는다.
+
+    사람이 이 파일에 그냥 이어 적을 수도 있다. 켤 때마다 덮으면 그
+    사람의 글이 사라진다 - 설정에서 정한 규칙과 같다.
+    """
+
+    from app import app_info, error_log
+
+    path = os.path.join(where, FEEDBACK_NOTE)
+
+    if os.path.exists(path):
+        return path
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"""겪으신 일을 이 폴더에 적어 주십시오.
+
+파일 이름은 아무렇게나 지으셔도 됩니다.
+예) 2026-08-09 이미지가 안 걸림.txt
+
+무엇을 적으면 도움이 되나요
+---------------------------
+    1. 무엇을 하려던 참이었는지
+    2. 무엇을 눌렀는지
+    3. 무엇이 나왔는지 (화면에 뜬 글을 그대로)
+
+여기에 두 가지를 함께 넣어 주시면 훨씬 빨리 찾습니다.
+
+    화면 오른쪽 위 [정보 복사] 를 누르고 붙여넣기
+    프로그램이 아예 안 켜졌다면 {error_log.DIRNAME} 폴더의 파일
+
+보내실 곳
+---------
+{app_info.CONTACT}
+
+이 폴더는 프로그램이 지우지 않습니다. 새 판을 덮어씌워도 남습니다.
+""")
+
+    return path
+
 
 def _free_port() -> int:
     """지금 비어 있는 포트. 운영체제가 골라 준다."""
@@ -124,6 +172,9 @@ def _prepare_home() -> str:
     runtime_paths.ensure(os.path.join(
         runtime_paths.home(), runtime_paths.MUSIC_DIRNAME,
         runtime_paths.MUSIC_INBOX))
+
+    # Sprint174 - 겪은 일을 적어 둘 자리와, 무엇을 적으면 되는지.
+    _feedback_note(runtime_paths.ensure(runtime_paths.feedback_root()))
 
     settings.ensure()
 
@@ -260,6 +311,14 @@ def _serve(argv) -> int:
 
     _report_tools()
     _report_music()
+
+    # Sprint174 - 막혔을 때 갈 곳. 곤란해진 다음에 찾아 헤매게 하면
+    # 아무도 안 쓴다.
+    from app import runtime_paths
+
+    print()
+    print(f"  겪은 일   {runtime_paths.feedback_root()} 에 적어 주십시오")
+    print(f"  문의      {app_info.CONTACT}")
 
     print()
     print("  끄려면 이 창을 닫거나 Ctrl+C 를 누르십시오.")

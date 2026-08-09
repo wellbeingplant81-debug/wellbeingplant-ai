@@ -38,6 +38,13 @@ VERSION = "0.1.0"
 # 묶을 때 프로그램 안에 들어가는 것.
 BUILD_FILENAME = "build_info.json"
 
+# Sprint174 - 막혔을 때 물어볼 곳.
+#
+# 여기 하나에서만 온다. README도 창도 화면도 이것을 읽는다 - 손으로
+# 옮겨 적으면, 바뀐 줄 모르고 없는 주소로 보내는 사람이 생긴다.
+# 답을 못 받은 사람은 다시 묻지 않는다.
+CONTACT = "wellbeingplant81@gmail.com"
+
 
 def build_date():
     """
@@ -84,3 +91,6 @@ def title() -> str:
 #
 # 화면은 이 표를 들고 있고, 내보낼 때 여기서 채운다.
 PAGE_TOKEN = "{{APP_VERSION}}"
+
+# Sprint174 - 문의처도 같은 방식이다. 화면에 적어 두지 않는다.
+CONTACT_TOKEN = "{{APP_CONTACT}}"
