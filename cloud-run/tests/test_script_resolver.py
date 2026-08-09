@@ -148,10 +148,18 @@ class TestPreparedSourcesNeverCallStep01(_Case):
             "print(len([m for m in sys.modules "
             "if m.startswith(('google.genai','vertexai'))]))\n"
         )
+        # Sprint194 - 읽는 인코딩을 못 박는다.
+        #
+        # text=True는 PYTHONIOENCODING이 아니라 로케일로 읽는다. 이
+        # 머신에서는 그 둘이 다르고(utf-8 대 cp949), 자식이 한글을 내는
+        # 순간 읽는 스레드가 죽어 stdout이 None이 된다. 여기서 보는
+        # 것은 마지막 줄의 "0"이라, 못 읽는 바이트가 와도 replace로
+        # 넘기면 판정에는 영향이 없다.
         result = subprocess.run(
             [sys.executable, "-c", code],
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
 
         self.assertEqual(result.returncode, 0, result.stderr[-400:])

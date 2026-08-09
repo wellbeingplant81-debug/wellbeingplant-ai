@@ -9,6 +9,7 @@ Sprint53~55에서 테스트를 돌릴 때마다 매번
 않는다.
 """
 
+import locale
 import os
 import re
 import subprocess
@@ -71,10 +72,65 @@ def build_unittest_command(modules: list) -> list:
     return [python, "-m", "unittest", *modules]
 
 
+def decode_line(line: bytes) -> str:
+    """
+    한 줄을 읽어 낸다. UTF-8 먼저, 그 다음 로케일.
+
+    순서가 중요하다. UTF-8 한글은 cp949로도 '읽히기는' 한다 - 엉뚱한
+    한자로. 그러면 깨진 줄 모르고 지나간다. 반대로 cp949 한글은 UTF-8로
+    거의 언제나 읽히지 않으므로, UTF-8을 먼저 대 보면 각 줄이 제
+    주인에게 간다.
+
+    둘 다 아니면 그때는 글자를 잃더라도 읽는다. 여기서 예외를 내면
+    윗줄과 아랫줄까지 통째로 못 보게 된다.
+    """
+
+    for codec in ("utf-8", locale.getpreferredencoding(False)):
+        try:
+            return line.decode(codec)
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+    return line.decode("utf-8", errors="replace")
+
+
+def decode_output(raw: bytes) -> str:
+    """
+    Sprint194 - 자식이 낸 바이트를 글로 바꾼다.
+
+    한 스트림에 인코딩이 둘 섞일 수 있다. 자식 unittest는 로케일로
+    쓰는데, 파이프를 물려받은 손자(ffmpeg 같은 것)는 제 인코딩으로
+    쓰기 때문이다. 그건 우리가 정할 수 있는 것이 아니다.
+
+    그래서 한 줄씩 본다. 줄 하나는 대개 한 사람이 쓴 것이라, 줄 단위로
+    고르면 둘 다 살릴 수 있다.
+
+    자식에게 "UTF-8로 말하라"고 시키지 않는다. 그 지시는 손자에게까지
+    내려가고, 손자의 말을 로케일로 읽고 있던 다른 테스트가 대신
+    깨진다 - Sprint194에서 실제로 그렇게 만들었다가 되돌렸다.
+    """
+
+    if not raw:
+        return ""
+
+    return "".join(decode_line(line) for line in raw.splitlines(keepends=True))
+
+
 def run_tests(modules: list = None) -> dict:
     """build_unittest_command()로 만든 명령을 CLOUD_RUN_DIR에서 실행하고,
     {"summary": parse_unittest_summary(...), "returncode": int,
-    "raw_output": str}를 반환한다."""
+    "raw_output": str}를 반환한다.
+
+    Sprint194 - 바이트로 받아 우리가 읽는다.
+
+    subprocess에게 글자로 달라고 하면(text=True) 로케일로 읽다가,
+    한글 traceback이 나오는 순간 - 즉 테스트가 깨졌을 때만 - 읽는
+    스레드가 죽는다. stdout/stderr가 None이 되어, 정작 무엇이
+    실패했는지를 못 본다. Sprint192/193에서 두 번 그랬다.
+
+    글자 몇 개가 깨져도 요약과 traceback은 남는다 - 아무것도 못 보는
+    것보다 낫다.
+    """
 
     command = build_unittest_command(modules or [])
 
@@ -82,10 +138,9 @@ def run_tests(modules: list = None) -> dict:
         command,
         cwd=CLOUD_RUN_DIR,
         capture_output=True,
-        text=True,
     )
 
-    raw_output = result.stdout + result.stderr
+    raw_output = decode_output(result.stdout) + decode_output(result.stderr)
 
     return {
         "summary": parse_unittest_summary(raw_output),
