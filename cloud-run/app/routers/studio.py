@@ -273,6 +273,21 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-release-report")
+def beta_release_report_card():
+    """
+    Sprint193 - 밖으로 내보낼 한 장.
+
+    스냅샷이 낸 것만 옮긴다. 여기서 세거나 고르지 않는다 - 그러면
+    이 글과 화면이 다른 말을 하고, 받아 본 사람은 어느 쪽이 맞는지
+    알 수 없다.
+    """
+
+    from app.services import beta_release_report
+
+    return beta_release_report.build()
+
+
 @router.get("/api/beta-snapshot")
 def beta_snapshot_card():
     """
