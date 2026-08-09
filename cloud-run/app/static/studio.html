@@ -548,6 +548,10 @@ a{color:var(--accent)}
   <!-- Sprint175 - 어디까지 갔는지. 값은 서버가 준다(/studio/api/about).
        개인의 것은 애초에 적히지 않는다. -->
   <span class="tag" id="usageTag">사용 기록 —</span>
+  <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
+  <button class="tag" id="openHelp" onclick="showTrouble()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="지금 무엇이 문제이고 어떻게 하면 되는지">문제 해결</button>
   <button class="tag" id="copyUsage" onclick="copyUsage()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="실행 횟수와 마지막 상태를 복사합니다">사용 기록 복사</button>
@@ -3871,6 +3875,7 @@ function freeHome(){
          그대로 그린다 - 화면이 다시 세면 "준비됨"이라는데 버튼이
          막히는 일이 생긴다. -->
     <div id="onboardBox"></div>
+    <div id="troubleBox" class="panel" style="display:none;margin-top:8px"></div>
     <div class="rowbtns">
       <button class="sm" onclick="${next.action}">${next.label}</button>
       <span class="muted">${escHtml(next.why)}</span>
@@ -3938,6 +3943,80 @@ async function showOnboarding(){
       <b>${escHtml(found.title)}</b> ${escHtml(found.message)}</p>
     ${why}
     <div class="rowbtns">${button}</div>`;
+}
+
+// Sprint181 - 문제 해결 센터.
+//
+// 무엇이 문제인지도, 어떻게 하면 되는지도 서버가 정한다. 화면이
+// 제 나름대로 찾아내면 진행 표시와 다른 이야기를 하게 된다.
+async function showTrouble(){
+  let found;
+
+  try{
+    const where = reviewProject
+      ? "?project_id=" + encodeURIComponent(reviewProject) : "";
+    found = await (await fetch(
+      "/studio/api/troubleshooting" + where)).json();
+  }catch(err){
+    alert("문제 해결 정보를 읽지 못했습니다.");
+    return;
+  }
+
+  const box = $("troubleBox");
+
+  const problems = (found.problems || []).length
+    ? `<p class="muted" style="margin:10px 0 4px"><b>발견된 문제</b></p>
+       <ul class="muted" style="margin:0 0 0 16px">`
+      + found.problems.map(p => `<li>${escHtml(p)}</li>`).join("")
+      + `</ul>`
+    : `<p class="muted" style="margin:10px 0 0">지금 막는 것은
+         없습니다.</p>`;
+
+  const how = `<p class="muted" style="margin:10px 0 4px"><b>해결 방법</b></p>
+     <ul class="muted" style="margin:0 0 0 16px">`
+    + (found.suggestions || [])
+        .map(s => `<li>${escHtml(s)}</li>`).join("")
+    + `</ul>`;
+
+  const failed = found.last_error_kind
+    ? `<p class="muted" style="margin:6px 0 0">최근 오류
+         <b>${escHtml(found.last_error_kind)}</b></p>`
+    : "";
+
+  box.innerHTML = `
+    <div class="dh"><b>문제 해결</b>
+      <span class="src">${escHtml(found.status)}</span></div>
+    <p class="muted" style="margin:6px 0 0">
+      <b>현재 상태</b> ${escHtml(found.title)} · ${escHtml(found.message)}</p>
+    ${failed}
+    ${problems}
+    ${how}
+    <div class="rowbtns">
+      <button class="sm" onclick="copyTrouble()">문의하기 (내용 복사)</button>
+      <span class="muted" id="troubleCopied"></span>
+    </div>`;
+
+  box.style.display = "block";
+  troubleText = found.contact_text;
+}
+
+let troubleText = "";
+
+async function copyTrouble(){
+  if(!troubleText) return;
+
+  try{
+    await navigator.clipboard.writeText(troubleText);
+    $("troubleCopied").textContent = "복사했습니다. 문의처로 보내 주십시오.";
+  }catch(err){
+    // 클립보드를 막아 둔 자리가 있다. 그때는 직접 긁어 가게 둔다.
+    const area = document.createElement("textarea");
+    area.value = troubleText;
+    area.style.cssText = "width:100%;height:160px;margin-top:8px";
+    $("troubleBox").appendChild(area);
+    area.select();
+    $("troubleCopied").textContent = "직접 복사하십시오.";
+  }
 }
 
 function onboardGo(){

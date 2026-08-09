@@ -197,6 +197,29 @@ def onboarding(project_id: str = ""):
     return onboarding_state.build(_workspace_store(), path)
 
 
+@router.get("/api/troubleshooting")
+def troubleshooting_center(project_id: str = ""):
+    """
+    Sprint181 - 무엇이 문제이고 어떻게 하면 되는가.
+
+    새로 찾아내지 않는다. onboarding_state가 낸 답을 사람이 읽을 수
+    있는 모양으로 옮긴 것을 그대로 내준다 - 여기서 다시 세면 진행
+    표시와 문제 해결이 서로 다른 이야기를 한다.
+    """
+
+    from app.services import troubleshooting
+
+    path = None
+
+    if project_id:
+        try:
+            path = _project_path(project_id)
+        except Exception:
+            path = None
+
+    return troubleshooting.build(_workspace_store(), path)
+
+
 @router.get("/api/beta-feedback")
 def beta_feedback_package():
     """
