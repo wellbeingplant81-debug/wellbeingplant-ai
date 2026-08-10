@@ -1426,10 +1426,82 @@ def media(project_id: str, kind: str, scene: int = None):
     return FileResponse(target)
 
 
+def _refuse_if_the_script_is_not_ready(project_id: str) -> None:
+    """
+    Sprint203 - 못 갈 것은 부르기 전에 막는다.
+
+    문지기가 화면에만 있었다. 화면은 버튼을 감추지만 그 아래 API는
+    누구에게나 열려 있었고, 그리로 들어오면 몇 초 뒤 개발자 문구로
+    죽었다 - "scene 1: image_prompt 없음". 같은 프로그램이 같은
+    상태를 두 가지로 말한 것이다.
+
+    막는 기준은 계약이지 품질이 아니다
+    ----------------------------------
+    script_quality_check로 막으면 "9초로 짧습니다"처럼 렌더가 견디는
+    것까지 막힌다. 그래서 렌더가 실제로 대괄호로 꺼내는 것만 본다 -
+    어차피 죽었을 것을 더 일찍, 더 또렷하게 막을 뿐이다.
+
+    하는 말은 이미 있는 말
+    ----------------------
+    새 문구를 지으면 화면과 API가 다른 낱말로 같은 것을 말하게 된다.
+    script_quality_check가 만든 문장을 그대로 옮긴다.
+
+    지어 넣지 않는다
+    ----------------
+    빠진 것을 여기서 채우면 그것은 더 이상 사용자가 준 대본이 아니다.
+    """
+
+    from app.services import onboarding_state, script_quality_check
+    from app.steps import step01_script_resolve as resolver
+
+    if not project_id:
+        # AI가 대본을 쓰는 길. 아직 없는 대본을 미리 검사할 수 없다.
+        return
+
+    try:
+        path = _project_path(project_id)
+    except Exception:
+        return
+
+    if not os.path.isfile(resolver.script_path(path)):
+        # 미리 놓인 대본을 쓰는 길이 아니다.
+        return
+
+    try:
+        script = resolver.load_prepared(path)
+    except resolver.ScriptResolveError:
+        script = None
+
+    if script is not None:
+        return
+
+    # 여기까지 왔다면 계약을 못 갖췄다. 무슨 말을 할지는 이미 있는
+    # 자리에 물어본다.
+    try:
+        found = resolver._load(resolver.script_path(path))
+    except Exception:
+        found = {}
+
+    quality = script_quality_check.check(found)
+
+    raise HTTPException(status_code=400, detail={
+        "message": onboarding_state.SAYS[
+            onboarding_state.SCRIPT_CHECK_REQUIRED][1],
+        "reasons": quality.get("reasons") or [],
+        "next_action": onboarding_state.SAYS[
+            onboarding_state.SCRIPT_CHECK_REQUIRED][2],
+    })
+
+
 @router.post("/api/jobs")
 def create_job(request: GenerateRequest):
     if not request.topic or not request.topic.strip():
         raise HTTPException(status_code=400, detail="주제를 입력하십시오.")
+
+    # Sprint203 - 못 갈 것은 여기서 막는다. 작업을 만들어 두고 몇 초
+    # 뒤에 죽이면 큐에 죽을 것이 쌓이고, 사람은 무엇을 해야 하는지
+    # 모른 채 기다린다.
+    _refuse_if_the_script_is_not_ready(request.project_id)
 
     # Sprint107 - project_id가 오면 미리 만들어 둔 프로젝트로 만든다.
     # 없으면 예전과 똑같이 새 프로젝트를 만든다. 버튼도 엔드포인트도
