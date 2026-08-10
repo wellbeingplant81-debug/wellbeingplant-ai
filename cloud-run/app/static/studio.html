@@ -567,6 +567,12 @@ a{color:var(--accent)}
   <button class="tag" id="openGate" onclick="showReleaseGate()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="내보낼지 정하기 전에 확인할 것들">배포 확인 정보</button>
+  <!-- Sprint200 - 처음 켠 사람의 여덟 걸음. 가 봤다고 말하지 않는다 -
+       기록을 읽은 것뿐이라 확인된 것과 아직 모르는 것만 적는다. -->
+  <button class="tag" id="openCandidate" onclick="showReleaseCandidate()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="처음 쓰는 사람이 어디까지 갈 수 있는가"
+          >처음 사용자 테스트</button>
   <button class="tag" id="openSummary" onclick="showSummary()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="베타 운영 정보를 한 장으로">Beta Summary</button>
@@ -4663,6 +4669,103 @@ async function copyBetaFeedback(){
   }catch(err){
     button.textContent = "정보를 못 읽음";
     setTimeout(() => { button.textContent = "베타 피드백 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
+}
+
+// Sprint200 - 처음 쓰는 사람의 여덟 걸음.
+//
+// 화면이 "통과" 같은 말을 만들지 않는다. 서버가 모른다고 한 자리는
+// 화면에서도 모른다고 둔다 - 여기서 채워 넣으면 안심시키는 그림이 된다.
+async function showReleaseCandidate(){
+  let found;
+
+  try{
+    found = await (await fetch(
+      "/studio/api/beta-release-candidate")).json();
+  }catch(err){
+    alert("처음 사용자 테스트 정보를 읽지 못했습니다.");
+    return;
+  }
+
+  const mark = row => row.ok === true ? '<span class="ok">O</span>'
+    : (row.ok === false ? '<span class="no">X</span>'
+                        : '<span class="src">?</span>');
+
+  const walk = (found.journey || []).map((row, at) =>
+    `<li>${mark(row)} <b>${at + 1}. ${escHtml(row.label)}</b>`
+    + (row.count === null || row.count === undefined
+        ? "" : ` <span class="dc">${row.count}벌</span>`)
+    + `<span class="src" style="display:block">${escHtml(row.detail)}</span>`
+    + `</li>`).join("");
+
+  const kinds = Object.keys(found.errors || {}).length
+    ? Object.entries(found.errors)
+        .map(([kind, n]) => `${escHtml(kind)} ${n}`).join(" · ")
+    : "없습니다";
+
+  const reasons = (found.now.reasons || []).length
+    ? `<ul class="muted" style="margin:2px 0 0 16px">`
+      + found.now.reasons.map(r => `<li>${escHtml(r)}</li>`).join("")
+      + `</ul>`
+    : "";
+
+  const cautions = (found.cautions || [])
+    .map(line => `<li>${escHtml(line)}</li>`).join("");
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>처음 사용자 테스트</b>
+      <span class="src">확인 시점 ${escHtml(found.taken_at)}
+        · 판 ${escHtml(found.version)}</span></div>
+
+    <p class="muted" style="margin:8px 0 2px"><b>현재 단계</b>
+      ${escHtml(found.now.title)}
+      <span class="src">${escHtml(found.now.state)}</span></p>
+    <p class="muted" style="margin:0">${escHtml(found.now.message)}</p>
+    <p class="muted" style="margin:4px 0 0"><b>다음 행동</b>
+      <span class="src">${escHtml(found.now.next_action)}</span></p>
+    ${reasons}
+
+    <p class="muted" style="margin:10px 0 2px"><b>여덟 걸음</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${walk}</ul>
+
+    <p class="muted" style="margin:10px 0 0">오류 종류
+      <span class="src">${kinds}</span></p>
+    <p class="muted" style="margin:2px 0 0">가장 많이 멈춘 곳
+      <span class="src">${escHtml(
+        found.top_blocked_stage || "없습니다")}</span></p>
+
+    <p class="muted" style="margin:10px 0 2px"><b>주의사항</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${cautions}</ul>
+
+    <p class="muted" style="margin:8px 0 0">${escHtml(found.note)}</p>
+    <button class="tag" onclick="copyReleaseCandidate()"
+            style="cursor:pointer;background:none;color:var(--dim);
+                   margin-top:8px" id="copyCandidate"
+            >처음 사용자 테스트 복사</button>`;
+
+  box.style.display = "block";
+}
+
+// 복사할 글은 Release Report가 이미 지어 두었다. 화면이 새로 조립하면
+// 받아 보는 글의 모양이 사람마다 달라진다(Sprint174에서 정한 규칙).
+async function copyReleaseCandidate(){
+  const button = $("copyCandidate");
+
+  let text = "";
+
+  try{
+    const found = await (await fetch(
+      "/studio/api/beta-release-candidate")).json();
+    text = found.report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => {
+      button.textContent = "처음 사용자 테스트 복사"; }, 2000);
     return;
   }
 

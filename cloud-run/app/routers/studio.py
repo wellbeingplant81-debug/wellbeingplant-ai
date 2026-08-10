@@ -273,6 +273,31 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-release-candidate")
+def beta_release_candidate_card(project_id: str = ""):
+    """
+    Sprint200 - 처음 쓰는 사람의 여덟 걸음.
+
+    가 봤다고 말하지 않는다. 기록을 읽을 뿐이라 확인된 것과 아직 모르는
+    것만 적는다 - "통과" 같은 말은 여기서 만들지 않는다.
+
+    없는 프로젝트를 물어도 404를 던지지 않는다. onboarding_state가
+    같은 이유로 그렇게 한다 - 첫 화면이 통째로 비면 안 된다.
+    """
+
+    from app.services import beta_release_candidate
+
+    path = None
+
+    if project_id:
+        try:
+            path = _project_path(project_id)
+        except Exception:
+            path = None
+
+    return beta_release_candidate.build(_workspace_store(), path)
+
+
 @router.get("/api/beta-release-gate")
 def beta_release_gate_card():
     """

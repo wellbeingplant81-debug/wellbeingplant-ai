@@ -202,6 +202,9 @@ ENDPOINTS = [
     # Sprint199 - 배포 확인 정보. 앞의 자리들이 낸 답을 모으기만
     # 하므로 패치할 것이 없다.
     ("GET", "/studio/api/beta-release-gate", None, []),
+    # Sprint200 - 처음 쓰는 사람의 여덟 걸음. Gate와 onboarding이 낸
+    # 답을 옮기기만 하므로 패치할 것이 없다.
+    ("GET", "/studio/api/beta-release-candidate", None, []),
     # Sprint185 - 무엇부터 고칠 것인가. dashboard가 낸 숫자만 읽으므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-insights", None, []),
