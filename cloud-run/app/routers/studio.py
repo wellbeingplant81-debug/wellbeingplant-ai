@@ -1484,12 +1484,18 @@ def _refuse_if_the_script_is_not_ready(project_id: str) -> None:
 
     quality = script_quality_check.check(found)
 
+    said = onboarding_state.SAYS[onboarding_state.SCRIPT_CHECK_REQUIRED]
+
     raise HTTPException(status_code=400, detail={
-        "message": onboarding_state.SAYS[
-            onboarding_state.SCRIPT_CHECK_REQUIRED][1],
+        # Sprint204 - 이름표를 함께 보낸다.
+        #
+        # 화면이 "대본 고치기"라는 글자를 보고 무엇을 열지 정하면,
+        # 문구가 바뀌는 날 조용히 틀린다. 새 판단이 아니라 이미 내린
+        # 판단에 이름을 붙여 보내는 것이다.
+        "state": onboarding_state.SCRIPT_CHECK_REQUIRED,
+        "message": said[1],
         "reasons": quality.get("reasons") or [],
-        "next_action": onboarding_state.SAYS[
-            onboarding_state.SCRIPT_CHECK_REQUIRED][2],
+        "next_action": said[2],
     })
 
 

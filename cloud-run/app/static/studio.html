@@ -5796,10 +5796,76 @@ $("go").onclick = async () => {
     body: JSON.stringify({topic, channel: $("channel").value,
                           project_id: projectId})});
   const d = await r.json();
+
+  // Sprint204 - 거절당했으면 거기서 멈춘다.
+  //
+  // 전에는 r.ok를 보지 않아, 400이 오면 job_id가 undefined인 채로
+  // "생성 중…"이라고 적어 놓고 단추는 잠긴 채 멈췄다. 사람은 아무
+  // 일도 일어나지 않는 화면을 보며 기다렸다.
+  if(!r.ok){
+    showScriptRefused(d.detail);
+    $("go").disabled = false;
+    $("jobState").textContent = "시작하지 못했습니다";
+    $("scenes").innerHTML = '<span class="muted">아직 장면이 없습니다.</span>';
+    $("inspector").innerHTML = '<span class="muted">아직 없습니다.</span>';
+    return;
+  }
+
   jobId = d.job_id; $("jobState").textContent = "생성 중…";
   if(poll) clearInterval(poll);
   poll = setInterval(pollJob, 1500);
 };
+
+// Sprint204 - 고치러 가는 자리로 데려간다.
+//
+// 무료 제작 3단계의 붙여넣기 칸이 그 자리다. 새로 만들지 않는다.
+//
+// 이름을 붙여 둔다 - onclick 안에 코드를 늘어놓으면 "markup이 부르는
+// 함수가 선언돼 있는가"를 보는 가드가 if를 함수 이름으로 읽는다
+// (실제로 걸렸다).
+function openScriptFix(){
+  if(!wizOpen){ toggleFreeWizard(); }
+
+  const box = document.getElementById("wizRaw");
+
+  if(box){ box.scrollIntoView({block:"center"}); box.focus(); }
+}
+
+// Sprint204 - 왜 못 갔는지와, 어디서 고치면 되는지.
+//
+// 문구를 여기서 짓지 않는다. 서버가 준 말을 그대로 띄운다 - 화면이
+// 제 나름대로 지으면 같은 상태를 두 가지 말로 하게 된다.
+//
+// 무엇을 열지는 글자가 아니라 state로 정한다. 문구는 바뀔 수 있고,
+// 그때 글자를 보고 있던 화면은 조용히 틀린다.
+function showScriptRefused(found){
+  const box = $("troubleBox");
+
+  if(!found || typeof found !== "object"){
+    box.innerHTML = `<div class="dh"><b>시작하지 못했습니다</b></div>
+      <p class="muted">${escHtml(String(found || "알 수 없는 이유입니다."))}</p>`;
+    box.style.display = "block";
+    return;
+  }
+
+  const reasons = (found.reasons || [])
+    .map(line => `<li>${escHtml(line)}</li>`).join("");
+
+  // 고친 대본을 다시 붙여넣는 자리는 이미 있다 - 무료 제작 3단계.
+  const fix = found.state === "SCRIPT_CHECK_REQUIRED"
+    ? `<button class="sm" style="margin-top:8px"
+         onclick="openScriptFix()"
+       >${escHtml(found.next_action || "대본 고치기")}</button>`
+    : "";
+
+  box.innerHTML = `
+    <div class="dh"><b>시작하지 못했습니다</b></div>
+    <p class="muted">${escHtml(found.message || "")}</p>
+    <ul class="muted" style="margin:6px 0 0 16px">${reasons}</ul>
+    ${fix}`;
+
+  box.style.display = "block";
+}
 
 async function pollJob(){
   if(!jobId) return;

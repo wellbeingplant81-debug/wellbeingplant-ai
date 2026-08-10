@@ -215,6 +215,134 @@ class StillWorksTest(Base):
         self.assertEqual(self.ask(self.project_id).status_code, 200)
 
 
+class TheScreenConnectsItTest(Base):
+    """
+    Sprint204 - 거절을 수정 행동으로 잇는다.
+
+    Sprint203은 라우터만 고치고 화면을 보지 않았다. 제작 시작 단추가
+    r.ok를 안 봐서, 400이 오면 job_id가 undefined인 채 "생성 중…"이라고
+    적어 놓고 단추는 잠긴 채로 멈췄다 - 사람은 아무 일도 일어나지 않는
+    화면을 보며 기다렸다.
+
+    서버는 좋아지고 화면은 나빠졌다. 그것을 잇는다.
+    """
+
+    def page(self):
+        from app.routers import studio as studio_router
+
+        return studio_router.studio_page().body.decode("utf-8")
+
+    def go_handler(self):
+        """제작 시작 단추가 하는 일만 떼어 본다."""
+
+        page = self.page()
+        at = page.find('$("go").onclick')
+
+        self.assertNotEqual(at, -1, "제작 시작 단추를 찾지 못했습니다")
+
+        return page[at:at + 2400]
+
+    def test_the_refusal_carries_a_name_not_only_words(self):
+        """
+        화면이 글자를 보고 무엇을 열지 정하면, 문구가 바뀌는 날
+        조용히 틀린다.
+        """
+
+        from app.services import onboarding_state
+
+        self.place(NO_IMAGE)
+
+        found = self.ask(self.project_id).json()["detail"]
+
+        self.assertEqual(found["state"],
+                         onboarding_state.SCRIPT_CHECK_REQUIRED)
+
+    def test_the_button_looks_at_whether_it_worked(self):
+        self.assertIn("if(!r.ok)", self.go_handler())
+
+    def test_the_button_comes_back(self):
+        """
+        잠긴 채로 두면 다시 눌러 볼 수도 없다.
+        """
+
+        said = self.go_handler()
+
+        at = said.find("if(!r.ok)")
+
+        self.assertNotEqual(at, -1)
+        self.assertIn('$("go").disabled = false', said[at:])
+
+    def test_it_does_not_say_it_is_making_something(self):
+        """
+        거절당했는데 "생성 중…"이라고 적어 두면, 사람은 아무 일도
+        일어나지 않는 화면을 보며 기다린다.
+        """
+
+        said = self.go_handler()
+
+        at = said.find("if(!r.ok)")
+
+        self.assertIn("showScriptRefused", said[at:])
+        self.assertIn("return", said[at:])
+
+    def test_the_screen_shows_what_is_wrong(self):
+        page = self.page()
+
+        self.assertIn("showScriptRefused", page)
+        self.assertIn("reasons", page[page.find("showScriptRefused"):])
+
+    def test_the_screen_offers_the_way_to_fix_it(self):
+        """
+        고친 대본을 다시 붙여넣는 자리는 이미 있다(무료 제작 3단계).
+        """
+
+        page = self.page()
+
+        at = page.find("function showScriptRefused")
+        self.assertNotEqual(at, -1)
+
+        said = page[at:at + 1800]
+
+        self.assertIn("SCRIPT_CHECK_REQUIRED", said)
+        self.assertIn("openScriptFix()", said)
+
+        opener = page.find("function openScriptFix")
+        self.assertNotEqual(opener, -1)
+
+        self.assertIn("toggleFreeWizard", page[opener:opener + 600])
+        self.assertIn("wizRaw", page[opener:opener + 600])
+
+
+class NothingIsMadeTest(Base):
+    """Sprint204 - 거절할 때 아무것도 만들지 않는다."""
+
+    def test_no_provider_is_called(self):
+        """
+        안내를 하려고 AI를 부르면 그것은 안내가 아니라 생성이다.
+        """
+
+        from app.providers import tts_provider
+        from app.services import image_service
+
+        self.place(NO_IMAGE)
+
+        with patch.object(image_service, "generate_image") as image, \
+                patch.object(tts_provider, "generate_voice") as voice:
+
+            self.ask(self.project_id)
+
+            image.assert_not_called()
+            voice.assert_not_called()
+
+    def test_no_render_is_started(self):
+        self.place(NO_IMAGE)
+
+        with patch.object(studio_jobs, "start") as started:
+            self.ask(self.project_id)
+
+            started.assert_not_called()
+
+
 class PrivacyTest(Base):
     """3. 거절하는 말에 남의 것이 실리지 않는다."""
 
