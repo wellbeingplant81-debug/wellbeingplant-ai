@@ -33,18 +33,26 @@ NOTE = (
 )
 
 
-def build() -> dict:
+def build(summary: dict = None) -> dict:
     """
     지금을 한 장으로. 읽기만 하고 적지 않는다.
 
     확인 시각만 여기서 새로 안다 - 나머지는 전부 앞의 두 자리가
     낸 답이다.
+
+    Sprint199 - 이미 만들어 둔 summary를 받을 수 있다. beta_readiness가
+    Sprint192에 받은 것과 같은 주입구다. 여럿이 한 장 안에서 볼 때
+    각자 다시 읽으면 그 사이에 기록이 바뀌고 숫자가 서로 어긋난다.
+
+    주지 않으면 예전과 완전히 같다.
     """
 
     from app import app_info
     from app.services import beta_readiness, beta_summary
 
-    summary = beta_summary.build()
+    if summary is None:
+        summary = beta_summary.build()
+
     readiness = beta_readiness.build(summary)
 
     flow = [

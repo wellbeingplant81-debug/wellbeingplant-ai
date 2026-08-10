@@ -561,6 +561,12 @@ a{color:var(--accent)}
           style="cursor:pointer;background:none;color:var(--dim)"
           title="지금 확인된 것을 붙여넣을 수 있는 글로 복사합니다"
           >Release Report 복사</button>
+  <!-- Sprint199 - 내보낼지 정하려는 사람이 보는 한 장. 문을 여닫지
+       않는다 - 확인된 것과 아직 모르는 것을 늘어놓을 뿐이고, 판단은
+       사람이 한다. -->
+  <button class="tag" id="openGate" onclick="showReleaseGate()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="내보낼지 정하기 전에 확인할 것들">배포 확인 정보</button>
   <button class="tag" id="openSummary" onclick="showSummary()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="베타 운영 정보를 한 장으로">Beta Summary</button>
@@ -4657,6 +4663,102 @@ async function copyBetaFeedback(){
   }catch(err){
     button.textContent = "정보를 못 읽음";
     setTimeout(() => { button.textContent = "베타 피드백 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
+}
+
+// Sprint199 - 배포 확인 정보. 앞의 자리들이 낸 답을 모아 놓기만 한다.
+//
+// 여기서 "배포 가능" 같은 말을 만들지 않는다. 화면이 제 나름대로
+// 판정하면, 서버가 지키려 한 것이 마지막 한 걸음에서 무너진다.
+async function showReleaseGate(){
+  let found;
+
+  try{
+    found = await (await fetch("/studio/api/beta-release-gate")).json();
+  }catch(err){
+    alert("배포 확인 정보를 읽지 못했습니다.");
+    return;
+  }
+
+  const mark = row => row.ok === true ? '<span class="ok">O</span>'
+    : (row.ok === false ? '<span class="no">X</span>'
+                        : '<span class="src">?</span>');
+
+  const checks = (found.readiness.checks || []).map(row =>
+    `<li>${mark(row)} ${escHtml(row.label)}
+       <span class="src">${escHtml(row.detail)}</span></li>`).join("");
+
+  const flow = (found.release.funnel || []).map(row =>
+    `<span class="dc"><b>${escHtml(row.label)}</b> ${row.count}</span>`)
+    .join("");
+
+  const kinds = (found.summary.error_kinds || []).map(row =>
+    escHtml(typeof row === "string" ? row : (row.kind || JSON.stringify(row))))
+    .join(" · ");
+
+  const cautions = (found.release.cautions || [])
+    .map(line => `<li>${escHtml(line)}</li>`).join("");
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>배포 확인 정보</b>
+      <span class="src">확인 시점 ${escHtml(found.taken_at)}
+        · 판 ${escHtml(found.version)}</span></div>
+
+    <p class="muted" style="margin:8px 0 2px"><b>베타 현황</b>
+      <span class="src">설치본 ${found.summary.installations}벌</span></p>
+    <div class="fsum">
+      <span class="dc"><b>시작</b> ${found.summary.started}</span>
+      <span class="dc"><b>완료</b> ${found.summary.finished}</span>
+      <span class="dc"><b>완료율</b> ${found.summary.success_rate}%</span>
+    </div>
+    <p class="muted" style="margin:6px 0 0">가장 많이 멈춘 곳
+      <span class="src">${escHtml(
+        found.summary.top_blocked_stage || "없습니다")}</span></p>
+    <p class="muted" style="margin:2px 0 0">오류 종류
+      <span class="src">${kinds || "없습니다"}</span></p>
+
+    <p class="muted" style="margin:10px 0 2px"><b>지금 확인되는 것</b>
+      O ${found.readiness.passed} · X ${found.readiness.failed}
+      · ? ${found.readiness.unknown}</p>
+    <ul class="muted" style="margin:0 0 0 16px">${checks}</ul>
+
+    <p class="muted" style="margin:10px 0 2px"><b>Flow</b></p>
+    <div class="fsum">${flow}</div>
+
+    <p class="muted" style="margin:10px 0 2px"><b>진단 정보</b>
+      ${mark(found.diagnostic)}
+      <span class="src">${escHtml(found.diagnostic.detail)}</span></p>
+
+    <p class="muted" style="margin:10px 0 2px"><b>주의사항</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${cautions}</ul>
+
+    <p class="muted" style="margin:8px 0 0">${escHtml(found.note)}</p>
+    <button class="tag" onclick="copyReleaseGate()"
+            style="cursor:pointer;background:none;color:var(--dim);
+                   margin-top:8px" id="copyGate">배포 확인 정보 복사</button>`;
+
+  box.style.display = "block";
+}
+
+// 복사할 글은 Release Report가 이미 지어 두었다. 화면이 새로 조립하면
+// 받아 보는 글의 모양이 사람마다 달라진다(Sprint174에서 정한 규칙).
+async function copyReleaseGate(){
+  const button = $("copyGate");
+
+  let text = "";
+
+  try{
+    const found =
+      await (await fetch("/studio/api/beta-release-gate")).json();
+    text = found.release.report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = "배포 확인 정보 복사"; }, 2000);
     return;
   }
 

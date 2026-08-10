@@ -199,6 +199,9 @@ ENDPOINTS = [
     # Sprint193 - 밖으로 내보낼 한 장. 스냅샷이 낸 것만 옮기므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-release-report", None, []),
+    # Sprint199 - 배포 확인 정보. 앞의 자리들이 낸 답을 모으기만
+    # 하므로 패치할 것이 없다.
+    ("GET", "/studio/api/beta-release-gate", None, []),
     # Sprint185 - 무엇부터 고칠 것인가. dashboard가 낸 숫자만 읽으므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-insights", None, []),

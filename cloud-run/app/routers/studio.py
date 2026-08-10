@@ -273,6 +273,21 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-release-gate")
+def beta_release_gate_card():
+    """
+    Sprint199 - 배포를 정하려는 사람이 보는 한 장.
+
+    앞의 자리들이 낸 답을 모아 놓기만 한다. 문을 여닫지 않는다 -
+    "배포 가능" 같은 말은 여기서 만들지 않고, 그러면 안 되는 이유는
+    beta_readiness의 caution이 그대로 실려 말한다.
+    """
+
+    from app.services import beta_release_gate
+
+    return beta_release_gate.build()
+
+
 @router.get("/api/beta-release-report")
 def beta_release_report_card():
     """
