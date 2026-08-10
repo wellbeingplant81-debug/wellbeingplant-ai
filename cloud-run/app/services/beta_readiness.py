@@ -93,11 +93,23 @@ def build(summary: dict = None) -> dict:
 
     funnel = {row["key"]: row["count"] for row in summary["funnel"]["steps"]}
 
+    from app.utils.paths import is_inside
+
     home = runtime_paths.home()
     program = runtime_paths.program_dir()
 
-    separated = not os.path.normcase(os.path.abspath(home)).startswith(
-        os.path.normcase(os.path.abspath(program)))
+    # Sprint211 - 여기가 startswith 였다. 경로는 글자가 아니라 자리다.
+    #
+    #     C:\Temp\RC209-home 은 C:\Temp\RC209 로 시작하지만 그 안에
+    #     있지 않다 - 이름이 겹치는 이웃일 뿐이다.
+    #
+    # beta_package_validation이 같은 질문을 하는데 Sprint210에서 그쪽만
+    # 고쳤다. 그래서 한 화면 안에서 두 답이 어긋났다 - 처음 사용자
+    # 테스트 한 장에 나눠 줄 폴더와 이 표가 같이 있다.
+    #
+    # 재는 자를 하나로 만들었으므로 이제 갈라질 수가 없다. 묻는 것도
+    # 이 줄의 이름도 그대로다.
+    separated = not is_inside(home, program)
 
     report = diagnostic_report.build(runtime_paths.workflow_root())
     diagnostic_ok = report.get("version") == app_info.VERSION

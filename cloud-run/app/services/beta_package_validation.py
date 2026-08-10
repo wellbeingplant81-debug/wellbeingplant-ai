@@ -149,16 +149,18 @@ def _runtime(folder: str) -> list:
         for name in (media_tools.FFMPEG, media_tools.FFPROBE)
     ]
 
-    beside = os.path.normcase(os.path.abspath(
-        os.path.join(folder, media_tools.BESIDE_DIRNAME)))
+    # Sprint211 - 여기도 startswith 였다. _user 와 같은 결함이다 -
+    # tools 옆에 toolsX 같은 이웃이 있으면 그 안의 것을 "받은 폴더
+    # 안"이라고 본다. 재는 자를 하나로 만든 김에 여기도 그것을 쓴다.
+    from app.utils.paths import is_inside
+
+    beside = os.path.join(folder, media_tools.BESIDE_DIRNAME)
 
     inside = []
 
     for name in (media_tools.FFMPEG, media_tools.FFPROBE):
         where = media_tools.resolve(name)
-        inside.append(
-            os.path.normcase(os.path.abspath(where)).startswith(beside)
-            if where else False)
+        inside.append(is_inside(where, beside) if where else False)
 
     all_inside = inside and False not in inside
 
@@ -170,52 +172,22 @@ def _runtime(folder: str) -> list:
     return checks
 
 
-def _inside(child: str, parent: str) -> bool:
-    """
-    child가 parent 안에 있는가. 글자가 아니라 자리로 본다.
-
-    Sprint210 - 여기가 startswith 였다. 경로는 글자가 아니라 자리인데
-    글자로 쟀다.
-
-        C:\\Temp\\RC209-home 은 C:\\Temp\\RC209 로 시작하지만
-        그 안에 있지 않다 - 이름이 겹치는 이웃일 뿐이다.
-
-    Sprint209에서 절차를 밟다가 드러났다. 안전한데 위험하다고 말하는
-    쪽이라 급하지는 않았지만, 거짓 경보는 사람이 검사를 믿지 않게
-    만든다.
-
-    commonpath는 조각 단위로 본다. …RC209-home 과 …RC209 의 공통
-    자리는 C:\\Temp 이고 그것은 …RC209 가 아니므로 밖이다.
-
-    startswith로 같은 일을 하려면 구분자를 손으로 붙여야 하고
-    (parent + os.sep), 그러면 드라이브 뿌리에서 어긋난다. 파이썬이
-    이미 아는 일을 다시 짜지 않는다.
-
-    묻는 것은 바뀌지 않았다 - 내 것이 프로그램 폴더 밖에 있는가.
-    재는 방법만 고쳤다.
-    """
-
-    try:
-        return os.path.commonpath([child, parent]) == parent
-    except ValueError:
-        # 드라이브가 다르면 겹칠 수 없다. commonpath가 그때 던진다.
-        return False
-
-
 def _user(folder: str) -> list:
     """내 것과 프로그램 자리가 갈려 있는가."""
 
-    home = os.path.normcase(os.path.abspath(runtime_paths.home()))
-    program = os.path.normcase(os.path.abspath(
-        runtime_paths.program_dir()))
-    here = os.path.normcase(os.path.abspath(folder))
+    # Sprint211 - 재는 자는 app/utils/paths 에 하나만 둔다. 여기에
+    # 한 벌을 더 쓰면 beta_readiness와 또 갈라진다(Sprint210에서
+    # 그렇게 갈라졌다). 대소문자와 상대 경로도 그쪽에서 맞춘다.
+    from app.utils.paths import is_inside
+
+    home = runtime_paths.home()
 
     return [
         _row("separated", "사용자 데이터 분리",
-             not _inside(home, program),
+             not is_inside(home, runtime_paths.program_dir()),
              "내 것이 프로그램 폴더 밖에 있는지 봅니다."),
         _row("no_write", "프로그램 폴더에 안 쌓임",
-             not _inside(home, here),
+             not is_inside(home, folder),
              "받은 폴더 안에 내 자리가 생기지 않았는지 봅니다."),
     ]
 

@@ -442,6 +442,124 @@ class TwoPlacesAgreeTest(Base):
 
         self.assertEqual(ours, theirs["data_separated"])
 
+    def both(self, home, program):
+        """같은 자리를 두 자리에게 물어본다."""
+
+        os.makedirs(home, exist_ok=True)
+        os.makedirs(program, exist_ok=True)
+
+        from app.services import beta_package_validation, beta_readiness
+
+        with patch.dict(os.environ, {runtime_paths.HOME_ENV: home}), \
+                patch.object(runtime_paths, "program_dir",
+                             return_value=program):
+
+            package = beta_package_validation.build(program)
+            readiness = beta_readiness.build()
+
+        ours = {row["key"]: row["ok"]
+                for group in package["groups"] for row in group["checks"]}
+        theirs = {row["key"]: row["ok"] for row in readiness["checks"]}
+
+        return ours["separated"], theirs["data_separated"]
+
+    def test_they_agree_when_it_is_really_inside(self):
+        program = os.path.join(self.folder, "프로그램")
+
+        ours, theirs = self.both(os.path.join(program, "안쪽"), program)
+
+        self.assertIs(ours, False)
+        self.assertEqual(ours, theirs)
+
+    def test_they_agree_on_a_plain_neighbour(self):
+        program = os.path.join(self.folder, "프로그램")
+
+        ours, theirs = self.both(
+            os.path.join(self.folder, "내자리"), program)
+
+        self.assertIs(ours, True)
+        self.assertEqual(ours, theirs)
+
+    def test_they_agree_on_a_neighbour_with_a_shared_prefix(self):
+        """
+        Sprint210이 한 쪽만 고쳐서 여기서 둘이 갈라졌다.
+
+        같은 화면에 두 답이 함께 뜬다 - 처음 사용자 테스트 한 장 안에
+        나눠 줄 폴더와 Readiness가 같이 있다.
+        """
+
+        program = os.path.join(self.folder, "AI영상제작소-RC209")
+        home = os.path.join(self.folder, "AI영상제작소-RC209-home")
+
+        ours, theirs = self.both(home, program)
+
+        self.assertIs(ours, True)
+        self.assertEqual(ours, theirs)
+
+    def test_they_agree_when_it_is_the_same_folder(self):
+        program = os.path.join(self.folder, "프로그램")
+
+        ours, theirs = self.both(program, program)
+
+        self.assertIs(ours, False)
+        self.assertEqual(ours, theirs)
+
+    def test_they_share_one_ruler(self):
+        """
+        같은 함수를 부르면 갈라질 수가 없다. 한 벌을 더 쓰면 이
+        스프린트가 다시 필요해진다.
+
+        startswith 를 통째로 막지는 않는다 - beta_readiness가 적어 둔
+        테스트 결과의 첫 낱말을 볼 때처럼 글자를 글자로 보는 정당한
+        자리가 있다. 막는 것은 경로를 글자로 재는 것이다.
+        """
+
+        import ast
+
+        from app.utils import paths
+
+        self.assertTrue(callable(paths.is_inside))
+
+        for name in ("beta_package_validation", "beta_readiness"):
+            with self.subTest(name=name):
+                source = os.path.join(REPO, "app", "services", f"{name}.py")
+
+                with open(source, encoding="utf-8") as f:
+                    tree = ast.parse(f.read())
+
+                called = [node.func.attr if isinstance(node.func, ast.Attribute)
+                          else getattr(node.func, "id", None)
+                          for node in ast.walk(tree)
+                          if isinstance(node, ast.Call)]
+
+                self.assertIn("is_inside", called)
+
+                # 경로를 글자로 재던 흔적. normcase(abspath(...)) 를
+                # 손으로 조립해 startswith 하던 그 모양이다.
+                self.assertNotIn("normcase", called)
+
+    def test_a_tool_in_a_neighbouring_folder_is_not_beside(self):
+        """
+        tools 옆에 toolsX 가 있으면 그 안의 것은 받은 폴더 안이 아니다.
+        _user 와 같은 결함이 여기에도 있었다.
+        """
+
+        from app.services import beta_package_validation, media_tools
+
+        self.whole_package()
+
+        far = os.path.join(self.folder,
+                           media_tools.BESIDE_DIRNAME + "X", "ffmpeg.exe")
+        os.makedirs(os.path.dirname(far), exist_ok=True)
+        open(far, "w").close()
+
+        with patch.object(media_tools, "missing", return_value=[]), \
+                patch.object(media_tools, "resolve", return_value=far):
+
+            found = beta_package_validation.build(self.folder)
+
+        self.assertIsNot(_mark(found, "beside")["ok"], True)
+
 
 class ApiTest(Base):
     """H. 서버와 화면."""
