@@ -4779,6 +4779,30 @@ async function showReleaseCandidate(){
     + `<span class="src" style="display:block">${escHtml(row.detail)}</span>`
     + `</li>`).join("");
 
+  // Sprint208 - 나눠 주기 전에 확인할 것. 셋 다 서버가 낸 값 그대로다.
+  //
+  // 날짜에 "오래됐다" 같은 말을 붙이지 않는다 - 며칠이면 오래된
+  // 것인지는 우리가 정할 일이 아니다.
+  const begin = found.start_check || {};
+  const box3 = begin.package || {};
+  const kept = begin.collecting || {};
+
+  const start = `
+    <li>${box3.failed ? '<span class="no">X</span>'
+                      : '<span class="ok">O</span>'} 나눠 줄 폴더
+      <span class="src" style="display:block">갖춘 것 ${box3.passed} ·
+        못 갖춘 것 ${box3.failed} · 모르는 것 ${box3.unknown}${
+        (box3.missing || []).length
+          ? " — " + box3.missing.map(escHtml).join(" · ") : ""}</span></li>
+    <li>${begin.built_at ? '<span class="ok">O</span>'
+                         : '<span class="src">?</span>'} 언제 지은 판
+      <span class="src" style="display:block">${
+        escHtml(begin.built_detail || "")}</span></li>
+    <li><span class="src">·</span> 받은 기록 넣는 자리
+      <span class="src" style="display:block">내 것 폴더의
+        .dataset\\${escHtml(kept.dirname || "")} · 지금 ${
+        kept.so_far}벌을 보고 셉니다</span></li>`;
+
   const kinds = Object.keys(found.errors || {}).length
     ? Object.entries(found.errors)
         .map(([kind, n]) => `${escHtml(kind)} ${n}`).join(" · ")
@@ -4807,6 +4831,9 @@ async function showReleaseCandidate(){
     <p class="muted" style="margin:4px 0 0"><b>다음 행동</b>
       <span class="src">${escHtml(found.now.next_action)}</span></p>
     ${reasons}
+
+    <p class="muted" style="margin:10px 0 2px"><b>베타를 시작하기 전에</b></p>
+    <ul class="muted" style="margin:0 0 0 16px">${start}</ul>
 
     <p class="muted" style="margin:10px 0 2px"><b>여덟 걸음</b></p>
     <ul class="muted" style="margin:0 0 0 16px">${walk}</ul>

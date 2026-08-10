@@ -93,6 +93,74 @@ WALK = (
 )
 
 
+# Sprint208 - 묶은 적이 없을 때 하는 말.
+#
+# X로 찍지 않는다. 개발 중에는 묶은 적이 없는 것이 정상이고, X는
+# "고장 났다"로 읽힌다.
+NEVER_BUILT = "묶은 적이 없습니다. 개발 중에는 이것이 정상입니다."
+
+BUILT_AT = "{} 에 묶은 판입니다."
+
+
+def _start_check(gate: dict) -> dict:
+    """
+    나눠 주기 전에 확인할 것. 전부 이미 있는 값이다.
+
+    베타를 시작하는 사람에게는 두 가지가 한 질문이다 - 지금 이걸 남에게
+    줘도 되는가. 그런데 나눠 줄 물건(디스크)과 받을 준비(기록 자리)가
+    서로 다른 카드에 있었다.
+
+    날짜는 적을 뿐 판정하지 않는다
+    ------------------------------
+    "오래됐다"고 말하지 않는다. 며칠이면 오래된 것인지 우리가 정할 일이
+    아니고, 정하는 순간 새 기준이 생긴다. 날짜를 적고 사람이 본다.
+
+    Sprint201에서 dist의 exe가 하루 지난 것이었고 Sprint192~200이 빠져
+    있었다. 알아챈 것은 사람이 날짜를 눈으로 본 덕이었지 화면이 말해
+    준 것이 아니다. 이제 화면이 날짜를 말한다.
+
+    경로를 통째로 적지 않는다
+    -------------------------
+    받는 자리는 내 자리 아래의 상대 이름만 적는다. 통째로 적으면
+    사용자 이름이 함께 나간다.
+
+    기록을 다시 읽지 않는다
+    -----------------------
+    package_validation은 디스크만 본다(기록 0회). 나머지는 넘겨받은
+    summary에서 꺼내므로 여기서도 읽지 않는다.
+    """
+
+    from app import app_info
+    from app.services import beta_package_validation
+
+    package = beta_package_validation.build()
+
+    gone = [row["label"] for group in package["groups"]
+            for row in group["checks"] if row["ok"] is False]
+
+    made = app_info.build_date()
+
+    return {
+        # 나눠 줄 폴더. 셈도 못 갖춘 줄도 그쪽이 낸 그대로다.
+        "package": {
+            "passed": package["passed"],
+            "failed": package["failed"],
+            "unknown": package["unknown"],
+            "missing": gone,
+        },
+
+        # 언제 지은 판인가. 사실만 적는다.
+        "built_at": made,
+        "built_detail": BUILT_AT.format(made) if made else NEVER_BUILT,
+
+        # 받은 기록을 어디에 넣는가, 지금 몇 벌인가.
+        "collecting": {
+            "dirname": gate["summary"]["collected_dirname"],
+            "so_far": gate["summary"]["installations"],
+        },
+    }
+
+
 def _counts_of(gate: dict) -> dict:
     """flow의 칸 이름 -> 숫자. Gate가 낸 것을 옮기기만 한다."""
 
@@ -177,6 +245,9 @@ def build(store_path: str, project_path: str = None) -> dict:
 
         # 여덟 걸음.
         "journey": _walk(gate, now["state"]),
+
+        # Sprint208 - 나눠 주기 전에 확인할 것.
+        "start_check": _start_check(gate),
 
         # 무엇에 걸렸는가. Gate가 낸 그대로다.
         "errors": gate["summary"]["error_kinds"],

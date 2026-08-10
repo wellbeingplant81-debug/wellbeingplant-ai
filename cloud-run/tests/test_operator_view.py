@@ -192,6 +192,114 @@ class TheHoldingIsTrueTest(Base):
             self.assertEqual(counted.call_count, 1)
 
 
+class BeforeHandingItOutTest(Base):
+    """
+    Sprint208 - 나눠 주기 전에 확인할 것.
+
+    베타를 시작하는 사람에게는 두 가지가 한 질문이다 - "지금 이걸
+    남에게 줘도 되는가". 그런데 나눠 줄 물건(디스크)과 받을 준비(기록
+    자리)가 서로 다른 카드에 있었다.
+
+    그리고 하나는 아무 데도 없었다 - 언제 지은 판인가. Sprint201에서
+    dist의 exe가 하루 지난 것이었고 Sprint192~200이 빠져 있었는데,
+    그것을 알아챈 것은 사람이 날짜를 눈으로 본 덕이었다.
+
+    app_info.build_date()는 이미 있다. 어느 화면도 쓰지 않았을 뿐이다.
+    """
+
+    def card(self):
+        from app.services import beta_release_candidate
+
+        return beta_release_candidate.build(self.store, None)
+
+    def test_the_card_carries_a_start_check(self):
+        self.assertIn("start_check", self.card())
+
+    def test_it_says_whether_the_folder_is_whole(self):
+        from app.services import beta_package_validation
+
+        found = self.card()["start_check"]["package"]
+        theirs = beta_package_validation.build()
+
+        for key in ("passed", "failed", "unknown"):
+            with self.subTest(key=key):
+                self.assertEqual(found[key], theirs[key])
+
+    def test_the_missing_rows_are_the_ones_that_failed(self):
+        from app.services import beta_package_validation
+
+        theirs = beta_package_validation.build()
+
+        gone = [row["label"] for group in theirs["groups"]
+                for row in group["checks"] if row["ok"] is False]
+
+        self.assertEqual(self.card()["start_check"]["package"]["missing"],
+                         gone)
+
+    def test_it_says_when_this_build_was_made(self):
+        from app import app_info
+
+        found = self.card()["start_check"]["built_at"]
+
+        self.assertEqual(found, app_info.build_date())
+
+    def test_never_bundled_is_not_a_failure(self):
+        """
+        개발 중에는 묶은 적이 없다. X로 찍으면 고장 난 것으로 읽힌다.
+        """
+
+        said = self.card()["start_check"]["built_detail"]
+
+        self.assertIn("묶은 적이 없습니다", said)
+
+    def test_it_says_where_received_records_go(self):
+        from app.services import beta_dashboard
+
+        self.some()
+
+        found = self.card()["start_check"]["collecting"]
+
+        self.assertEqual(found["dirname"],
+                         beta_dashboard.build()["collected_dirname"])
+
+    def test_it_says_how_many_have_come_so_far(self):
+        from app.services import beta_summary
+
+        self.some()
+
+        self.assertEqual(self.card()["start_check"]["collecting"]["so_far"],
+                         beta_summary.build()["installations"])
+
+
+class TheDateIsNotAVerdictTest(Base):
+    """
+    Sprint208 - 날짜는 적을 뿐 판정하지 않는다.
+
+    며칠이면 오래된 것인지 우리가 정할 일이 아니다. 정하는 순간 새
+    기준이 생긴다.
+    """
+
+    def test_it_never_calls_the_build_old(self):
+        from app.services import beta_release_candidate
+
+        body = json.dumps(beta_release_candidate.build(self.store, None),
+                          ensure_ascii=False)
+
+        for said in ("오래", "낡", "최신이 아닙니다", "다시 묶"):
+            with self.subTest(said=said):
+                self.assertNotIn(said, body)
+
+    def test_it_never_says_it_is_fine(self):
+        from app.services import beta_release_candidate
+
+        body = json.dumps(beta_release_candidate.build(self.store, None),
+                          ensure_ascii=False)
+
+        for said in ("통과", "배포 가능", "문제 없음", "안전함"):
+            with self.subTest(said=said):
+                self.assertNotIn(said, body)
+
+
 class NothingNewTest(Base):
     """4. 새로 만든 것이 없다."""
 

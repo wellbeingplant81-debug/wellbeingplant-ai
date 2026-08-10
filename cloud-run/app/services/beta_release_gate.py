@@ -97,6 +97,11 @@ def build() -> dict:
             # 사이의 낙차 판정이 전부 달라진다.
             "preparation_ready":
                 summary["dashboard"]["preparation_ready"],
+
+            # Sprint208 - 받은 기록을 어디에 넣는가. 내 자리 아래의
+            # 상대 이름이다 - 통째로 적으면 사용자 이름이 함께 나간다.
+            "collected_dirname":
+                summary["dashboard"]["collected_dirname"],
             "error_kinds": summary["error_kinds"],
             "next_action": summary["next_action"],
         },
