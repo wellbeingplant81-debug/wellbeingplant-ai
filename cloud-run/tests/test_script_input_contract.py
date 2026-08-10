@@ -313,6 +313,80 @@ class TheScreenConnectsItTest(Base):
         self.assertIn("wizRaw", page[opener:opener + 600])
 
 
+class TheWizardAsksFirstTest(Base):
+    """
+    Sprint205 - 붙여넣기 칸에서 미리 말한다.
+
+    검사는 이미 있었다. POST /api/script-check 가 "Scene 1: 그림 묘사가
+    없습니다"라고 말한다. 그런데 무료 제작 마법사의 붙여넣기 칸만 그
+    검사를 부르지 않았다.
+
+        checkScript('importRaw','importQuality')   있다
+        checkScript('manualRaw','manualQuality')   있다
+        wizRaw                                     없다
+
+    하필 Closed Beta 사용자가 지나는 길이 그 길이다. 그래서 넷째
+    걸음(제작 시작)에서야 알았다 - 첫째 걸음에서 이미 할 수 있던 말을.
+    """
+
+    def page(self):
+        from app.routers import studio as studio_router
+
+        return studio_router.studio_page().body.decode("utf-8")
+
+    def test_the_wizard_asks_the_check_that_already_exists(self):
+        self.assertIn("checkScript('wizRaw','wizQuality')", self.page())
+
+    def test_there_is_a_place_to_show_the_answer(self):
+        self.assertIn('id="wizQuality"', self.page())
+
+    def test_the_box_says_what_a_script_must_have(self):
+        """
+        무엇이 있어야 하는지 모르면 붙여넣고 나서야 안다.
+        """
+
+        page = self.page()
+        at = page.find('id="wizRaw"')
+
+        self.assertNotEqual(at, -1)
+
+        near = page[max(0, at - 900):at + 900]
+
+        self.assertIn("읽을 문장", near)
+        self.assertIn("그림 묘사", near)
+
+    def test_those_words_are_the_words_the_check_uses(self):
+        """
+        검사와 안내가 다른 낱말을 쓰면, 안내를 보고 고쳐도 검사가
+        여전히 안 된다고 한다.
+        """
+
+        from app.services import script_quality_check
+
+        found = script_quality_check.check({
+            "title": "무릎", "hook": "", "script": "무릎",
+            "scenes": [{"scene": 1, "narration": "다리를 펴 주십시오."}],
+        })
+
+        said = " ".join(found.get("reasons") or [])
+
+        self.assertIn("그림 묘사", said)
+
+    def test_the_check_still_only_reads(self):
+        """
+        읽어 보는 것으로 프로젝트가 생기면 안 된다.
+        """
+
+        before = sorted(os.listdir(self.home))
+
+        answer = self.client.post(
+            "/studio/api/script-check",
+            json={"raw": "제목: 무릎\n\nScene 1\n다리를 펴 주십시오.\n"})
+
+        self.assertEqual(answer.status_code, 200)
+        self.assertEqual(sorted(os.listdir(self.home)), before)
+
+
 class NothingIsMadeTest(Base):
     """Sprint204 - 거절할 때 아무것도 만들지 않는다."""
 

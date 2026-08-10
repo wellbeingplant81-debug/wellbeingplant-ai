@@ -5025,6 +5025,23 @@ async function wizReadScript(){
   renderFreeWizard();
 }
 
+// Sprint205 - 읽는 것과 살펴보는 것을 함께 한다.
+//
+// 검사는 이미 있었다(Sprint179의 /api/script-check). 그런데 이 칸만
+// 그것을 부르지 않아서, "장면 3개"라는 말만 듣고 다음으로 갔다가
+// 제작 시작에서야 "그림 묘사가 없습니다"를 들었다. 첫 걸음에서 이미
+// 할 수 있던 말이다.
+//
+// 새 검사를 만들지 않는다. importRaw·manualRaw가 쓰는 그 함수를
+// 같은 인자 모양으로 부른다.
+//
+// 살펴보는 것은 읽은 뒤에 한다 - wizReadScript가 끝나면서 마법사를
+// 다시 그리고, 그때 결과를 담을 자리가 새로 생긴다.
+async function wizReadAndCheck(){
+  await wizReadScript();
+  await checkScript('wizRaw','wizQuality');
+}
+
 // 확정. 여기서 프로젝트가 생긴다.
 async function wizCreateProject(){
   wizError = "";
@@ -5158,15 +5175,19 @@ function renderFreeWizard(){
     ${wizProject ? `<p class="muted">
         <b>${escHtml(wizProject.title)}</b> · scene ${wizProject.scene_count}개
         · 프로젝트 ${wizProject.project_id}</p>`
-      : `<textarea id="wizRaw" placeholder="Gemini 답을 그대로 붙여넣기"
+      : `<p class="muted">장면마다 <b>읽을 문장</b>과 <b>그림 묘사</b>가
+           있어야 합니다. 위 요청문을 채팅창에 넣고 받은 답이면 둘 다
+           들어 있습니다.</p>
+         <textarea id="wizRaw" placeholder="Gemini 답을 그대로 붙여넣기"
            ></textarea>
          <div class="rowbtns">
-           <button class="sm ghost" onclick="wizReadScript()">읽어 보기</button>
+           <button class="sm ghost" onclick="wizReadAndCheck()">읽어 보기</button>
            ${wizScript ? `<button class="sm" onclick="wizCreateProject()">
              이 대본으로 시작</button>` : ""}
          </div>
          ${wizScript ? `<p class="muted"><b>${escHtml(wizScript.title)}</b>
-           · scene ${wizScript.scene_count}개</p>` : ""}`}
+           · scene ${wizScript.scene_count}개</p>` : ""}
+         <div id="wizQuality"></div>`}
 
     ${wizHead(4, "내 자료 폴더")}
     <div class="rowbtns" style="margin-top:0">
