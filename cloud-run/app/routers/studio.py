@@ -273,6 +273,23 @@ def beta_insights_card():
     return beta_insights.build()
 
 
+@router.get("/api/beta-package-validation")
+def beta_package_validation_card():
+    """
+    Sprint201 - 받은 폴더에 있어야 할 것이 있는가.
+
+    만들지 않는다. 없는 자리를 여기서 만들어 주면 그것은 검증이 아니라
+    설치이고, 그 다음부터는 무엇이 원래 있던 것인지 알 수 없다.
+
+    켜 봤다고 말하지도 않는다 - 두 번 눌러 화면이 뜨는지는 사람이
+    봐야 하고, 그 사실을 답의 note가 직접 말한다.
+    """
+
+    from app.services import beta_package_validation
+
+    return beta_package_validation.build()
+
+
 @router.get("/api/beta-release-candidate")
 def beta_release_candidate_card(project_id: str = ""):
     """

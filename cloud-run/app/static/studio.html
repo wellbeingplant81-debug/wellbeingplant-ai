@@ -573,6 +573,11 @@ a{color:var(--accent)}
           style="cursor:pointer;background:none;color:var(--dim)"
           title="처음 쓰는 사람이 어디까지 갈 수 있는가"
           >처음 사용자 테스트</button>
+  <!-- Sprint201 - 받은 폴더에 있어야 할 것이 있는가. 켜 봤다고 말하지
+       않는다 - 두 번 눌러 화면이 뜨는지는 사람이 봐야 한다. -->
+  <button class="tag" id="openPackage" onclick="showPackageCheck()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="받은 폴더와 내 자료 자리를 살펴봅니다">패키지 확인</button>
   <button class="tag" id="openSummary" onclick="showSummary()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="베타 운영 정보를 한 장으로">Beta Summary</button>
@@ -4669,6 +4674,71 @@ async function copyBetaFeedback(){
   }catch(err){
     button.textContent = "정보를 못 읽음";
     setTimeout(() => { button.textContent = "베타 피드백 복사"; }, 2000);
+    return;
+  }
+
+  await _clipboard(button, text, "복사했습니다");
+}
+
+// Sprint201 - 받은 폴더 확인.
+//
+// 서버가 ?로 둔 자리를 화면에서 O나 X로 바꾸지 않는다. "아직 없습니다"는
+// 고장이 아니라 아직 안 켠 것이고, 그 구별이 이 표의 값이다.
+async function showPackageCheck(){
+  let found;
+
+  try{
+    found = await (await fetch(
+      "/studio/api/beta-package-validation")).json();
+  }catch(err){
+    alert("패키지 확인 정보를 읽지 못했습니다.");
+    return;
+  }
+
+  const mark = row => row.ok === true ? '<span class="ok">O</span>'
+    : (row.ok === false ? '<span class="no">X</span>'
+                        : '<span class="src">?</span>');
+
+  const groups = (found.groups || []).map(group =>
+    `<p class="muted" style="margin:10px 0 2px"><b>${
+       escHtml(group.label)}</b></p>`
+    + `<ul class="muted" style="margin:0 0 0 16px">`
+    + group.checks.map(row =>
+        `<li>${mark(row)} ${escHtml(row.label)}`
+        + `<span class="src" style="display:block">${
+             escHtml(row.detail)}</span></li>`).join("")
+    + `</ul>`).join("");
+
+  const box = $("troubleBox");
+
+  box.innerHTML = `
+    <div class="dh"><b>패키지 확인</b>
+      <span class="src">확인 시점 ${escHtml(found.taken_at)}
+        · 판 ${escHtml(found.version)}</span></div>
+    <p class="muted" style="margin:6px 0 0">
+      O ${found.passed} · X ${found.failed} · ? ${found.unknown}</p>
+    ${groups}
+    <p class="muted" style="margin:10px 0 0">${escHtml(found.note)}</p>
+    <button class="tag" onclick="copyPackageCheck()"
+            style="cursor:pointer;background:none;color:var(--dim);
+                   margin-top:8px" id="copyPackage"
+            >패키지 확인 복사</button>`;
+
+  box.style.display = "block";
+}
+
+async function copyPackageCheck(){
+  const button = $("copyPackage");
+
+  let text = "";
+
+  try{
+    const found = await (await fetch(
+      "/studio/api/beta-package-validation")).json();
+    text = found.report;
+  }catch(err){
+    button.textContent = "정보를 못 읽음";
+    setTimeout(() => { button.textContent = "패키지 확인 복사"; }, 2000);
     return;
   }
 

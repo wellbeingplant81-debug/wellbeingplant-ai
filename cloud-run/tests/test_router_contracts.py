@@ -205,6 +205,9 @@ ENDPOINTS = [
     # Sprint200 - 처음 쓰는 사람의 여덟 걸음. Gate와 onboarding이 낸
     # 답을 옮기기만 하므로 패치할 것이 없다.
     ("GET", "/studio/api/beta-release-candidate", None, []),
+    # Sprint201 - 받은 폴더 확인. 디스크를 읽기만 하므로 패치할 것이
+    # 없다.
+    ("GET", "/studio/api/beta-package-validation", None, []),
     # Sprint185 - 무엇부터 고칠 것인가. dashboard가 낸 숫자만 읽으므로
     # 패치할 것이 없다.
     ("GET", "/studio/api/beta-insights", None, []),
