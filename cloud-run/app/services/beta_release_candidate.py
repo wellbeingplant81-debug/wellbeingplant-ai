@@ -49,10 +49,12 @@ NOTE = (
     "본 것이 아니므로, 확인된 것과 아직 모르는 것만 적었습니다."
 )
 
-# 다섯째 걸음이 왜 비어 있는지. 화면이 이 말을 그대로 띄운다.
-ASSETS_DETAIL = (
-    "자료가 갖춰졌다는 기록은 남지만 모아 세는 자리가 없어 아직 모릅니다."
-)
+# 다섯째 걸음. Sprint206에서 수를 얻었지만 판정은 여전히 없다.
+#
+# "몇 벌이 거기까지 갔다"와 "그것으로 충분한가"는 다른 말이다. 후자를
+# 묻는 자리가 없으므로 ok는 ? 그대로다 - 숫자가 생겼다고 판정이 생긴
+# 것이 아니다.
+ASSETS_DETAIL = "자료가 갖춰진 기록 {}벌. 갖췄는지 판정하는 자리는 없습니다."
 
 # (열쇠, 사람이 읽는 이름, flow의 어느 칸인가, readiness의 어느 줄인가)
 #
@@ -82,9 +84,9 @@ def _marks_of(gate: dict) -> dict:
     return {row["key"]: row for row in gate["readiness"]["checks"]}
 
 
-def _detail_for(key: str, mark: dict, state: str) -> str:
+def _detail_for(key: str, mark: dict, state: str, assets=None) -> str:
     if key == "assets":
-        return ASSETS_DETAIL
+        return ASSETS_DETAIL.format(assets)
 
     if key == "output":
         return f"지금 이 설치본은 {state} 입니다."
@@ -103,6 +105,10 @@ def _walk(gate: dict, state: str) -> list:
     counts = _counts_of(gate)
     marks = _marks_of(gate)
 
+    # Sprint206 - 자료까지 갖춘 기록. flow 다섯 칸에 없는 숫자라
+    # Gate가 따로 실어 온다.
+    assets = gate["summary"]["preparation_ready"]
+
     steps = []
 
     for key, label, at, judged in WALK:
@@ -111,9 +117,10 @@ def _walk(gate: dict, state: str) -> list:
         steps.append({
             "key": key,
             "label": label,
-            "count": counts.get(at) if at else None,
+            "count": assets if key == "assets"
+            else (counts.get(at) if at else None),
             "ok": mark["ok"] if mark else None,
-            "detail": _detail_for(key, mark, state),
+            "detail": _detail_for(key, mark, state, assets),
         })
 
     return steps

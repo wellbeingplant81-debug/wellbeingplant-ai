@@ -65,9 +65,23 @@ STAGES = (
 )
 
 # 세어서 내주는 사건들.
+#
+# Sprint206 - preparation_ready 가 여기 없었다. 적히기는 하는데
+# (studio.py, 프로젝트당 한 번) 아무도 세지 않아서, 모든 기록에 들어
+# 있는 숫자를 아무도 읽지 못했다.
+#
+# ORDER 와 STAGES 에는 넣지 않는다. 넣으면 blocked_stage 바구니가
+# 달라지고, 어제까지 script_ready 에서 멈춘 것으로 세어지던 사람이
+# 오늘부터 다른 칸으로 옮겨간다 - 그것은 이미 내려진 판정을 바꾸는
+# 일이라 따로 정할 문제다.
+#
+# 그래서 지금도 "자료를 못 모아 못 간 사람"과 "다 모아 놓고 안 누른
+# 사람"은 같은 칸에 있다. 다만 자료까지 간 기록이 몇 벌인지는 이제
+# 말할 수 있다.
 COUNTED = (
     WORKSPACE_SELECTED,
     SCRIPT_READY,
+    beta_telemetry.PREPARATION_READY,
     RENDER_STARTED,
     beta_telemetry.RENDER_COMPLETED,
     beta_telemetry.RENDER_FAILED,
@@ -216,6 +230,8 @@ def build() -> dict:
         "launch_count": launches,
         "workspace_selected": counted[WORKSPACE_SELECTED],
         "script_ready": counted[SCRIPT_READY],
+        # Sprint206 - 자료까지 갖춘 기록. 세기만 한다.
+        "preparation_ready": counted[beta_telemetry.PREPARATION_READY],
         "render_started": counted[RENDER_STARTED],
         "render_completed": counted[beta_telemetry.RENDER_COMPLETED],
         "render_failed": counted[beta_telemetry.RENDER_FAILED],

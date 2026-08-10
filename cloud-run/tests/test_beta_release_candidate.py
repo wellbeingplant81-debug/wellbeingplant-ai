@@ -182,9 +182,13 @@ class TheWalkTest(Base):
         self.assertEqual(self.step(found, "render_completed")["ok"],
                          marks["render_done"])
 
-    def test_the_assets_step_says_it_does_not_know(self):
+    def test_the_assets_step_has_a_number_but_no_verdict(self):
         """
-        preparation_ready는 기록에 남지만 모아 세는 자리가 없다.
+        Sprint200에서는 수도 없었다 - preparation_ready를 아무도 세지
+        않았기 때문이다. Sprint206이 그것을 세기 시작했다.
+
+        수가 생겨도 판정은 여전히 없다. "몇 벌이 거기까지 갔다"와
+        "그것으로 충분한가"는 다른 말이고, 후자를 묻는 자리가 없다.
         """
 
         self.walked()
@@ -192,8 +196,8 @@ class TheWalkTest(Base):
         row = self.step(self.now(), ASSETS)
 
         self.assertIsNone(row["ok"])
-        self.assertIsNone(row["count"])
-        self.assertIn("세는", row["detail"])
+        self.assertEqual(row["count"], 2)
+        self.assertIn("판정", row["detail"])
 
     def test_the_state_is_the_onboarding_state(self):
         self.walked()

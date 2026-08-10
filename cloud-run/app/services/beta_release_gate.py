@@ -92,6 +92,11 @@ def build() -> dict:
             "finished": summary["finished"],
             "success_rate": summary["success_rate"],
             "top_blocked_stage": summary["top_blocked_stage"],
+            # Sprint206 - 자료까지 갖춘 기록. flow 다섯 칸에는 없는
+            # 숫자라 여기로 실어 나른다 - funnel의 칸을 늘리면 칸
+            # 사이의 낙차 판정이 전부 달라진다.
+            "preparation_ready":
+                summary["dashboard"]["preparation_ready"],
             "error_kinds": summary["error_kinds"],
             "next_action": summary["next_action"],
         },
