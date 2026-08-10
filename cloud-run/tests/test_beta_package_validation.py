@@ -329,6 +329,105 @@ class ToolsTest(Base):
             self.assertIs(row["ok"], False)
 
 
+class PathsAreNotJustLettersTest(Base):
+    """
+    Sprint210 - 경로는 글자가 아니라 자리다.
+
+    C:\\Temp\\RC209-home 은 C:\\Temp\\RC209 로 시작하지만 그 안에 있지
+    않다 - 이름이 겹치는 이웃일 뿐이다.
+
+    Sprint209에서 절차를 밟다가 드러났다. 시험용 폴더를 …RC209 와
+    …RC209-home 으로 지었더니 "사용자 데이터 분리"가 X로 나왔다.
+
+    안전한데 위험하다고 말하는 쪽이라 급하지는 않았다. 다만 거짓
+    경보는 사람이 검사를 믿지 않게 만든다.
+    """
+
+    def marks(self, home, program):
+        os.makedirs(home, exist_ok=True)
+        os.makedirs(program, exist_ok=True)
+
+        from app.services import beta_package_validation
+
+        with patch.dict(os.environ, {runtime_paths.HOME_ENV: home}), \
+                patch.object(runtime_paths, "program_dir",
+                             return_value=program):
+
+            found = beta_package_validation.build(program)
+
+        return {row["key"]: row["ok"]
+                for group in found["groups"] for row in group["checks"]}
+
+    def test_a_neighbour_with_a_shared_prefix_is_outside(self):
+        program = os.path.join(self.folder, "AI영상제작소-RC209")
+        home = os.path.join(self.folder, "AI영상제작소-RC209-home")
+
+        found = self.marks(home, program)
+
+        self.assertIs(found["separated"], True)
+        self.assertIs(found["no_write"], True)
+
+    def test_a_plain_neighbour_is_still_outside(self):
+        program = os.path.join(self.folder, "프로그램")
+        home = os.path.join(self.folder, "내자리")
+
+        found = self.marks(home, program)
+
+        self.assertIs(found["separated"], True)
+        self.assertIs(found["no_write"], True)
+
+    def test_really_inside_is_still_inside(self):
+        program = os.path.join(self.folder, "프로그램")
+        home = os.path.join(program, "안쪽")
+
+        found = self.marks(home, program)
+
+        self.assertIs(found["separated"], False)
+        self.assertIs(found["no_write"], False)
+
+    def test_the_same_folder_is_inside(self):
+        program = os.path.join(self.folder, "프로그램")
+
+        found = self.marks(program, program)
+
+        self.assertIs(found["separated"], False)
+        self.assertIs(found["no_write"], False)
+
+    def test_another_drive_does_not_kill_it(self):
+        """
+        드라이브가 다르면 겹칠 수 없다. 재다가 죽지 않는다.
+        """
+
+        from app.services import beta_package_validation
+
+        program = os.path.join(self.folder, "프로그램")
+        os.makedirs(program, exist_ok=True)
+
+        with patch.object(runtime_paths, "home", return_value=r"Z:\내자리"), \
+                patch.object(runtime_paths, "program_dir",
+                             return_value=program):
+
+            found = beta_package_validation.build(program)
+
+        marks = {row["key"]: row["ok"]
+                 for group in found["groups"] for row in group["checks"]}
+
+        self.assertIs(marks["separated"], True)
+
+    def test_the_words_did_not_change(self):
+        """
+        재는 방법만 고쳤다. 묻는 것도 이름도 그대로다.
+        """
+
+        self.whole_package()
+
+        row = _mark(self.now(), "separated")
+
+        self.assertEqual(row["label"], "사용자 데이터 분리")
+        self.assertEqual(row["detail"],
+                         "내 것이 프로그램 폴더 밖에 있는지 봅니다.")
+
+
 class TwoPlacesAgreeTest(Base):
     """G. 데이터 분리를 두 자리가 같게 본다."""
 

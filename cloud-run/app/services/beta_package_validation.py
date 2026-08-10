@@ -170,6 +170,38 @@ def _runtime(folder: str) -> list:
     return checks
 
 
+def _inside(child: str, parent: str) -> bool:
+    """
+    child가 parent 안에 있는가. 글자가 아니라 자리로 본다.
+
+    Sprint210 - 여기가 startswith 였다. 경로는 글자가 아니라 자리인데
+    글자로 쟀다.
+
+        C:\\Temp\\RC209-home 은 C:\\Temp\\RC209 로 시작하지만
+        그 안에 있지 않다 - 이름이 겹치는 이웃일 뿐이다.
+
+    Sprint209에서 절차를 밟다가 드러났다. 안전한데 위험하다고 말하는
+    쪽이라 급하지는 않았지만, 거짓 경보는 사람이 검사를 믿지 않게
+    만든다.
+
+    commonpath는 조각 단위로 본다. …RC209-home 과 …RC209 의 공통
+    자리는 C:\\Temp 이고 그것은 …RC209 가 아니므로 밖이다.
+
+    startswith로 같은 일을 하려면 구분자를 손으로 붙여야 하고
+    (parent + os.sep), 그러면 드라이브 뿌리에서 어긋난다. 파이썬이
+    이미 아는 일을 다시 짜지 않는다.
+
+    묻는 것은 바뀌지 않았다 - 내 것이 프로그램 폴더 밖에 있는가.
+    재는 방법만 고쳤다.
+    """
+
+    try:
+        return os.path.commonpath([child, parent]) == parent
+    except ValueError:
+        # 드라이브가 다르면 겹칠 수 없다. commonpath가 그때 던진다.
+        return False
+
+
 def _user(folder: str) -> list:
     """내 것과 프로그램 자리가 갈려 있는가."""
 
@@ -180,10 +212,10 @@ def _user(folder: str) -> list:
 
     return [
         _row("separated", "사용자 데이터 분리",
-             not home.startswith(program),
+             not _inside(home, program),
              "내 것이 프로그램 폴더 밖에 있는지 봅니다."),
         _row("no_write", "프로그램 폴더에 안 쌓임",
-             not home.startswith(here),
+             not _inside(home, here),
              "받은 폴더 안에 내 자리가 생기지 않았는지 봅니다."),
     ]
 
