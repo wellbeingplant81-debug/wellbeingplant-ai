@@ -216,10 +216,30 @@ def build(store_path: str, project_path: str = None) -> dict:
     """
 
     from app.services import (
-        final_check, free_workspace, output_check, studio_review,
+        final_check, free_workspace, local_library, output_check,
+        studio_review,
     )
 
     chosen = bool(free_workspace.remembered(store_path).get("root"))
+
+    # Sprint214 - 기억과 준비는 다른 것이다.
+    #
+    # remembered는 "폴더를 한 번 정하면 기억한다"는 편의다. 라이브러리를
+    # 훑을 때 root를 안 주면 쓰는 기본값이고, 주면 쳐다보지도 않는다.
+    #
+    # 훑은 결과는 프로젝트 안에 남는다(local_library.json). 제작이
+    # 기대는 것은 그쪽이고, Sprint213이 그것을 증명했다 - 전역 기억이
+    # 빈 채로 영상이 끝까지 나왔다. 그런데 화면은 계속 "폴더를
+    # 고르십시오"라고 했다. 같은 상태를 둘이 다르게 말한 것이다.
+    #
+    # 그래서 프로젝트가 제 자료 목록을 갖고 있으면 그 걸음은 끝난
+    # 것으로 본다. 새 기준을 만드는 것이 아니라 local_library가 이미
+    # 아는 사실을 읽는다 - load는 없으면 빈 것을 주고, 그것이 곧
+    # "훑은 적이 없다"는 뜻이라고 그 docstring이 말한다.
+    #
+    # 여기서 기억을 채우지는 않는다. 사람이 고른 적이 없기 때문이다.
+    if not chosen and project_path:
+        chosen = bool(local_library.load(project_path).get("items"))
 
     if not project_path:
         state = WORKSPACE_REQUIRED if not chosen else SCRIPT_REQUIRED
