@@ -49,6 +49,27 @@ NOTE = (
     "본 것이 아니므로, 확인된 것과 아직 모르는 것만 적었습니다."
 )
 
+# Sprint207 - 이 한 장이 담고 있는 것들.
+#
+# 머리줄에 누를 것이 열둘이고, 그중 넷은 서로를 담는 관계다. 그 사실을
+# 아무도 말하지 않아 운영자는 넷을 눌러 봤고, 넷은 서로 다른 순간을
+# 말했다(실측: 배포 확인 정보 13:04:24, Beta Snapshot 13:04:25).
+#
+# 하나만 눌러도 되면 읽기가 한 번이고, 한 번이면 한 순간이다.
+#
+# 여기 적는 것은 이름뿐이다. 담고 있다는 것 자체는 코드가 이미 그런
+# 것이고(gate를 부르고 그 안에 snapshot이 있다), 그것이 사실인지는
+# 값으로 확인한다(test_operator_view.TheHoldingIsTrueTest).
+HOLDS = (
+    "배포 확인 정보",
+    "Beta Snapshot",
+    "Beta Summary",
+    "Beta Readiness",
+    "Release Report",
+)
+
+HOLDS_LINE = "이 한 장에 다음이 들어 있습니다 - " + " · ".join(HOLDS)
+
 # 다섯째 걸음. Sprint206에서 수를 얻었지만 판정은 여전히 없다.
 #
 # "몇 벌이 거기까지 갔다"와 "그것으로 충분한가"는 다른 말이다. 후자를
@@ -162,6 +183,12 @@ def build(store_path: str, project_path: str = None) -> dict:
         "top_blocked_stage": gate["summary"]["top_blocked_stage"],
 
         "cautions": gate["release"]["cautions"],
-        "report": gate["release"]["report"],
+
+        # 무엇이 이 안에 들어 있는가. 넷을 눌러 보지 않아도 되게.
+        "holds": list(HOLDS),
+
+        # 붙여 넣어 보내는 글에도 적는다 - 받아 본 사람은 화면을 못
+        # 본다. 글을 새로 짓지 않고 이미 지어진 것 뒤에 한 줄을 붙인다.
+        "report": gate["release"]["report"] + "\n\n" + HOLDS_LINE,
         "note": NOTE,
     }

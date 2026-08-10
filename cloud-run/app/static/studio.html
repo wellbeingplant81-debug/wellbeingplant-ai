@@ -551,6 +551,18 @@ a{color:var(--accent)}
   <!-- Sprint181 - 막혔을 때 스스로 알아볼 수 있게. -->
   <!-- Sprint184 - 베타 현황. 로그인은 없다 - 이 서버는 127.0.0.1에만
        열려 있고 그것이 지금 유일한 경계다. -->
+  <!-- Sprint207 - 무엇을 먼저 볼 것인가.
+       머리줄에 누를 것이 열둘이고 그중 넷은 서로를 담는 관계다. 그
+       사실을 아무도 말하지 않아 운영자는 넷을 눌러 봤고, 넷은 서로
+       다른 순간을 말했다 - 카드 하나는 기록을 한 번만 읽지만, 카드
+       사이에서는 그 원칙이 지켜지지 않는다.
+       하나만 눌러도 되면 읽기가 한 번이고, 한 번이면 한 순간이다. -->
+  <span class="tag" id="firstLook">먼저 볼 것</span>
+  <button class="tag" id="openCandidate" onclick="showReleaseCandidate()"
+          style="cursor:pointer;background:none;color:var(--dim)"
+          title="처음 쓰는 사람이 어디까지 갈 수 있는가 · 아래 낱장들이 이 안에 들어 있습니다"
+          >처음 사용자 테스트</button>
+  <span class="tag" id="singleSheets">낱장으로 볼 것</span>
   <button class="tag" id="openSnapshot" onclick="showSnapshot()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="지금을 한 장으로">Beta Snapshot</button>
@@ -567,12 +579,8 @@ a{color:var(--accent)}
   <button class="tag" id="openGate" onclick="showReleaseGate()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="내보낼지 정하기 전에 확인할 것들">배포 확인 정보</button>
-  <!-- Sprint200 - 처음 켠 사람의 여덟 걸음. 가 봤다고 말하지 않는다 -
-       기록을 읽은 것뿐이라 확인된 것과 아직 모르는 것만 적는다. -->
-  <button class="tag" id="openCandidate" onclick="showReleaseCandidate()"
-          style="cursor:pointer;background:none;color:var(--dim)"
-          title="처음 쓰는 사람이 어디까지 갈 수 있는가"
-          >처음 사용자 테스트</button>
+  <!-- Sprint200의 [처음 사용자 테스트]는 Sprint207에서 머리줄 맨 앞
+       "먼저 볼 것"으로 옮겼다. 여기 두 번 두지 않는다. -->
   <!-- Sprint201 - 받은 폴더에 있어야 할 것이 있는가. 켜 봤다고 말하지
        않는다 - 두 번 눌러 화면이 뜨는지는 사람이 봐야 한다. -->
   <button class="tag" id="openPackage" onclick="showPackageCheck()"
@@ -4813,6 +4821,9 @@ async function showReleaseCandidate(){
     <ul class="muted" style="margin:0 0 0 16px">${cautions}</ul>
 
     <p class="muted" style="margin:8px 0 0">${escHtml(found.note)}</p>
+    <p class="muted" style="margin:2px 0 0"><span class="src">이 한 장에
+      ${(found.holds || []).map(escHtml).join(" · ")} 이(가) 들어
+      있습니다. 따로 누르지 않으셔도 됩니다.</span></p>
     <button class="tag" onclick="copyReleaseCandidate()"
             style="cursor:pointer;background:none;color:var(--dim);
                    margin-top:8px" id="copyCandidate"
