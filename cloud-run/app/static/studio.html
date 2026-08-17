@@ -521,6 +521,249 @@ a{color:var(--accent)}
 .promptbox{width:100%;min-height:170px;font-family:ui-monospace,monospace;
   font-size:11.5px;line-height:1.5;background:#0f141f;border:1px solid #2a3346;
   border-radius:8px;color:#c8d2e2;padding:9px}
+
+/* ══════════════════════════════════════════════════════════════════
+   Sprint216 - 한 화면에서 끝낸다 (Epic 60).
+
+   무엇이 문제였는가 (1382x979에서 실측한 값이다)
+   ---------------------------------------------
+   첫 화면이 2075px, 2.12 화면이었다. 프로젝트를 하나 고르면 3173px,
+   3.24 화면이 됐다. 세로로 쌓인 덩이가 셋이라서다 -
+   머리줄 216px · .maker 779px · .layout 1068px. 오른쪽 칸 하나가
+   혼자 2141px였고, 그 안의 썸네일 한 장이 573px였다.
+
+   머리줄 216px는 장식이 아니라 결함이었다. 전역 button{width:100%}가
+   머리줄 단추까지 늘려서 h1이 폭 17px로 짜부라졌고, 제목 다섯 글자가
+   세로로 한 줄씩 섰다.
+
+   무엇을 바꾸는가
+   ---------------
+   페이지가 스크롤하지 않는다. body가 화면 높이를 꽉 채우고 각 칸이
+   제 안에서 스크롤한다. 덩이를 쌓지 않고 나란히 놓는다.
+
+       머리줄    ① 무엇을 만드는가  ② 지금 어떤 상태인가
+       왼        최근 프로젝트
+       가운데    ③ 새 영상 만들기 - 설정 · 대본 · 옵션
+       오른      ④ 요약 · 준비도 · [영상 생성]   그 아래로 결과들
+       아래      ⑤ 진행 단계 · 콘솔
+
+   기능은 하나도 빼지 않는다. .maker와 .layout을 display:contents로
+   풀어 그 자식들을 한 판(#work) 위에 다시 놓기만 한다 - 그래서
+   마크업 순서와 id가 그대로 남고, 그것을 붙잡고 있는 테스트들도
+   그대로 통과한다.
+   ══════════════════════════════════════════════════════════════════ */
+html,body{height:100%}
+body{overflow:hidden;display:grid;
+  grid-template-rows:auto auto minmax(0,1fr)}
+
+/* ── 머리줄 ─────────────────────────────────────────────────────
+   한 줄로 눕힌다. width:auto가 이 줄의 핵심이다 - 전역
+   button{width:100%}를 여기서 끊지 않으면 제목이 다시 세로로 선다. */
+header{flex-wrap:wrap;row-gap:5px;gap:9px;padding:7px 13px}
+header h1{flex:none;white-space:nowrap;font-size:15px}
+header>*{flex:none}
+header button{width:auto}
+header .tag{padding:2px 7px}
+/* 문의 안내는 지우지 않는다 - README가 가리키는 글이다. 한 줄로
+   줄이고 나머지는 hover에 둔다. */
+#contactTag{max-width:148px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;cursor:help}
+.cps{margin-left:0;flex-wrap:nowrap;overflow-x:auto;max-width:34vw;
+  scrollbar-width:none}
+.cps::-webkit-scrollbar{display:none}
+.cp{white-space:nowrap;flex:none}
+/* 도움 단추들은 한 덩이로 묶어 오른쪽 끝에 둔다 - 작업과 섞이면
+   무엇이 실행 단추인지 고르기 어려워진다.
+   margin-left:auto를 쓰지 않는다. 자동 여백은 flex-grow보다 먼저
+   남는 폭을 다 먹어서, #nowBar가 0폭이 되거나 이 덩이가 아래 줄로
+   밀려난다(1366에서 실제로 두 줄이 됐다). #nowBar가 자라면서
+   밀어내는 것으로 충분하다. */
+.hbtns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ① 무엇을 만들고 있는가 · ② 지금 어떤 상태인가.
+   새 사실을 만들지 않는다 - 고른 프로젝트와 #jobState를 되읽는다. */
+/* flex-basis를 0으로 둔다. 줄바꿈은 basis로 계산되므로, 이 칸이
+   남는 폭을 요구하면 도움 단추들이 아래 줄로 밀려난다 - 0이면
+   한 줄에 다 들어간 뒤에 남는 만큼만 자란다. */
+#nowBar{display:flex;align-items:center;gap:8px;min-width:150px;
+  flex:1 1 0;padding:3px 11px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:99px}
+#nowBar .lb{flex:none;font-size:9.5px;color:var(--dim);font-weight:600;
+  text-transform:uppercase;letter-spacing:.7px}
+#nowTitle{min-width:0;font-size:12.5px;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#nowTitle.empty{font-weight:400;color:var(--dim)}
+#nowState{flex:none;font-size:11px;color:var(--accent);white-space:nowrap;
+  border-left:1px solid var(--line);padding-left:8px}
+
+/* ── 작업 판 ────────────────────────────────────────────────────
+   세 칸과 아래 상태줄. 어느 칸도 페이지를 밀지 않는다. */
+#work{display:grid;min-height:0;overflow:hidden;gap:9px;padding:9px;
+  grid-template-columns:clamp(196px,15.5vw,254px) minmax(0,1fr)
+                        clamp(292px,23.5vw,348px);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"recent make sidetop"
+                      "recent make side"
+                      "status status status"}
+.maker,.layout{display:contents}
+.maker>.panel{grid-area:make;overflow-y:auto;min-height:0}
+#makerSummary{grid-area:sidetop;display:flex;flex-direction:column;
+  gap:7px;min-height:0;max-height:46vh}
+.layout>.stack:nth-child(1){grid-area:recent;overflow-y:auto;min-height:0}
+.layout>.stack:nth-child(3){grid-area:side;overflow-y:auto;min-height:0}
+.layout>.stack:nth-child(2){grid-area:status;flex-direction:row;
+  min-height:0;gap:9px}
+.layout>.stack:nth-child(2)>.panel{min-width:0;overflow:hidden}
+.layout>.stack:nth-child(2)>.panel:first-child{flex:1 1 auto}
+.layout>.stack:nth-child(2)>.panel:last-child{flex:1 1 330px;
+  display:flex;flex-direction:column}
+
+/* ── 밀도 ───────────────────────────────────────────────────────
+   정보 밀도는 올리고 시각적 복잡도는 내린다. 카드를 새로 만들지
+   않고 이미 있는 것의 여백만 깎는다. */
+.panel{padding:10px 11px}
+.panel h2{margin:0 0 7px}
+.stack{gap:9px}
+label{margin:7px 0 3px}
+.topicrow{margin-bottom:9px}
+.topicrow textarea{height:54px}
+textarea{min-height:52px}
+.rowbtns{margin-top:8px}
+.na-note{padding:7px 9px;font-size:11px;line-height:1.45}
+.strat{margin-bottom:9px}
+.rcards{grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:6px}
+.rcard{padding:8px 10px;gap:5px}
+.rcard .n{font-size:13px}
+.picks{gap:8px}
+
+/* 좁아진 칸에서 낱말이 글자마다 끊기던 자리.
+   .pcard의 .a와 .model에는 flex-basis:100%가 적혀 있다 - "제 줄을
+   쓰겠다"는 뜻인데 flex-wrap이 없었다. 그래서 다섯 조각이 한 줄에서
+   서로를 밀어내고 "AI 자 동 생 성"이 됐다. 가운데 칸이 1007px에서
+   745px로 좁아지자 드러났을 뿐, 없던 결함이 생긴 것이 아니다 -
+   창을 줄이면 예전 화면에서도 같은 일이 났다. */
+.pick .pcard{flex-wrap:wrap}
+.pick .pcard>span{white-space:nowrap}
+.pick .pcard .n{flex:none}
+.pick .pcard .a,.pick .pcard .model{white-space:normal}
+/* 제작 모드 카드도 같은 모양이었다. 줄이지 않고 넘긴다 - 글을
+   자르면 무엇을 고르는지 알 수 없다. */
+.cmode .cm{flex:0 0 auto}
+.wspace .wrow>*{min-width:0}
+
+/* 전역 input{width:100%}가 라디오와 체크박스까지 늘린다.
+   이 함정에 네 번 걸렸다 - .pcard(Sprint117) · .rprov/.sprov
+   (Sprint132) · .rcard · .mode 가 각자 width:auto를 적어 막았고,
+   Sprint150에 붙은 .cmode는 그것을 안 적어서 라디오 하나가 카드
+   전체 폭을 먹고 "API 사 용"이 됐다.
+
+   자리마다 따로 칠하는 것을 그만둔다. 라디오와 체크박스는 폭을
+   늘려야 할 이유가 애초에 없다 - 한 줄로 끊어 두면 다음에 붙는
+   카드가 다시 걸리지 않는다. */
+input[type=radio],input[type=checkbox]{width:auto}
+
+/* 요약 칸 - 카드만 스크롤하고 준비도와 실행 단추는 늘 보인다.
+   ④가 화면 밖으로 밀려나면 이 화면은 제 일을 못 한다. */
+#makerSummary h2{margin:0}
+#planSummary{overflow-y:auto;min-height:0;margin:0;padding:8px 9px}
+/* 여덟 장이 두 무리(.res · .cards)로 온다. 같은 크기로 맞춰 두 칸씩
+   네 줄로 세운다 - 세 칸으로 쪼개면 한 칸이 85px가 되고 낱말이
+   글자마다 끊긴다(실측). */
+.res,.cards{gap:6px;margin-bottom:6px}
+.res .r,.card{padding:6px 8px;gap:0}
+.res b,.card b{font-size:12.5px;line-height:1.3}
+.res .k,.card .k{font-size:9px}
+.res .s,.card .s{font-size:9px;line-height:1.3}
+/* 배경음악 안내 - 지우지 않는다. 두 줄까지만 보이고 나머지는
+   hover와 스크롤에 있다. */
+#planSummary>p.muted{margin:0;font-size:10px;line-height:1.4}
+#readiness{flex:none;margin-top:0;padding:8px 10px}
+.ready .pct{font-size:13px;margin-top:4px}
+.ready .ticks{margin-top:4px;font-size:10.5px}
+#go{flex:none;margin-top:0!important;padding:11px 14px;font-size:14px}
+#jobState{flex:none;margin:0!important}
+/* 파이프라인 고정값 안내는 지우지 않는다 - 고급 설정에 같은 것이
+   있다는 사실을 이 줄이 말한다. 두 줄을 한 줄로 줄인다. */
+#makerSummary>p.muted:last-child{flex:none;margin:0!important;
+  font-size:10px;line-height:1.4;max-height:2.8em;overflow:hidden;
+  cursor:help}
+
+/* 결과 미리보기 - 9:16 한 장이 573px를 먹던 자리다. 비율은 그대로
+   두고 높이만 묶는다. */
+#videoBox video{max-height:34vh;object-fit:contain}
+#thumbBox img.preview{max-height:30vh;width:auto;max-width:100%;
+  margin:0 auto;object-fit:contain}
+#scores{gap:6px}
+.score{padding:7px}
+.score b{font-size:17px}
+
+/* ⑤ 진행 단계 - 아홉 줄을 아홉 칸으로 눕힌다(410px -> 한 줄). */
+#stages{flex-direction:row;flex-wrap:wrap;gap:5px}
+#stages .stage{flex:none;padding:4px 9px;gap:6px;font-size:12px}
+#stages .stage .name{flex:none}
+#stages .stage .note{font-size:9.5px}
+/* 콘솔은 늘 보이되 자리를 적게 쓴다. 더 보려면 펼친다. */
+.console{height:84px;padding:8px;flex:1 1 auto;min-height:0}
+.console.big{height:46vh;flex:none}
+.layout>.stack:nth-child(2)>.panel:last-child>h2{display:flex;
+  align-items:center;gap:8px}
+#consoleToggle{width:auto;flex:none;margin-left:auto;padding:1px 8px;
+  font-size:10.5px}
+
+/* 문제 해결 · 운영자 낱장이 그려지는 자리.
+   예전에는 이 상자가 renderFreeHome 안에만 있어서, 첫 화면에서
+   [문제 해결]을 누르면 아무 일도 일어나지 않았다(innerHTML of null).
+   이제 화면에 늘 있고, 닫을 수 있다. */
+#troubleBox{margin-bottom:9px}
+#troubleClose{width:auto;padding:2px 9px;font-size:11px;float:right}
+
+/* ── 창이 작아질 때 ─────────────────────────────────────────────
+   1920 · 1600 · 1366 은 모두 위의 세 칸 그대로다(1366에서도 폭이
+   1180을 넘는다). 사람이 창을 그보다 좁히면 칸을 더 쪼개지 않고
+   예전처럼 세로로 쌓고 페이지 스크롤을 되돌려 준다 - 좁은 칸에
+   단추를 밀어 넣어 못 누르게 만드는 것보다 낫다. */
+@media (max-width:1180px){
+  html,body{height:auto}
+  body{overflow:auto;display:block}
+  #work{display:block;overflow:visible;padding:0}
+  .maker{display:grid;grid-template-columns:minmax(0,1fr) 300px;
+    gap:9px;padding:0 9px 9px}
+  .layout{display:grid;grid-template-columns:1fr;gap:9px;padding:0 9px 9px}
+  .maker>.panel,#makerSummary,.layout>.stack{grid-area:auto;
+    max-height:none;overflow:visible}
+  #makerSummary{position:sticky;top:9px}
+  #planSummary{overflow:visible}
+  .layout>.stack:nth-child(2){flex-direction:column}
+  .console{height:150px}
+  .cps{max-width:100%}
+}
+/* 세로가 짧은 화면(1366x768 등).
+   468px를 오른쪽 칸 셋이 나눠 써야 한다 - 요약이 절반을 넘으면 그
+   아래 결과 칸이 100px로 남는다(실측). 요약의 낱장 여덟은 제 안에서
+   넘기게 두고, 결과 칸에 자리를 준다. 준비도·[영상 생성]·상태는
+   요약 안에서 스크롤하지 않는 자리에 있어 그대로 보인다. */
+@media (max-height:800px){
+  .console{height:56px}
+  #makerSummary{max-height:46vh}
+  #work{gap:7px;padding:7px}
+  .panel{padding:8px 10px}
+  #stages .stage{padding:3px 8px;font-size:11px}
+  #videoBox video{max-height:28vh}
+  #thumbBox img.preview{max-height:24vh}
+  /* 준비도를 눕힌다. 넷을 세로로 쌓으면 92px인데, 그만큼을 요약
+     낱장들에서 빼앗아 가 낱장이 16px만 보였다(실측). 같은 사실을
+     세 줄에 담는다 - "제작 준비도 100%" · 막대 · 체크들. */
+  #readiness{display:flex;flex-wrap:wrap;align-items:baseline;
+    gap:2px 8px;padding:6px 9px}
+  .ready .k{margin:0;flex:none}
+  .ready .pct{margin:0;font-size:12.5px;flex:none;order:1}
+  .ready .bar{flex:1 1 100%;height:5px;order:2}
+  .ready .ticks{margin:0;flex:1 1 100%;order:3}
+  #go{padding:9px 14px;font-size:13px}
+  /* 파이프라인 고정값 안내는 한 줄만. 나머지는 hover에 있다. */
+  #makerSummary>p.muted:last-child{display:-webkit-box;
+    -webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+}
 </style>
 </head>
 <body>
@@ -530,6 +773,28 @@ a{color:var(--accent)}
        적지 않는다 - 예전에 "Studio v1"이라고 적혀 있었고, 프로그램은
        그 사이 여러 판을 지나 있었다. -->
   <span class="tag" id="appVersion">{{APP_VERSION}}</span>
+
+  <!-- Sprint216 - ① 무엇을 만들고 있는가 ② 지금 어떤 상태인가.
+       화면을 봤을 때 가장 먼저 눈에 들어와야 하는 둘인데, 첫째는
+       아무 데도 없었고 둘째는 오른쪽 요약 칸 안에 묻혀 있었다
+       (그 칸은 스크롤해야 보였다).
+
+       새 사실을 만들지 않는다 - 고른 프로젝트의 제목과 #jobState를
+       되읽어 옮겨 적는다. 두 곳에서 따로 세면 어긋나는 날이 온다. -->
+  <div id="nowBar">
+    <span class="lb">지금</span>
+    <span id="nowTitle" class="empty">주제를 적으면 여기에 나타납니다</span>
+    <span id="nowState">대기 중</span>
+  </div>
+
+  <!-- Sprint117 - 지금 무엇이 도는지는 무엇을 고르든 항상 보인다. -->
+  <div id="currentProviders" class="cps"></div>
+  <button class="sm ghost" id="providersToggle"
+          onclick="toggleProviders()">▼</button>
+
+  <!-- Sprint216 - 도움 단추들은 오른쪽 끝에 모은다. 작업 단추와
+       섞여 있으면 무엇을 눌러 만드는지 고르기가 어려워진다. -->
+  <div class="hbtns">
   <!-- Sprint174 - 막힌 사람이 창을 뒤져 옮겨 적지 않게 한다. 글은
        서버(/studio/api/about)가 짓는다 - 화면마다 다른 모양으로 오면
        무엇이 빠졌는지 알 수 없다. -->
@@ -538,8 +803,13 @@ a{color:var(--accent)}
           title="판번호와 지금 상태를 복사합니다">정보 복사</button>
   <!-- Sprint177 - 묻기 전에 무엇을 보내면 되는지 먼저 말한다.
        문의처만 보여 주면 사람은 "안 돼요"라고만 보내고, 우리는
-       되물어야 한다. -->
-  <span class="tag" id="contactTag">문의 {{APP_CONTACT}} ·
+       되물어야 한다.
+
+       Sprint216 - 글은 그대로 두고 한 줄로 줄였다(README가 가리키는
+       안내다). 전체는 hover에서 그대로 읽힌다. -->
+  <span class="tag" id="contactTag"
+        title="문의 {{APP_CONTACT}} · 아래 [베타 피드백 복사] 내용을 함께 보내주시면 확인이 빠릅니다"
+        >문의 {{APP_CONTACT}} ·
     아래 [베타 피드백 복사] 내용을 함께 보내주시면 확인이 빠릅니다</span>
   <button class="tag" id="copyBeta" onclick="copyBetaFeedback()"
           style="cursor:pointer;background:none;color:var(--dim)"
@@ -559,10 +829,7 @@ a{color:var(--accent)}
   <button class="tag" id="operatorToggle" onclick="toggleOperator()"
           style="cursor:pointer;background:none;color:var(--dim)"
           title="운영자가 확인하는 정보를 펼칩니다">운영자 확인</button>
-  <!-- Sprint117 - 지금 무엇이 도는지는 무엇을 고르든 항상 보인다. -->
-  <div id="currentProviders" class="cps"></div>
-  <button class="sm ghost" id="providersToggle"
-          onclick="toggleProviders()">▼</button>
+  </div>
 </header>
 
 <!-- Sprint215 - 운영자 영역. 지우지 않고 옮기기만 했다.
@@ -623,9 +890,23 @@ a{color:var(--accent)}
 <!-- 새 영상 만들기 - 단계마다 무엇으로 만들지 직접 고른다.
      등급 이름(Premium/Standard/Economy)은 어떤 AI가 쓰이는지도, 비용이
      어디서 나는지도 말해 주지 않아서 걷어냈다. -->
+<!-- Sprint216 - 작업 판. 아래 두 덩이(.maker · .layout)를 세로로 쌓지
+     않고 한 판 위에 나란히 놓는다. 두 덩이는 display:contents로 풀리고
+     그 자식들이 이 판의 칸에 앉는다 - 마크업 순서와 id는 손대지
+     않는다. -->
+<div id="work">
 <section class="maker">
   <div class="panel">
     <h2>새 영상 만들기</h2>
+
+    <!-- Sprint216 - 문제 해결·운영자 낱장이 그려지는 자리.
+         예전에는 이 상자가 renderFreeHome이 만드는 글 안에만 있었다.
+         그래서 첫 화면에서 [문제 해결]을 누르면 아무 일도 일어나지
+         않았다 - 콘솔에만 "innerHTML of null"이 남았다(실측).
+         화면에 늘 두고, 닫을 수 있게 한다. -->
+    <button class="sm ghost" id="troubleClose" onclick="closeTrouble()"
+            style="display:none" title="이 글을 닫습니다">닫기</button>
+    <div id="troubleBox" class="panel" style="display:none"></div>
 
     <!-- Sprint215 - 무엇을 만들지부터. 나머지 설정은 접어 둔다.
          기본값이 이미 있고, 받은 사람이 처음에 정할 것이 아니다. -->
@@ -768,7 +1049,11 @@ a{color:var(--accent)}
     <div id="readiness" class="ready"></div>
     <button id="go" style="margin-top:10px">영상 생성</button>
     <p class="muted" id="jobState" style="margin:9px 0 0">대기 중</p>
-    <p class="muted" style="margin:6px 0 0">
+    <!-- Sprint216 - 세로가 짧은 화면에서는 한 줄로 접힌다. 지우지
+         않는다 - 고급 설정을 열어 본 사람이 "왜 못 바꾸는가"를 묻는
+         자리다. 접힌 나머지는 hover에 그대로 있다. -->
+    <p class="muted" style="margin:6px 0 0"
+       title="Platform / Length / Language는 현재 파이프라인 고정값입니다. 엔진을 바꾸지 않기로 한 범위라 표시만 합니다.">
       Platform / Length / Language는 현재 파이프라인 고정값입니다.
       엔진을 바꾸지 않기로 한 범위라 표시만 합니다.
     </p>
@@ -785,7 +1070,13 @@ a{color:var(--accent)}
     </div>
   </div>
 
-  <!-- 중: 진행 + 미리보기 + 콘솔 -->
+  <!-- 중: 진행 + 콘솔. Sprint216에서 화면 아래 상태줄이 됐다 -
+       ⑤ 얼마나 진행됐는가는 무엇을 하고 있든 늘 보여야 하고,
+       그러려면 스크롤을 따라다니는 자리가 아니라 고정된 자리에
+       있어야 한다.
+
+       Video Preview는 오른쪽 결과 칸으로 옮겼다(지우지 않았다) -
+       9:16 영상이 이 낮은 줄에서는 우표만큼 작아진다. -->
   <div class="stack">
     <div class="panel">
       <h2>Pipeline Progress</h2>
@@ -793,18 +1084,22 @@ a{color:var(--accent)}
     </div>
 
     <div class="panel">
-      <h2>Video Preview</h2>
-      <div id="videoBox" class="muted">아직 영상이 없습니다.</div>
-    </div>
-
-    <div class="panel">
-      <h2>Console</h2>
+      <h2>Console
+        <button class="sm ghost" id="consoleToggle"
+                onclick="toggleConsole()"
+                title="자세한 기록을 크게 봅니다">펼치기</button>
+      </h2>
       <div class="console" id="console">준비됨.</div>
     </div>
   </div>
 
-  <!-- 우: scene / 품질 / inspector -->
+  <!-- 우: 결과 / scene / 품질 / inspector -->
   <div class="stack">
+    <div class="panel">
+      <h2>Video Preview</h2>
+      <div id="videoBox" class="muted">아직 영상이 없습니다.</div>
+    </div>
+
     <div class="panel">
       <h2>Quality</h2>
       <div class="scores" id="scores"><span class="muted">평가 전</span></div>
@@ -850,6 +1145,7 @@ a{color:var(--accent)}
     </div>
   </div>
 </div>
+</div><!-- /#work -->
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -873,6 +1169,66 @@ function renderStages(stages){
   }).join("");
 }
 
+// ══ Sprint216 - 머리줄이 무엇을 말하는가 ═══════════════════════════
+//
+// ① 무엇을 만들고 있는가 ② 지금 어떤 상태인가. 둘 다 새 사실이
+// 아니다 - 고른 프로젝트와 #jobState에 이미 있던 것을 눈에 보이는
+// 자리로 옮겨 적는 것뿐이다.
+
+function showNowMaking(what){
+  const said = (what || "").trim();
+  const box = $("nowTitle");
+
+  box.textContent = said || "주제를 적으면 여기에 나타납니다";
+  box.title = said;
+  box.classList.toggle("empty", !said);
+}
+
+// #jobState를 되읽는다.
+//
+// 그 값을 적는 자리가 코드 안에 여덟 곳이다. 여덟 곳을 다 고치면
+// 그중 하나를 잊는 날이 오고, 그때 머리줄은 지난 상태를 계속 말한다.
+// 한 곳에서 지켜보는 편이 어긋나지 않는다.
+function watchJobState(){
+  const from = $("jobState"), to = $("nowState");
+
+  const copy = () => { to.textContent = from.textContent.trim() || "대기 중"; };
+
+  new MutationObserver(copy).observe(
+    from, {childList:true, characterData:true, subtree:true});
+
+  copy();
+}
+
+// 콘솔은 아래 상태줄에서 늘 보이되 자리를 적게 쓴다. 자세히 볼
+// 때만 펼친다 - 기록을 지우지 않는다.
+function toggleConsole(){
+  const box = $("console"), open = box.classList.toggle("big");
+
+  $("consoleToggle").textContent = open ? "접기" : "펼치기";
+
+  box.scrollTop = box.scrollHeight;
+}
+
+// 문제 해결·운영자 낱장을 닫는다. 지우는 것이 아니라 덮어 두는
+// 것이다 - 다시 누르면 그때의 상태로 새로 그려진다.
+function closeTrouble(){
+  $("troubleBox").style.display = "none";
+  $("troubleClose").style.display = "none";
+}
+
+// 그 낱장들이 열릴 때 [닫기]도 함께 나타나게 한다.
+//
+// display를 block으로 바꾸는 자리가 열세 곳이다 - 열세 곳에 한 줄씩
+// 더 적는 대신 상자 하나를 지켜본다.
+function watchTroubleBox(){
+  const box = $("troubleBox"), button = $("troubleClose");
+
+  new MutationObserver(() => {
+    button.style.display = box.style.display === "none" ? "none" : "";
+  }).observe(box, {attributes:true, attributeFilter:["style"]});
+}
+
 async function loadProjects(){
   const r = await fetch("/studio/api/projects");
   const d = await r.json();
@@ -891,6 +1247,7 @@ async function openProject(id){
   const r = await fetch(`/studio/api/projects/${id}`);
   if(!r.ok){ return; }
   currentDetail = await r.json();
+  showNowMaking(currentDetail.title || currentDetail.topic || id);
   renderStages(currentDetail.stages);
   renderScores(currentDetail.quality);
   renderScenes(currentDetail.scenes);
@@ -3944,7 +4301,10 @@ function freeHome(){
          여섯 걸음으로 다시 적은 것을 위에 둔다. -->
     <div id="guideBox"></div>
     <div id="onboardBox"></div>
-    <div id="troubleBox" class="panel" style="display:none;margin-top:8px"></div>
+    <!-- Sprint216 - troubleBox는 여기서 만들지 않는다. 이 글은
+         [직접 고르기]를 눌러야 그려지므로, 첫 화면에서는 상자가
+         아예 없었고 [문제 해결]은 조용히 죽었다. 이제 화면 마크업에
+         늘 있다 - 두 곳에서 만들면 id가 둘이 된다. -->
     <div class="rowbtns">
       <button class="sm" onclick="${next.action}">${next.label}</button>
       <span class="muted">${escHtml(next.why)}</span>
@@ -5989,6 +6349,16 @@ renderStages(null);
 loadDataset();
 loadOAuth();
 loadStages();
+
+// Sprint216 - 머리줄이 지금 상태를 되읽기 시작한다.
+watchJobState();
+watchTroubleBox();
+
+// 주제를 적는 그 순간부터 머리줄이 그것을 말한다. 프로젝트를 이미
+// 열어 둔 동안에는 덮어쓰지 않는다 - 만들고 있는 것이 그쪽이다.
+$("topic").addEventListener("input", () => {
+  if(!currentProject){ showNowMaking($("topic").value); }
+});
 
 // Sprint84 - Queue에서 프로젝트를 직접 열 수 있어야 한다.
 // 목록이 먼저 그려진 뒤에 열어야 선택 표시가 맞는다.
