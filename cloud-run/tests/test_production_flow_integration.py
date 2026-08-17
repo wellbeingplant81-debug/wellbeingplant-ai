@@ -221,7 +221,10 @@ class TestGenerateReusesThePreparedProject(_Case):
                 "project_id": "20260101_000001",
             })
 
-        start.assert_called_once_with("주제", "wellbeing", "20260101_000001")
+        # Sprint218 - 네 번째는 어느 단추로 눌렀는가다. 안 보내면 None
+        # 이므로 "예전과 완전히 같다"는 그대로다.
+        start.assert_called_once_with(
+            "주제", "wellbeing", "20260101_000001", None)
 
     def test_the_endpoint_still_works_without_it(self):
         """기존 호출부는 전혀 영향받지 않는다."""
@@ -230,7 +233,7 @@ class TestGenerateReusesThePreparedProject(_Case):
             response = client.post("/studio/api/jobs", json={"topic": "주제"})
 
         self.assertEqual(response.status_code, 200)
-        start.assert_called_once_with("주제", "wellbeing", None)
+        start.assert_called_once_with("주제", "wellbeing", None, None)
 
 
 class TestTheScreen(unittest.TestCase):

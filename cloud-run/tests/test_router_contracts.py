@@ -115,6 +115,13 @@ ENDPOINTS = [
      ["app.routers.studio.studio_jobs.start_social"],
      "/studio/api/social/youtube/login"),
 
+    # Sprint218 - 만들기 갈래와 화면 테마. 셋 다 엔진을 부르지 않는다.
+    # 테마 저장은 settings.json 한 줄을 고칠 뿐이라 패치하지 않는다 -
+    # 이 스위트는 이미 임시 홈에서 돈다.
+    ("GET", "/studio/api/production/creation-modes", None, []),
+    ("GET", "/studio/api/settings", None, []),
+    ("PUT", "/studio/api/settings/theme", {"theme": "dark"}, []),
+
     # Sprint84 - Production Queue. 승인은 workflow 상태만 바꾸므로
     # 엔진을 부르지 않는다.
     ("GET", "/studio/queue", None, []),

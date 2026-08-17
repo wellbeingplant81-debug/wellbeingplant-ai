@@ -210,16 +210,30 @@ def _new_job(job_id, topic, channel, project_id=None, project_path=None):
 
 
 def start(topic: str, channel: str = "wellbeing",
-          project_id: str = None) -> str:
+          project_id: str = None, creation_mode: str = None) -> str:
     """생성을 시작하고 job_id를 돌려준다.
 
     Sprint107 - project_id를 주면 미리 만들어 둔 프로젝트로 만든다.
-    주지 않으면 예전과 같다."""
+    주지 않으면 예전과 같다.
+
+    Sprint218 - creation_mode를 함께 적어 둔다.
+
+    엔진에 새 인자를 넘기지 않는다. 이 저장소에서 무엇을 어떻게 만들지를
+    실제로 정하는 것은 프로젝트에 적힌 단계별 Provider 선택이고
+    (/api/review/{id}/providers), FREE와 FULL_AUTO의 차이는 그 선택을
+    다르게 채우는 것으로 이미 엔진에 전달된다. 여기에 또 하나의 경로를
+    만들면 둘이 어긋나는 날이 온다.
+
+    그래도 적어 두는 이유는, 무엇을 눌러 시작한 작업인지 뒤에서 알 수
+    있어야 하기 때문이다 - 실패한 렌더가 어느 갈래였는지 모르면 무엇을
+    고쳐야 할지도 모른다."""
 
     job_id = uuid.uuid4().hex[:12]
 
     with _lock:
-        _jobs[job_id] = _new_job(job_id, topic, channel, project_id)
+        job = _new_job(job_id, topic, channel, project_id)
+        job["creation_mode"] = creation_mode
+        _jobs[job_id] = job
 
     thread = threading.Thread(
         target=_run, args=(job_id, topic, channel, project_id), daemon=True,
@@ -618,6 +632,8 @@ def status(job_id: str, console_from: int = 0) -> dict:
             # Sprint217 - SNS 계정 한 덩이. 실패해도 채워져 있다.
             "platform": job.get("platform"),
             "account": job.get("account"),
+            # Sprint218 - 무엇을 눌러 시작한 작업인가.
+            "creation_mode": job.get("creation_mode"),
             "console": list(console[start_at:]),
             "console_next": len(console),
         }

@@ -16,7 +16,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from app import config
+from app import config, settings
 from app.services import (
     oauth_manager, project_service, studio_jobs, studio_regeneration,
     studio_replay, studio_service, studio_upload, studio_workflow,
@@ -47,6 +47,13 @@ class GenerateRequest(BaseModel):
     # Sprint107 - 붙여넣기/직접 작성으로 미리 만들어 둔 프로젝트가
     # 있으면 그것으로 만든다. 없으면(기본값) 예전과 똑같이 새로 만든다.
     project_id: str = None
+    # Sprint218 - 어느 갈래로 눌렀는가. 보내지 않으면 예전과 똑같다
+    # (직접 고르기 화면의 [영상 생성]이 그렇다) - 기존 동작을 바꾸지
+    # 않기 위해 기본값을 None으로 둔다.
+    creation_mode: str = None
+    # 비용이 발생할 수 있다는 안내를 사람이 확인했는가. 유료 API를
+    # 부를 수 있는 갈래에서는 이것이 없으면 시작하지 않는다.
+    cost_ack: bool = False
 
 
 class ChatImportRequest(BaseModel):
@@ -108,7 +115,91 @@ def studio_page():
     page = page.replace(app_info.PAGE_TOKEN, app_info.label())
     page = page.replace(app_info.CONTACT_TOKEN, app_info.CONTACT)
 
+    # Sprint218 - 고른 테마를 <html data-theme>에 심는다.
+    #
+    # 자바스크립트가 켜진 뒤에 붙이면, 라이트를 고른 사람은 켤 때마다
+    # 검은 화면이 한 번 번쩍이는 것을 본다(첫 그림은 :root 기본값인
+    # 다크로 그려지기 때문이다). 서버는 이미 그 값을 알고 있으므로
+    # 여기서 적어 두면 첫 그림부터 제 색이다.
+    #
+    # 모르는 값이 적혀 있어도 화면은 뜬다 - settings.theme()이 다크로
+    # 되돌린다.
+    page = page.replace(settings.THEME_TOKEN, settings.theme())
+
     return HTMLResponse(page)
+
+
+# ── Sprint218 - 화면 테마 (Epic 62) ──────────────────────────────────
+#
+# 새 설정 저장 체계를 만들지 않는다. app.settings가 이미 %APPDATA% 아래
+# settings.json을 들고 있고 "없는 것만 채운다"는 규칙까지 지킨다.
+
+
+class ThemeRequest(BaseModel):
+    theme: str
+
+
+@router.get("/api/settings")
+def settings_view():
+    """지금 설정. 화면이 테마 고르는 칸을 그릴 때 읽는다."""
+
+    return {
+        "theme": settings.theme(),
+        "themes": [
+            {"key": key, "label": settings.THEME_LABELS[key]}
+            for key in settings.THEMES
+        ],
+        "open_browser": settings.load().get(settings.OPEN_BROWSER, True),
+        "path": settings.path(),
+    }
+
+
+@router.put("/api/settings/theme")
+def settings_theme(request: ThemeRequest):
+    """
+    고른 테마를 적는다.
+
+    모르는 값은 막는다 - 조회(theme())는 오타를 다크로 되돌려 주지만,
+    적는 자리에서까지 조용히 받아 주면 사람은 "골랐는데 안 바뀐다"를
+    겪는다.
+    """
+
+    if not settings.is_theme(request.theme):
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 테마입니다: {request.theme!r}. "
+                   f"사용 가능한 값: {list(settings.THEMES)}",
+        )
+
+    try:
+        settings.save({settings.THEME: request.theme})
+    except Exception as exc:
+        # 적지 못했으면 그렇다고 말한다. "저장했습니다"라고 해 놓고
+        # 다음에 없으면 안 된다.
+        raise HTTPException(
+            status_code=500,
+            detail=f"테마를 저장하지 못했습니다: {exc}",
+        )
+
+    return {"theme": settings.theme()}
+
+
+# ── Sprint218 - 제작 방식과 과금 확인 ────────────────────────────────
+
+
+@router.get("/api/production/creation-modes")
+def creation_modes_view():
+    """
+    사람이 고를 두 갈래와, 각 갈래에서 돈이 들 수 있는가.
+
+    비용 안내문을 화면에 적어 두지 않는다 - 어느 단계가 API를 부르는지는
+    등록된 Provider에 따라 달라지고, 화면이 그것을 다시 세면 어느 날
+    엔진과 다른 말을 한다.
+    """
+
+    from app.production import creation_modes
+
+    return {"modes": creation_modes.all_as_dict()}
 
 
 @router.get("/api/about")
@@ -1499,10 +1590,56 @@ def _refuse_if_the_script_is_not_ready(project_id: str) -> None:
     })
 
 
+def _refuse_unconfirmed_cost(request: "GenerateRequest") -> None:
+    """
+    Sprint218 - 돈이 들 수 있는 갈래는 확인 없이 시작하지 않는다.
+
+    이 검사가 서버에 있는 이유
+    --------------------------
+    화면의 confirm() 하나로 끝내면 그것은 연극이다. 창을 새로 열어
+    같은 요청을 보내면 그냥 시작된다. 확인을 받았다는 사실이 요청에
+    실려 와야 하고, 실려 오지 않으면 서버가 거절해야 한다.
+
+    기존 [영상 생성]은 그대로 둔다
+    ------------------------------
+    creation_mode를 안 보내면 이 검사를 지나간다. 그 단추는 단계마다
+    사람이 직접 Provider를 고른 뒤에 누르는 자리이고, 그 화면에는 이미
+    예상 비용과 "API 3 Stages"가 카드로 떠 있다 - 고지 없이 시작되는
+    자리가 아니다. 새로 생긴 [완전 자동으로 만들기]가 그 반대여서
+    (아무것도 고르지 않고 한 번에 시작한다) 문이 필요한 것이다.
+    """
+
+    from app.production import creation_modes
+
+    if request.creation_mode is None:
+        return
+
+    try:
+        creation_modes.require_creation_mode(request.creation_mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    policy = creation_modes.cost_policy_for(request.creation_mode)
+
+    if not policy.requires_confirmation or request.cost_ack:
+        return
+
+    raise HTTPException(
+        status_code=400,
+        detail="비용이 발생할 수 있다는 안내를 확인하지 않으셨습니다. "
+               f"{policy.reason} 화면의 안내에서 [확인하고 시작]을 "
+               "누르면 시작합니다.",
+    )
+
+
 @router.post("/api/jobs")
 def create_job(request: GenerateRequest):
     if not request.topic or not request.topic.strip():
         raise HTTPException(status_code=400, detail="주제를 입력하십시오.")
+
+    # 확인을 안 받았으면 프로젝트도 작업도 만들지 않는다 - 취소는
+    # "아무 일도 일어나지 않는다"여야 한다.
+    _refuse_unconfirmed_cost(request)
 
     # Sprint203 - 못 갈 것은 여기서 막는다. 작업을 만들어 두고 몇 초
     # 뒤에 죽이면 큐에 죽을 것이 쌓이고, 사람은 무엇을 해야 하는지
@@ -1514,7 +1651,8 @@ def create_job(request: GenerateRequest):
     # 하나 그대로다.
     return {"job_id": studio_jobs.start(request.topic.strip(),
                                         request.channel,
-                                        request.project_id)}
+                                        request.project_id,
+                                        request.creation_mode)}
 
 
 @router.get("/api/jobs/{job_id}")

@@ -37,9 +37,55 @@ OPEN_BROWSER = "open_browser"
 # 어느 판이 이 자리를 만들었는가. 갱신을 알아보려면 필요하다.
 CREATED_BY = "created_by_version"
 
+# Sprint218 - 화면 테마.
+#
+# 여기에 두는 이유. 이미 있는 설정 자리를 재사용한다 - localStorage에
+# 두면 브라우저를 바꾸거나 지우면 사라지고, 그 자리는 이 프로그램의
+# 설정이 사는 곳이 아니다. settings.json은 %APPDATA% 아래에 있어
+# 새 판을 덮어씌워도 남는다("없는 것만 채운다").
+THEME = "theme"
+
+THEME_DARK = "dark"
+THEME_LIGHT = "light"
+THEME_PODO = "podo"
+THEME_BLUE = "blue"
+
+THEMES = (THEME_DARK, THEME_LIGHT, THEME_PODO, THEME_BLUE)
+
+# 화면 파일의 <html data-theme="..."> 자리. app_info의 판번호 토큰과
+# 같은 방식이다 - 화면에 값을 적어 두지 않고 서버가 채운다.
+THEME_TOKEN = "{{APP_THEME}}"
+
+THEME_LABELS = {
+    THEME_DARK: "다크",
+    THEME_LIGHT: "라이트",
+    THEME_PODO: "포도",
+    THEME_BLUE: "블루",
+}
+
 DEFAULTS = {
     OPEN_BROWSER: True,
+    # 기본값은 다크다. 쓰던 사람의 화면이 판올림 한 번에 바뀌면
+    # 그것대로 놀란다 - 바꾸는 것은 사람이 고를 일이다.
+    THEME: THEME_DARK,
 }
+
+
+def is_theme(value) -> bool:
+    return value in THEMES
+
+
+def theme() -> str:
+    """
+    지금 고른 테마. 모르는 값이 적혀 있으면 다크로 본다.
+
+    막지 않고 되돌리는 이유 - 설정 파일은 사람이 손으로 고칠 수 있는
+    자리다. 오타 하나에 화면이 안 뜨면 고칠 방법이 없다.
+    """
+
+    found = load().get(THEME)
+
+    return found if is_theme(found) else THEME_DARK
 
 
 def path() -> str:

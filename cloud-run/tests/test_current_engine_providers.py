@@ -463,7 +463,11 @@ class TestTheEngineWasNotTouched(unittest.TestCase):
 
         self.assertEqual(
             sorted(paths),
-            ["/studio/api/production/images",
+            [# Sprint218 - 만들기 갈래 목록. GET 하나이고
+             # 아무것도 시작하지 않는다 - 이 가드가 지키는
+             # 경계는 그대로다.
+             "/studio/api/production/creation-modes",
+             "/studio/api/production/images",
              "/studio/api/production/import",
              "/studio/api/production/modes",
              "/studio/api/production/plan",

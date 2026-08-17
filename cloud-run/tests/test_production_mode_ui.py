@@ -290,17 +290,58 @@ class TestNothingElseWasTouched(unittest.TestCase):
     def test_the_generate_endpoint_gained_only_an_optional_project(self):
         """Sprint105에는 "모드 인자가 끼어들지 않았다"였다. Sprint107이
         미리 만들어 둔 프로젝트를 쓰게 하면서 선택 인자 하나를 더했다.
+        Sprint218이 어느 단추로 눌렀는가와 과금 확인 여부를 더했다.
 
-        지켜야 할 경계는 그대로다 - 모드가 끼어들지 않았고, 주지
-        않으면 예전과 완전히 같다."""
+        지켜야 할 경계는 그대로다 - 주지 않으면 예전과 완전히 같다.
+        새로 는 셋 다 기본값이 있어, 보내지 않는 호출부는 한 글자도
+        영향받지 않는다."""
 
         from app.routers.studio import GenerateRequest
 
         self.assertEqual(
             sorted(GenerateRequest.model_fields),
-            ["channel", "project_id", "topic"],
+            ["channel", "cost_ack", "creation_mode", "project_id", "topic"],
         )
         self.assertIsNone(GenerateRequest.model_fields["project_id"].default)
+        self.assertIsNone(GenerateRequest.model_fields["creation_mode"].default)
+        self.assertIs(GenerateRequest.model_fields["cost_ack"].default, False)
+
+    def test_no_mode_reaches_the_engine(self):
+        """
+        Sprint105가 실제로 지킨 경계는 여기다 - **엔진의 부름말**에
+        모드가 끼어들지 않는 것.
+
+        요청 모델이 무엇을 더 받든, 파이프라인을 부르는 자리는
+        topic·channel·project_id 셋이어야 한다. 그 셋을 넘어서는
+        순간 "모드마다 엔진이 다르게 돈다"가 시작되고, 그러면 화면이
+        약속한 것과 엔진이 하는 일이 갈라진다.
+
+        문자열이 아니라 AST로 본다 - 설명 주석에 걸려 거짓 판정하는
+        것을 이 저장소가 여러 번 겪었다.
+        """
+
+        import ast
+
+        from app.services import studio_jobs
+
+        tree = ast.parse(open(studio_jobs.__file__, encoding="utf-8").read())
+
+        called = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "generate_short_video"
+        ]
+
+        self.assertTrue(called, "엔진을 부르는 자리를 못 찾았다")
+
+        for call in called:
+            given = sorted(kw.arg for kw in call.keywords)
+
+            self.assertEqual(
+                given, ["channel", "project_id", "topic"],
+                f"엔진 부름말에 끼어든 것: {given}")
+            self.assertEqual(call.args, [], "위치 인자가 끼어들었다")
 
 
 if __name__ == "__main__":
