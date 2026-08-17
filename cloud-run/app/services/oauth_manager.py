@@ -140,16 +140,23 @@ class OAuthManager:
 def build_default_oauth_manager() -> OAuthManager:
     # desktop.application.publishing.connectors.youtube_connector.py가
     # 이미 쓰는 것과 동일한 환경 변수/기본 경로 관례.
+    #
+    # Sprint217 - 기본 경로를 credential_paths에게 맡긴다. 예전에는
+    # 상대 경로 "credentials/client_secret.json"이 기본값이었고, 묶은
+    # 프로그램은 사람이 두 번 누른 자리(바탕화면)에서 켜지므로 그 파일을
+    # 영원히 찾지 못했다 - [Google 로그인]을 눌러도 브라우저가 열리지
+    # 않은 실제 원인이다. 환경 변수는 그대로 이긴다.
     import os
 
     from app.providers.upload.file_token_store import FileTokenStore
     from app.providers.upload.google_oauth_service import GoogleOAuthService
+    from app.services import credential_paths
 
-    client_secret_path = os.environ.get(
-        "YOUTUBE_OAUTH_CLIENT_SECRET_PATH", "credentials/client_secret.json",
+    client_secret_path = credential_paths.resolve(
+        "YOUTUBE_OAUTH_CLIENT_SECRET_PATH", "client_secret.json",
     )
-    token_store_path = os.environ.get(
-        "YOUTUBE_OAUTH_TOKEN_STORE_PATH", "credentials/youtube_oauth_tokens.json",
+    token_store_path = credential_paths.resolve(
+        "YOUTUBE_OAUTH_TOKEN_STORE_PATH", "youtube_oauth_tokens.json",
     )
     account_id = os.environ.get("YOUTUBE_OAUTH_ACCOUNT_ID", _DEFAULT_ACCOUNT_ID)
 

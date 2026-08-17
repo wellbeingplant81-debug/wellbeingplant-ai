@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Optional
 
 from app.providers.upload.instagram_credential import InstagramCredential
+from app.services import secret_box
 
 
 class InstagramTokenStore:
@@ -55,12 +56,15 @@ class InstagramTokenStore:
         data.pop(account_id, None)
         self._write_all(data)
 
+    # Sprint217 - FileTokenStore와 같이 secret_box를 지나간다.
+    # Instagram의 장기 토큰은 60일짜리 하나뿐이라 그것이 곧
+    # refresh_token 노릇을 한다 - 평문으로 둘 이유가 더 없다.
     def _read_all(self) -> dict:
         if not os.path.exists(self.storage_path):
             return {}
 
         with open(self.storage_path, encoding="utf-8") as f:
-            return json.load(f)
+            return secret_box.unwrap(json.load(f))
 
     def _write_all(self, data: dict) -> None:
         directory = os.path.dirname(self.storage_path)
@@ -68,4 +72,4 @@ class InstagramTokenStore:
             os.makedirs(directory, exist_ok=True)
 
         with open(self.storage_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(secret_box.wrap(data), f, ensure_ascii=False, indent=2)

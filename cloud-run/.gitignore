@@ -11,6 +11,11 @@ venv/
 # Environment
 .env
 .env.*
+# Sprint217 - .env.example은 값이 아니라 빈 틀이고, README가 "이 파일을
+# 복사해 .env로 저장하세요"라고 가리키는 그 파일이다. 그런데 위의
+# .env.* 에 걸려 한 번도 저장소에 들어간 적이 없어서, 무엇을 설정해야
+# 하는지는 각자의 PC에만 있었다. 값이 든 .env는 계속 막는다.
+!.env.example
 
 # VS Code
 .vscode/

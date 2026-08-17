@@ -400,6 +400,97 @@ def start_oauth(action: str) -> str:
     return job_id
 
 
+def start_social(platform: str, action: str) -> str:
+    """
+    Sprint217 - SNS 로그인/로그아웃/확인을 백그라운드로 돌린다.
+
+    백그라운드로 돌리는 이유는 start_oauth와 같다 - 로그인은 브라우저
+    리다이렉트를 최장 300초 기다리며 블로킹한다. 요청 스레드에서 그대로
+    부르면 그동안 HTTP 응답이 돌아오지 않고, 화면은 얼어 있는 것처럼
+    보인다.
+
+    start_oauth와 합치지 않는다. 저쪽은 health 하나를 돌려주고 이쪽은
+    계정 한 덩이(연결 여부·계정 이름·무엇이 없는가)를 돌려준다 -
+    돌려주는 것이 다른 두 일을 한 함수에 넣으면 어느 쪽 모양인지
+    부르는 곳에서 알 수 없게 된다.
+    """
+
+    from app.services import social_accounts as social_module
+
+    job_id = uuid.uuid4().hex[:12]
+
+    with _lock:
+        job = _new_job(job_id, None, None)
+        job["kind"] = "social"
+        job["platform"] = platform
+        job["action"] = action
+        job["account"] = None
+        _jobs[job_id] = job
+
+    def run():
+        manager = social_module.build_default_social_auth_manager()
+        provider = manager.provider(platform)
+
+        return {
+            "login": provider.login,
+            "logout": provider.logout,
+            "refresh": provider.refresh_token,
+        }[action]()
+
+    thread = threading.Thread(
+        target=_run_social, args=(job_id, run), daemon=True,
+    )
+    thread.start()
+
+    return job_id
+
+
+def _run_social(job_id: str, target_fn) -> None:
+    """
+    Sprint217 - 실패를 조용히 삼키지 않는다.
+
+    _run_oauth는 예외를 job["error"]에 담았지만 화면이 그것을 읽지
+    않아서, 사람에게는 "눌러도 아무 반응 없음"이 됐다. 여기서는
+    실패해도 account 한 덩이를 반드시 채운다 - 화면이 그릴 것이 늘
+    있어야 한다. traceback은 콘솔에 남긴다.
+    """
+
+    import sys
+
+    from app.services import social_accounts as social_module
+
+    original = sys.stdout
+    sys.stdout = _Tee(original, job_id)
+
+    try:
+        account = target_fn()
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "done"
+                job["account"] = account.as_dict()
+
+    except Exception as exc:
+        _append_line(job_id, _masked(f"[Studio] SNS 처리 실패: {exc}"))
+        _append_line(job_id, _masked(traceback.format_exc()))
+
+        with _lock:
+            job = _jobs.get(job_id)
+            if job is not None:
+                job["state"] = "failed"
+                job["error"] = _masked(str(exc))
+                # 화면이 그릴 것을 여기서도 만들어 준다. 상태는
+                # UNKNOWN이다 - 연결됐다고 말하지 않는다.
+                job["account"] = social_module.SocialAccount(
+                    job.get("platform", ""), social_module.UNKNOWN,
+                    _masked(str(exc)),
+                ).as_dict()
+
+    finally:
+        sys.stdout = original
+
+
 def start_upload(project_id: str, project_path: str) -> str:
     """
     Sprint92 - 승인된 프로젝트를 올린다.
@@ -524,6 +615,9 @@ def status(job_id: str, console_from: int = 0) -> dict:
             "error": job["error"],
             "health": job.get("health"),
             "upload": job.get("upload"),
+            # Sprint217 - SNS 계정 한 덩이. 실패해도 채워져 있다.
+            "platform": job.get("platform"),
+            "account": job.get("account"),
             "console": list(console[start_at:]),
             "console_next": len(console),
         }

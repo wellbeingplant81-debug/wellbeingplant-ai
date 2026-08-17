@@ -2505,6 +2505,65 @@ def oauth_action(action: str):
     return {"job_id": studio_jobs.start_oauth(action)}
 
 
+# ── Sprint217 - SNS 계정 (Epic 61) ───────────────────────────────────
+#
+# YouTube 하나만 있던 자리를 세 플랫폼으로 넓힌다. 위의 /api/oauth/*
+# 는 지우지 않는다 - 이미 그 경로를 부르는 것이 있고(테스트 포함),
+# YouTube의 같은 자격증명을 같은 Manager로 다룬다.
+
+_SOCIAL_ACTIONS = ("login", "logout", "refresh")
+
+
+@router.get("/api/social/accounts")
+def social_accounts():
+    """
+    세 플랫폼의 지금 상태.
+
+    로컬 파일만 읽는다 - 네트워크도 브라우저도 열지 않는다. 화면을 열
+    때마다 불리는 자리라서, 여기서 브라우저가 열리면 그것이 곧 결함이다
+    (/api/oauth/status가 지켜 온 것과 같은 규칙).
+    """
+
+    from app.services import secret_box, social_accounts as social
+
+    manager = social.build_default_social_auth_manager()
+
+    return {
+        "accounts": [a.as_dict() for a in manager.accounts()],
+        # 토큰이 디스크에 어떻게 놓이는가. 화면이 그대로 보여 준다 -
+        # "안전하게 저장했다"고 말해 놓고 평문이면 그것이 거짓이다.
+        "token_at_rest": "protected" if secret_box.available() else "plaintext",
+    }
+
+
+@router.post("/api/social/{platform}/{action}")
+def social_action(platform: str, action: str):
+    """
+    login / logout / refresh.
+
+    login만 브라우저를 연다. 사람이 단추를 눌렀을 때만 이 경로가
+    불린다 - 상태 조회(GET)는 절대 여기로 오지 않는다.
+    """
+
+    from app.services import social_accounts as social
+
+    if platform not in social.PLATFORMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 플랫폼입니다: {platform!r}. "
+                   f"사용 가능한 값: {list(social.PLATFORMS)}",
+        )
+
+    if action not in _SOCIAL_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 동작입니다: {action!r}. "
+                   f"사용 가능한 값: {list(_SOCIAL_ACTIONS)}",
+        )
+
+    return {"job_id": studio_jobs.start_social(platform, action)}
+
+
 @router.get("/api/dataset")
 def dataset():
     """Dashboard의 Dataset 위젯. Sprint79 축적 파일을 읽는다."""

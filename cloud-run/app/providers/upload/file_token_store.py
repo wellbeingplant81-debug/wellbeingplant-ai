@@ -13,6 +13,7 @@ import os
 from datetime import datetime
 
 from app.providers.upload.oauth_credential import OAuthCredential
+from app.services import secret_box
 
 
 class FileTokenStore:
@@ -50,12 +51,22 @@ class FileTokenStore:
         data.pop(account_id, None)
         self._write_all(data)
 
+    # Sprint217 - refresh_token을 평문으로 두지 않는다.
+    #
+    # 감싸는 일은 secret_box(Windows DPAPI)가 한다. 여기서는 읽고 쓰는
+    # 자리만 그것을 지나가게 한다 - 파일 모양을 아는 곳이 두 곳이 되면
+    # 한쪽만 고치는 날이 온다.
+    #
+    # 예전에 평문으로 적힌 파일도 그대로 읽는다(secret_box.unwrap이
+    # 열쇠말이 없으면 준 것을 돌려준다). 이미 로그인해 둔 사람의
+    # 로그인이 판올림 한 번에 사라지면 안 되고, 다음 save()에서
+    # 감싸인 것으로 바뀐다.
     def _read_all(self) -> dict:
         if not os.path.exists(self.storage_path):
             return {}
 
         with open(self.storage_path, encoding="utf-8") as f:
-            return json.load(f)
+            return secret_box.unwrap(json.load(f))
 
     def _write_all(self, data: dict) -> None:
         directory = os.path.dirname(self.storage_path)
@@ -63,4 +74,4 @@ class FileTokenStore:
             os.makedirs(directory, exist_ok=True)
 
         with open(self.storage_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+            json.dump(secret_box.wrap(data), f, ensure_ascii=False, indent=2)

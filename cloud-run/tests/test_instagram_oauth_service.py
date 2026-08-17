@@ -26,6 +26,10 @@ _MODULE = "app.providers.upload.instagram_oauth_service"
 
 DEFAULT_ACCOUNT_ID = "default"
 
+# "보낸 state를 그대로 돌려준다"를 뜻하는 표식. None을 그 뜻으로 쓰면
+# "state를 아예 안 돌려준다"는 경우를 표현할 수 없다.
+_ECHO_STATE = object()
+
 
 def _service(**overrides):
     from app.providers.upload.instagram_oauth_service import InstagramOAuthService
@@ -39,18 +43,30 @@ def _service(**overrides):
     return InstagramOAuthService(**kwargs)
 
 
-def _mock_http_server_yielding(code=None, error=None):
+def _mock_http_server_yielding(code=None, error=None, state=_ECHO_STATE):
     """HTTPServer(...)가 생성되자마자 handle_request() 첫 호출에서
-    바로 code/error를 "받은 것"처럼 흉내낸다 - 실제 소켓을 열지 않는다."""
+    바로 code/error를 "받은 것"처럼 흉내낸다 - 실제 소켓을 열지 않는다.
+
+    Sprint217 - state도 함께 돌려준다.
+
+    실제 Meta 콜백은 authorize에 실어 보낸 state를 그대로 되돌려주고,
+    Provider는 이제 그 값이 같은지 확인한 뒤에야 코드를 쓴다. 이
+    대역이 state를 안 돌려주면 실제 흐름과 다른 것을 흉내내는 것이
+    된다 - 기본값은 "보낸 것을 그대로 되돌려준다"이고, state를 명시로
+    주면 어긋난 응답(가로채기)을 재현한다."""
 
     def _factory(*args, **kwargs):
         instance = MagicMock()
         instance.received_code = None
         instance.received_error = None
+        instance.received_state = None
 
         def _handle_request():
             instance.received_code = code
             instance.received_error = error
+            instance.received_state = (
+                instance.expected_state if state is _ECHO_STATE else state
+            )
 
         instance.handle_request.side_effect = _handle_request
         return instance

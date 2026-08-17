@@ -38,6 +38,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 
+from app.providers.upload import oauth_loopback
 from app.providers.upload.instagram_credential import InstagramCredential
 from app.providers.upload.oauth_service import OAuthError
 
@@ -90,6 +91,9 @@ class _CallbackHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         query = parse_qs(urlparse(self.path).query)
         self.server.received_code = (query.get("code") or [None])[0]
+        # Sprint217 - state도 받아 둔다. 확인은 아래
+        # _authorize_and_capture_code가 한다.
+        self.server.received_state = (query.get("state") or [None])[0]
         self.server.received_error = (
             (query.get("error_description") or query.get("error") or [None])[0]
         )
@@ -184,12 +188,46 @@ class InstagramOAuthService:
             ig_user_id=payload.get("id", ""),
         )
 
+    def missing_setup(self) -> list:
+        """없는 것들의 이름. Sprint217 - 화면이 "설정 필요"를 그린다."""
+
+        missing = []
+
+        if not self.client_id:
+            missing.append("INSTAGRAM_OAUTH_CLIENT_ID")
+        if not self.client_secret:
+            missing.append("INSTAGRAM_OAUTH_CLIENT_SECRET")
+
+        return missing
+
     def _authorize_and_capture_code(self) -> str:
+        # Sprint217 - 설정이 없으면 브라우저를 열지 않고 무엇이
+        # 없는지 말한다. 예전에는 빈 client_id로 Meta에 그대로
+        # 보냈고, 사람은 Meta의 영문 오류 화면을 마주했다.
+        missing = self.missing_setup()
+
+        if missing:
+            raise OAuthError(
+                "Instagram 앱 설정이 없어 로그인을 시작할 수 없습니다. "
+                f"{' · '.join(missing)} 를 설정하십시오. Meta 개발자 "
+                "콘솔에서 앱을 만들고 Instagram Business Login을 켠 뒤 "
+                f"Redirect URI로 {self.redirect_uri} 를 등록해야 합니다.")
+
+        # Sprint217 - state를 실어 보내고 콜백에서 되받아 확인한다.
+        #
+        # 예전에는 state가 아예 없었다. 그러면 로그인을 기다리는 동안
+        # 브라우저의 다른 탭이나 같은 PC의 다른 프로그램이
+        # 127.0.0.1:8551/callback?code=... 를 한 번 부르는 것만으로
+        # **남의 계정을 이 사람 계정으로 저장**할 수 있다(인가 코드
+        # 주입). 검증은 oauth_loopback이 한다.
+        state = oauth_loopback.new_state()
+
         auth_url = f"{AUTHORIZE_URL}?" + urlencode({
             "client_id": self.client_id,
             "redirect_uri": self.redirect_uri,
             "scope": _SCOPES,
             "response_type": "code",
+            "state": state,
         })
 
         # Redirect URI 확인 조사 - 화면에 어떤 값이 보이든, 실제로 Meta에
@@ -204,6 +242,10 @@ class InstagramOAuthService:
         server = HTTPServer(("127.0.0.1", self.redirect_port), _CallbackHandler)
         server.received_code = None
         server.received_error = None
+        server.received_state = None
+        # Sprint217 - 우리가 보낸 state를 서버 객체에 얹어 둔다. 실제
+        # Meta 콜백은 이 값을 그대로 돌려준다.
+        server.expected_state = state
         # Critical Bug Fix - UI Freeze on Instagram OAuth Login. timeout을
         # 설정하지 않으면 socketserver.BaseServer.handle_request()는 실제
         # 연결이 올 때까지 무기한 블로킹한다(기본값 None) - 그러면 아래
@@ -213,7 +255,16 @@ class InstagramOAuthService:
         # 매 반복마다 deadline을 다시 확인할 수 있게 한다.
         server.timeout = min(1.0, self.callback_timeout_seconds)
 
-        webbrowser.open(auth_url)
+        # Sprint217 - 브라우저가 안 열린 것을 안 열렸다고 말한다.
+        # webbrowser.open()은 실패를 예외로 던지지 않고 False를
+        # 돌려준다. 그 False를 버리면 브라우저가 열리지도 않은 채
+        # 콜백을 5분 기다리고, 사람에게는 "눌러도 아무 반응 없음"이다.
+        if webbrowser.open(auth_url) is False:
+            server.server_close()
+
+            raise OAuthError(
+                "브라우저를 열지 못했습니다. 아래 주소를 직접 "
+                f"여십시오.\n{auth_url}")
 
         deadline = time.time() + self.callback_timeout_seconds
         while (
@@ -228,6 +279,20 @@ class InstagramOAuthService:
             raise OAuthError(f"Instagram 로그인이 거부되었습니다: {server.received_error}")
         if server.received_code is None:
             raise OAuthError("Instagram 로그인 응답을 받지 못했습니다(시간 초과).")
+
+        # Sprint217 - 여기서 코드를 버릴 수 있어야 한다.
+        #
+        # state를 확인하지 않으면, 로그인을 기다리는 동안 브라우저의
+        # 다른 탭이나 같은 PC의 다른 프로그램이
+        # 127.0.0.1:8551/callback?code=... 를 한 번 부르는 것만으로
+        # **남의 계정을 이 사람 계정으로 저장**할 수 있다(OAuth 인가
+        # 코드 주입). 우리가 시작한 흐름이 아니면 코드를 쓰지 않는다.
+        if server.received_state != state:
+            raise OAuthError(
+                "Instagram 로그인 응답의 state가 일치하지 않아 "
+                "버렸습니다. 다른 창에서 시작된 응답이거나 가로채기일 "
+                "수 있습니다. 다시 로그인하십시오.")
+
         return server.received_code
 
     def _exchange_code_for_short_lived_token(self, code: str) -> str:

@@ -27,6 +27,7 @@ OAuth Scope는 최소 권한만 요청한다 - Sprint003 당시에는 "채널 �
 """
 
 import json
+import os
 from datetime import timezone
 
 from google.auth.transport.requests import Request
@@ -51,6 +52,28 @@ class GoogleOAuthService(OAuthService):
         self.client_secret_path = client_secret_path
 
     def authenticate(self, account_id: str) -> OAuthCredential:
+        # Sprint217 - 파일이 없다는 것을 먼저, 사람이 읽을 수 있는 말로
+        # 말한다.
+        #
+        # 예전에는 이 검사가 없어서 from_client_secrets_file()이 던지는
+        # FileNotFoundError가 그대로 아래 문장에 실려 나갔다. 화면에
+        # 뜬 것은 이것이었다(바탕화면 exe에서 실측).
+        #
+        #   ⚪ 알 수 없음
+        #   Google OAuth authentication failed for account default:
+        #   [Errno 2] No such file or directory:
+        #   'credentials/client_secret.json'
+        #
+        # 받은 사람이 이 글로 할 수 있는 일이 없다. 무엇이 없고 어디에
+        # 두면 되는지를 적는다 - 경로는 지어내지 않고 실제로 읽으려던
+        # 그 자리를 그대로 적는다.
+        if not os.path.exists(self.client_secret_path):
+            raise OAuthError(
+                "Google 로그인에 필요한 자격증명 파일이 없어 브라우저를 "
+                "열지 못했습니다. Google Cloud Console에서 만든 "
+                "데스크톱 앱 OAuth 클라이언트의 JSON 파일을 이 자리에 "
+                f"두십시오: {os.path.abspath(self.client_secret_path)}")
+
         try:
             flow = InstalledAppFlow.from_client_secrets_file(
                 self.client_secret_path,

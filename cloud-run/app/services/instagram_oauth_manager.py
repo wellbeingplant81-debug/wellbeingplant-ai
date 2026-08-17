@@ -36,8 +36,14 @@ def build_default_instagram_oauth_manager() -> OAuthManager:
     client_id = os.environ.get("INSTAGRAM_OAUTH_CLIENT_ID", "")
     client_secret = os.environ.get("INSTAGRAM_OAUTH_CLIENT_SECRET", "")
     redirect_uri = os.environ.get("INSTAGRAM_OAUTH_REDIRECT_URI", _DEFAULT_REDIRECT_URI)
-    token_store_path = os.environ.get(
-        "INSTAGRAM_OAUTH_TOKEN_STORE_PATH", _DEFAULT_TOKEN_STORE_PATH,
+    # Sprint217 - 기본 경로는 credential_paths가 정한다. 상대 경로를
+    # 기본값으로 두면 묶은 프로그램이 그 파일을 영원히 못 찾는다
+    # (YouTube 쪽에서 실제로 그렇게 막혀 있었다). 환경 변수는 그대로
+    # 이긴다.
+    from app.services import credential_paths
+
+    token_store_path = credential_paths.resolve(
+        "INSTAGRAM_OAUTH_TOKEN_STORE_PATH", "instagram_oauth_tokens.json",
     )
     account_id = os.environ.get("INSTAGRAM_OAUTH_ACCOUNT_ID", _DEFAULT_ACCOUNT_ID)
 

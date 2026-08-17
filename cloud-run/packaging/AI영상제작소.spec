@@ -139,6 +139,20 @@ hiddenimports = [
     "app.providers.claude_script_provider",
     "app.providers.openai_script_provider",
     "app.providers.deepseek_script_provider",
+    # Sprint217 - SNS 계정 연동(Epic 61). 라우터가 함수 안에서 들이므로
+    # 여기에 적어 둔다. PyInstaller가 함수 안의 import도 따라가기는
+    # 하지만, 이것들이 빠지면 [로그인]이 ImportError로 죽고 그 화면은
+    # 정확히 예전의 "눌러도 아무 반응 없음"이 된다 - 짐작에 맡기지 않는다.
+    "app.services.social_accounts",
+    "app.services.credential_paths",
+    "app.services.secret_box",
+    "app.providers.upload.oauth_loopback",
+    "app.providers.upload.tiktok_oauth_service",
+    "app.providers.upload.google_oauth_service",
+    "app.providers.upload.instagram_oauth_service",
+    # google_auth_oauthlib가 loopback 흐름에서 늦게 들이는 것들.
+    "google_auth_oauthlib.flow",
+    "googleapiclient.discovery",
 ]
 
 a = Analysis(
