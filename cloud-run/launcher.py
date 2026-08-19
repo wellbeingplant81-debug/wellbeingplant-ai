@@ -548,12 +548,297 @@ def _open_browser(url: str, ready_port: int = None):
     return thread
 
 
+# ── 끄면 정말 끝나게 ──────────────────────────────────────────────
+#
+# 실측으로 드러난 것(Sprint230 뒷마무리)
+# -------------------------------------
+# 묶은 프로그램은 프로세스가 둘이다. PyInstaller의 부트로더가 제 옆에
+# 자식을 하나 띄우고, **서버는 그 자식**이다.
+#
+#     부트로더 44348  →  자식 29428 (여기서 uvicorn이 돈다)
+#
+# 부트로더를 강제로 끝내면 자식이 남는다. 실측: 부모를 죽인 뒤 3초가
+# 지나도 자식이 살아 있고 포트도 계속 잡고 있었다. 그렇게 쌓인 것이
+# 여섯 개였고, 그중 하나가 dist의 exe를 물고 있어서 다음 묶기가
+# WinError 5로 죽었다 - "액세스가 거부되었습니다".
+#
+# 사람이 창을 닫거나 Ctrl+C를 누르면 콘솔이 둘 다에게 알려 주므로
+# 이 길로 오지 않는다. 여기서 막는 것은 **강제 종료**다 - 작업
+# 관리자, 그리고 시험/묶기 스크립트의 timeout.
+#
+# 두 가지를 건다
+# --------------
+#     부모 지킴이   부모가 사라지면 우리도 나간다
+#     Job Object   우리가 죽으면 자손(ffmpeg)도 함께 정리된다
+#
+# 둘이 서로를 대신하지 못한다. Job은 "내가 죽을 때 자손"을 맡고,
+# 지킴이는 "부모가 죽을 때 나"를 맡는다. Job을 만드는 주체가 곧 죽는
+# 대상이므로, Job만으로는 이 누수가 고쳐지지 않는다.
+
+JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+JobObjectExtendedLimitInformation = 9
+
+# 만든 Job을 붙잡아 둔다. 놓으면 핸들이 닫히고 그 순간 규칙이 발동해
+# 우리 자신까지 죽는다.
+_job = None
+
+# 부모가 사라진 뒤 곱게 끝나기를 기다리는 시간. 이 시간을 넘기면
+# 그대로 나간다 - 남아 있는 것이 더 나쁘다.
+GRACE_AFTER_PARENT_GONE = 8.0
+
+
+def own_children() -> bool:
+    """
+    우리가 죽으면 자손도 함께 죽게 만든다. 성공하면 True.
+
+    렌더는 moviepy가 ffmpeg를 자식으로 띄워서 한다. 그 자식을 붙잡아
+    두는 코드가 이 저장소에 없다 - Popen 핸들을 moviepy가 제 안에
+    들고 있다. 그래서 운영체제에 관계를 등록한다. 우리가 어떻게 죽든
+    같은 일이 일어난다.
+
+    실패해도 켜진다. 이미 다른 Job에 들어 있는 자리가 있을 수 있고,
+    그때 못 켜는 것은 과한 대가다.
+    """
+
+    global _job
+
+    if _job is not None:
+        return True
+
+    if not sys.platform.startswith("win"):
+        return False
+
+    import ctypes
+    from ctypes import wintypes
+
+    class _BasicLimit(ctypes.Structure):
+        _fields_ = [
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", wintypes.DWORD),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", wintypes.DWORD),
+            ("Affinity", ctypes.POINTER(wintypes.ULONG)),
+            ("PriorityClass", wintypes.DWORD),
+            ("SchedulingClass", wintypes.DWORD),
+        ]
+
+    class _IoCounters(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_uint64) for name in (
+            "ReadOperationCount", "WriteOperationCount",
+            "OtherOperationCount", "ReadTransferCount",
+            "WriteTransferCount", "OtherTransferCount")]
+
+    class _ExtendedLimit(ctypes.Structure):
+        _fields_ = [
+            ("BasicLimitInformation", _BasicLimit),
+            ("IoInfo", _IoCounters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+
+    # restype을 주지 않으면 64비트 핸들이 int로 잘려 뒤의 호출이 전부
+    # 실패한다. 실패 이유가 "핸들이 이상하다"뿐이어서 찾기 어렵다.
+    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE,
+                                                  wintypes.HANDLE]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+    try:
+        handle = kernel32.CreateJobObjectW(None, None)
+
+        if not handle:
+            return False
+
+        info = _ExtendedLimit()
+        info.BasicLimitInformation.LimitFlags = \
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+
+        if not kernel32.SetInformationJobObject(
+                handle, JobObjectExtendedLimitInformation,
+                ctypes.byref(info), ctypes.sizeof(info)):
+            kernel32.CloseHandle(handle)
+
+            return False
+
+        if not kernel32.AssignProcessToJobObject(
+                handle, kernel32.GetCurrentProcess()):
+            kernel32.CloseHandle(handle)
+
+            return False
+    except Exception:
+        return False
+
+    _job = handle
+
+    return True
+
+
+def parent_pid() -> int:
+    """
+    나를 띄운 프로세스의 번호. 못 구하면 0.
+
+    psutil을 쓰지 않는다 - 이 저장소의 의존이 아니고, 이것 하나 때문에
+    묶음이 커질 이유가 없다.
+    """
+
+    if not sys.platform.startswith("win"):
+        return 0
+
+    import ctypes
+    from ctypes import wintypes
+
+    TH32CS_SNAPPROCESS = 0x00000002
+
+    class _Entry(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", ctypes.c_long),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_char * 260),
+        ]
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+
+    try:
+        snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    except Exception:
+        return 0
+
+    if not snap or snap == wintypes.HANDLE(-1).value:
+        return 0
+
+    mine = os.getpid()
+    entry = _Entry()
+    entry.dwSize = ctypes.sizeof(_Entry)
+
+    try:
+        if not kernel32.Process32First(snap, ctypes.byref(entry)):
+            return 0
+
+        while True:
+            if entry.th32ProcessID == mine:
+                return int(entry.th32ParentProcessID)
+
+            if not kernel32.Process32Next(snap, ctypes.byref(entry)):
+                return 0
+    except Exception:
+        return 0
+    finally:
+        kernel32.CloseHandle(snap)
+
+
+def _leave_when_parent_goes(pid: int) -> None:
+    """
+    부모가 사라지면 우리도 나간다. 절대 던지지 않는다.
+
+    곱게 끝내는 것을 먼저 시도한다 - SIGINT를 우리 자신에게 보낸다.
+    uvicorn이 그것을 받아 정리하고 uvicorn.run이 돌아오면, 평소 끄는
+    길을 그대로 지난다(_STOP_WAITING도 그 자리에서 놓인다).
+
+    uvicorn.run을 uvicorn.Server로 바꾸지 않는다 - 시험 여섯 자리가
+    uvicorn.run을 patch해서 실제 서버가 뜨지 않게 막고 있다. 그 약속을
+    깨면 회귀가 서버를 켜기 시작한다.
+
+    그래도 안 끝나면 그대로 나간다. 남아서 포트와 exe를 물고 있는 것이
+    더 나쁘다 - 그 때문에 다음 묶기가 죽었다.
+    """
+
+    import ctypes
+    from ctypes import wintypes
+
+    SYNCHRONIZE = 0x00100000
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+
+    handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+
+    if not handle:
+        # 부모가 이미 없거나 볼 수 없다. 지켜볼 것이 없다.
+        note(f"parent watch: cannot open parent {pid}")
+
+        return
+
+    try:
+        kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+    finally:
+        kernel32.CloseHandle(handle)
+
+    note(f"parent watch: parent {pid} is gone, leaving")
+
+    # 기다리던 쪽에게 먼저 알린다.
+    _STOP_WAITING.set()
+
+    try:
+        import signal
+
+        signal.raise_signal(signal.SIGINT)
+    except Exception:
+        pass
+
+    time.sleep(GRACE_AFTER_PARENT_GONE)
+
+    note("parent watch: still here after grace, exiting hard")
+
+    os._exit(0)
+
+
+def watch_parent() -> int:
+    """
+    부모 지킴이를 띄운다. 지켜보는 부모의 번호, 안 띄웠으면 0.
+
+    **묶였을 때만 띄운다.** 개발 중에는 부모가 셸이나 pytest이고, 그것이
+    끝날 때 우리가 os._exit을 부르면 시험 자체를 끝내 버린다. 실제로
+    위험한 쪽이라 여기서 확실히 가른다.
+    """
+
+    if not getattr(sys, "frozen", False):
+        return 0
+
+    pid = parent_pid()
+
+    if not pid:
+        note("parent watch: no parent found")
+
+        return 0
+
+    thread = threading.Thread(target=_leave_when_parent_goes, args=(pid,),
+                              daemon=True, name="parent-watch")
+    thread.start()
+
+    note(f"parent watch: watching {pid}")
+
+    return pid
+
+
 def _serve(argv) -> int:
     """켜는 일 전부. 죽으면 그대로 던진다 - 받는 자리는 main이다."""
 
     # Sprint226 - 이번 켜기는 이제부터다. 지난번의 "그만"이 남아
     # 있으면 브라우저가 열리기도 전에 포기한다.
     _STOP_WAITING.clear()
+
+    # 가장 먼저 건다. 뒤에서 태어나는 것(ffmpeg)이 이미 Job 안에
+    # 있어야 하고, 부모가 그 사이에 사라져도 알아야 한다.
+    if not own_children():
+        note("serve: job object not set")
+
+    watch_parent()
 
     note("serve: importing app_info/settings")
 
