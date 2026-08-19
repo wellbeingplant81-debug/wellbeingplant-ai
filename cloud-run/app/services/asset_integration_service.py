@@ -66,6 +66,12 @@ SINGLE_IMAGE_PROVIDERS = {
 # 이미지가 프로젝트마다 다른 신뢰도를 갖게 된다.
 AI_SOURCES = ("ai_image",) + tuple(SINGLE_IMAGE_PROVIDERS)
 
+# Sprint223 - 받아 온 스톡 영상이 사는 자리. 프로젝트 폴더 아래다.
+#
+# 산출물이 사는 video/(단수)와 한 글자 차이라는 것을 알고 둔다 - 사양이
+# 정한 이름이고, 이 이름을 아는 곳은 여기와 video_builder 뿐이다.
+FOOTAGE_DIRNAME = "videos"
+
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
                image_style=image_service.IMAGE_STYLE_DEFAULT,
@@ -252,6 +258,33 @@ def _extract_first_frame(video_path: str, output_image_path: str) -> str:
     return output_image_path
 
 
+def _keep_footage(project_path: str, scene_number, raw_path: str) -> str:
+    """
+    받아 온 영상을 프로젝트에 남긴다. 남긴 자리를 돌려준다.
+
+    Sprint223 - 왜 이 함수가 생겼는가
+    ---------------------------------
+    지금까지 이 저장소는 스톡 영상을 받아 첫 프레임만 뽑고 원본을
+    지웠다. 이미 값을 치르고 내려받은 움직임을 매번 버린 것이다.
+
+    이름은 videos/scene{N}.mp4 다. 사양이 정한 이름이고, video_builder 가
+    scene 번호로 찾을 수 있어야 한다.
+
+    주의 - 이 폴더는 산출물이 사는 video/(단수, short.mp4·
+    final_short.mp4)와 한 글자 차이다. 둘을 섞어 읽으면 안 된다.
+    """
+
+    where = os.path.join(project_path, FOOTAGE_DIRNAME)
+
+    os.makedirs(where, exist_ok=True)
+
+    footage_path = os.path.join(where, f"scene{scene_number}.mp4")
+
+    os.replace(raw_path, footage_path)
+
+    return footage_path
+
+
 def integrate_asset(
     scene: dict,
     project_path: str,
@@ -362,10 +395,20 @@ def integrate_asset(
     # 구분한다. current 경로(ai_image)의 판정은 그대로다.
     generated_by_ai = source in AI_SOURCES
 
+    footage_path = None
+
     if asset_type == "video":
         try:
             _extract_first_frame(result["local_path"], final_image_path)
+
+            # Sprint223 - 그리고 원본을 남긴다. 예전에는 여기서 지웠다 -
+            # 20초짜리 영상을 받아 0초 프레임 한 장만 남기고 버렸다.
+            footage_path = _keep_footage(
+                project_path, scene_number, result["local_path"],
+            )
         finally:
+            # 옮기지 못했으면(첫 프레임 추출 실패 등) 예전처럼 치운다.
+            # 옮겼으면 이 자리에는 이미 아무것도 없다.
             if os.path.exists(result["local_path"]):
                 os.remove(result["local_path"])
     else:
@@ -409,6 +452,11 @@ def integrate_asset(
     enriched["asset_type"] = asset_type
     enriched["asset_path"] = final_image_path
     enriched["confidence"] = confidence
+
+    # Sprint223 - 영상을 받은 scene 에만 붙는다. 그림 scene 의
+    # script.json 은 한 바이트도 달라지지 않는다.
+    if footage_path:
+        enriched["footage_path"] = footage_path
 
     # Sprint74 - 후보를 여러 장 뽑은 경우에만 기록을 남긴다. 한 장이면
     # 고른 것이 없으므로 남길 결정도 없고, 예전 scene dict와 필드가

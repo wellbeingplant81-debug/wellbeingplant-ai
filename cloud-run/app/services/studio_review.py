@@ -41,7 +41,7 @@ import json
 import os
 
 from app.providers.tts_provider import generate_voice
-from app.services import audio_policy, provider_selection
+from app.services import asset_kind, audio_policy, provider_selection
 from app.steps import step01_script_resolve
 
 SCRIPT = "script"
@@ -139,6 +139,22 @@ def state(project_path):
                 ),
                 "has_image": os.path.exists(_image_path(project_path, number)),
                 "has_voice": os.path.exists(_voice_path(project_path, number)),
+                # Sprint223 - 이 그림이 어디서 왔는가. 이미 script.json에
+                # 적혀 있는 값을 그대로 내보낸다 - 여기서 다시 판정하지
+                # 않는다. 읽는 말로 옮기는 것도 여기가 아니라
+                # asset_kind가 한다 - Provider 이름은 이 파일에 들이지
+                # 않는다(그 경계를 지키는 가드가 있고, 그 가드는 이
+                # 파일의 글자를 그대로 훑는다).
+                "asset_type": (
+                    data["scenes"][index].get("asset_type") or ""
+                ),
+                "asset_source": (
+                    data["scenes"][index].get("provider") or ""
+                ),
+                "asset_label": asset_kind.label(
+                    data["scenes"][index].get("provider"),
+                    data["scenes"][index].get("asset_type"),
+                ),
             }
             for index, number in enumerate(numbers)
         ]

@@ -424,6 +424,12 @@ a{color:var(--accent)}
   object-fit:cover;border-radius:4px;margin:4px 0;background:var(--line)}
 .tl .card .line{font-size:10.5px;line-height:1.35;height:28px;
   overflow:hidden;color:var(--text)}
+/* Sprint223 - 이 그림이 어디서 왔는가. 서버가 준 말을 그대로 적는다.
+   모르면 서버가 빈 글자를 주고 이 줄은 그려지지 않는다. */
+.tl .card .src{display:inline-block;margin-top:3px;padding:0 4px;
+  border:1px solid var(--line);border-radius:3px;
+  font-size:9.5px;color:var(--dim)}
+.tl .card .src.mov{border-color:var(--accent);color:var(--accent)}
 .tl .card .foot{display:flex;align-items:center;gap:4px;margin-top:4px}
 .tl .card .foot .st{font-size:10px;color:var(--dim)}
 .tl .card .foot button{padding:0 5px;font-size:10px}
@@ -3760,6 +3766,27 @@ function sceneStatus(s){
   return {key:"none", label:"아직 없음"};
 }
 
+// Sprint223 - 이 scene의 그림이 어디서 왔는가.
+//
+// 화면이 판정하지 않는다. asset_label은 서버가 script.json에 이미
+// 적혀 있는 provider를 옮겨 준 것이고, 여기서는 그것을 그대로 적는다.
+// 모르면 빈 글자가 오고 그때는 아무것도 그리지 않는다 - "출처 미상"
+// 같은 말을 지어내지 않는다.
+//
+// 움직이는 것만 눈에 띄게 둔다. 스톡 영상은 이 프로그램이 정지
+// 사진으로만 쓰던 것이라(Sprint223 이전) 사람이 그 차이를 알아볼 수
+// 있어야 한다.
+function assetBadge(s){
+  const label = s.asset_label || "";
+  if(!label) return "";
+
+  const moving = s.asset_type === "video";
+
+  return `<div class="src${moving ? " mov" : ""}" title="${
+    moving ? "이 scene은 영상이 그대로 재생됩니다"
+           : "이 scene의 그림이 온 곳"}">${label}</div>`;
+}
+
 function sceneCard(s, picked, state){
   const st = sceneStatus(s);
   const on = s.scene === picked;
@@ -3780,6 +3807,7 @@ function sceneCard(s, picked, state){
       ? `<img src="${s.image_url}&t=${Date.now()}">`
       : `<div class="noimg"></div>`}
     <div class="line">${sceneFirstLine(s.narration)}</div>
+    ${assetBadge(s)}
     <div class="foot"><span class="st">${
       hidden ? "숨김" : st.label}</span>
       <button class="sm ghost" title="이 scene 고치기"

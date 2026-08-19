@@ -145,6 +145,107 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.assertTrue(os.path.exists(final_path))
         self.assertFalse(os.path.exists(staging_path))
 
+    # --- Sprint223: 원본 영상을 지우지 않는다 ---
+
+    def _integrate_a_video(self, mock_get_candidates, mock_download,
+                           mock_subprocess_run):
+        """영상 후보 하나를 실제로 통과시킨다. 결과 scene 을 돌려준다."""
+
+        mock_get_candidates.return_value = [PEXELS_VIDEO_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect(
+            content=b"fake video bytes",
+        )
+
+        def _ffmpeg_side_effect(command, **asked):
+            with open(command[-1], "wb") as f:
+                f.write(b"fake frame bytes")
+            said = MagicMock()
+            said.returncode = 0
+            said.stderr = ""
+            return said
+
+        mock_subprocess_run.side_effect = _ffmpeg_side_effect
+
+        return integrate_asset(SAMPLE_SCENE, self.project_path)
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_the_video_itself_is_kept(
+        self, mock_get_candidates, mock_download, mock_subprocess_run,
+    ):
+        """
+        예전에는 첫 프레임을 뽑고 원본을 os.remove 했다 - 이미 값을
+        치르고 받아 온 움직임을 매번 버렸다.
+        """
+
+        self._integrate_a_video(
+            mock_get_candidates, mock_download, mock_subprocess_run)
+
+        self.assertTrue(os.path.exists(
+            os.path.join(self.project_path, "videos", "scene2.mp4")))
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_the_first_frame_is_kept_too(
+        self, mock_get_candidates, mock_download, mock_subprocess_run,
+    ):
+        """
+        둘 다 남아야 한다. 그림은 썸네일·품질 채점·검수 화면이 읽고,
+        videos/ 가 없어졌을 때 렌더가 돌아갈 자리이기도 하다.
+        """
+
+        self._integrate_a_video(
+            mock_get_candidates, mock_download, mock_subprocess_run)
+
+        self.assertTrue(os.path.exists(
+            os.path.join(self.project_path, "images", "scene2.png")))
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_the_scene_records_where_the_video_went(
+        self, mock_get_candidates, mock_download, mock_subprocess_run,
+    ):
+        result = self._integrate_a_video(
+            mock_get_candidates, mock_download, mock_subprocess_run)
+
+        self.assertEqual(
+            result["footage_path"],
+            os.path.join(self.project_path, "videos", "scene2.mp4"),
+        )
+        self.assertTrue(os.path.exists(result["footage_path"]))
+
+    @patch("app.services.asset_integration_service.subprocess.run")
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_the_kind_is_still_recorded_as_video(
+        self, mock_get_candidates, mock_download, mock_subprocess_run,
+    ):
+        result = self._integrate_a_video(
+            mock_get_candidates, mock_download, mock_subprocess_run)
+
+        self.assertEqual(result["asset_type"], "video")
+
+    @patch("app.services.asset_integration_service.download_candidate")
+    @patch("app.services.asset_integration_service.get_candidates")
+    def test_an_image_scene_gains_nothing(
+        self, mock_get_candidates, mock_download,
+    ):
+        """
+        그림 scene 의 script.json 은 한 바이트도 달라지지 않아야 한다.
+        """
+
+        mock_get_candidates.return_value = [PEXELS_IMAGE_CANDIDATE]
+        mock_download.side_effect = _download_candidate_side_effect()
+
+        result = integrate_asset(SAMPLE_SCENE, self.project_path)
+
+        self.assertNotIn("footage_path", result)
+        self.assertFalse(os.path.exists(
+            os.path.join(self.project_path, "videos")))
+
     # --- AI fallback when no candidates exist ---
 
     @patch("app.services.image_service.generate_image")

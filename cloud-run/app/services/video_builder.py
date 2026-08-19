@@ -7,6 +7,7 @@ from moviepy.video.fx.CrossFadeOut import CrossFadeOut
 from moviepy.video.fx.FadeIn import FadeIn
 from moviepy.video.fx.FadeOut import FadeOut
 
+from app.services.footage import build_footage_clip, is_footage
 from app.services.kenburns import build_kenburns_clip
 from app.services import scene_order
 from app.services.scene_timeline import build_timeline
@@ -95,7 +96,19 @@ def _resolve_asset_path(project_path, scene):
     scene에 asset_path가 있으면(step02_assets.py 경로) 그대로 사용하고,
     없으면 기존 step02_image.py 파이프라인과의 하위호환을 위해 기존
     파일명 규칙(images/sceneN.png)으로 폴백합니다.
+
+    Sprint223 - 받아 둔 스톡 영상이 있으면 그 영상이 이 scene의 자산이다.
+
+    **파일이 실제로 있을 때만** 쓴다. 적혀만 있고 없으면 예전처럼
+    그림으로 간다 - 첫 프레임은 영상과 함께 언제나 남으므로
+    (asset_integration_service) 그 길이 늘 살아 있고, 사람이 videos/를
+    지웠다는 이유로 렌더가 통째로 멈추지 않는다.
     """
+
+    footage_path = scene.get("footage_path")
+
+    if footage_path and os.path.exists(footage_path):
+        return footage_path
 
     asset_path = scene.get("asset_path")
 
@@ -186,9 +199,14 @@ def build_video(project_path: str):
             else durations[index] + overlap
         )
 
-        clip = build_kenburns_clip(
-            asset_path,
-            clip_duration,
+        # Sprint223 - 사진이냐 영상이냐로 갈리는 유일한 자리다. 두
+        # 함수가 돌려주는 것의 모양이 같으므로(1080x1920 · 그 길이 ·
+        # 소리 없음) 아래 겹침 계산은 종류를 몰라도 된다 - 그 계산은
+        # 이번에 한 줄도 바뀌지 않았다.
+        clip = (
+            build_footage_clip(asset_path, clip_duration)
+            if is_footage(asset_path)
+            else build_kenburns_clip(asset_path, clip_duration)
         )
 
         clip = clip.with_fps(30)

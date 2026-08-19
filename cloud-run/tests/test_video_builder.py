@@ -345,5 +345,170 @@ class TestBuildVideoFollowsSharedTimeline(unittest.TestCase):
         self.assertAlmostEqual(occupied, sum(durations), places=9)
 
 
+class TheFootageSceneUsesTheFootageTest(unittest.TestCase):
+    """
+    Sprint223 - 받아 둔 스톡 영상이 있으면 그것이 이 scene 의 자산이다.
+    """
+
+    def test_the_footage_wins_when_it_is_really_there(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            where = os.path.join(tmp_dir, "videos", "scene1.mp4")
+            os.makedirs(os.path.dirname(where))
+
+            with open(where, "wb") as f:
+                f.write(b"stub")
+
+            scene = {
+                "scene": 1,
+                "asset_path": os.path.join(tmp_dir, "images", "scene1.png"),
+                "footage_path": where,
+            }
+
+            self.assertEqual(_resolve_asset_path(tmp_dir, scene), where)
+
+    def test_a_recorded_but_missing_footage_falls_back_to_the_picture(self):
+        """
+        사람이 videos/ 를 지웠다는 이유로 렌더가 멈추지 않는다 - 첫
+        프레임은 언제나 함께 남는다.
+        """
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            picture = os.path.join(tmp_dir, "images", "scene1.png")
+
+            scene = {
+                "scene": 1,
+                "asset_path": picture,
+                "footage_path": os.path.join(tmp_dir, "videos", "gone.mp4"),
+            }
+
+            self.assertEqual(_resolve_asset_path(tmp_dir, scene), picture)
+
+    def test_a_scene_without_footage_is_untouched(self):
+        scene = {"scene": 4}
+
+        self.assertEqual(
+            _resolve_asset_path("output/proj", scene),
+            os.path.join("output/proj", "images", "scene4.png"),
+        )
+
+
+class TheMixedTimelinePicksTheRightBuilderTest(unittest.TestCase):
+    """
+    한 타임라인에 영상과 그림이 섞인다. 어느 쪽으로 가는지는 확장자
+    하나로 갈리고, 그 갈림은 footage.is_footage 한 곳에서 정한다.
+    """
+
+    def _project(self, tmp_dir, footage_scenes):
+        os.makedirs(os.path.join(tmp_dir, "images"), exist_ok=True)
+        os.makedirs(os.path.join(tmp_dir, "videos"), exist_ok=True)
+        os.makedirs(os.path.join(tmp_dir, "audio", "scenes"), exist_ok=True)
+
+        scenes = []
+
+        for index in (1, 2, 3):
+            picture = os.path.join(tmp_dir, "images", f"scene{index}.png")
+            audio = os.path.join(
+                tmp_dir, "audio", "scenes",
+                audio_policy.scene_audio_filename(index))
+
+            for path in (picture, audio):
+                with open(path, "wb") as f:
+                    f.write(b"stub")
+
+            scene = {"scene": index, "narration": "x"}
+
+            if index in footage_scenes:
+                where = os.path.join(tmp_dir, "videos", f"scene{index}.mp4")
+
+                with open(where, "wb") as f:
+                    f.write(b"stub")
+
+                scene["footage_path"] = where
+
+            scenes.append(scene)
+
+        with open(
+            os.path.join(tmp_dir, "script.json"), "w", encoding="utf-8",
+        ) as f:
+            json.dump({"scenes": scenes}, f)
+
+    def _build(self, tmp_dir):
+        by_path = {
+            os.path.join(
+                tmp_dir, "audio", "scenes",
+                audio_policy.scene_audio_filename(index),
+            ): 4.0
+            for index in (1, 2, 3)
+        }
+
+        with patch(
+            "app.services.scene_timeline.get_audio_duration",
+            lambda path: by_path[path],
+        ), patch(
+            "app.services.video_builder.build_kenburns_clip"
+        ) as mock_kenburns, patch(
+            "app.services.video_builder.build_footage_clip"
+        ) as mock_footage, patch(
+            "app.services.video_builder.concatenate_videoclips"
+        ) as mock_concat:
+
+            mock_kenburns.return_value = MagicMock()
+            mock_footage.return_value = MagicMock()
+            mock_concat.return_value = MagicMock()
+
+            build_video(tmp_dir)
+
+            return mock_kenburns.call_args_list, mock_footage.call_args_list
+
+    def test_each_kind_goes_to_its_own_builder(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._project(tmp_dir, footage_scenes={1, 3})
+
+            kenburns, footage = self._build(tmp_dir)
+
+        self.assertEqual(len(footage), 2)
+        self.assertEqual(len(kenburns), 1)
+
+    def test_the_still_scene_still_gets_ken_burns(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._project(tmp_dir, footage_scenes={1, 3})
+
+            kenburns, _ = self._build(tmp_dir)
+
+            self.assertEqual(
+                kenburns[0].args[0],
+                os.path.join(tmp_dir, "images", "scene2.png"),
+            )
+
+    def test_a_project_with_no_footage_never_calls_the_new_path(self):
+        """예전 프로젝트는 예전 그대로 돈다."""
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._project(tmp_dir, footage_scenes=set())
+
+            kenburns, footage = self._build(tmp_dir)
+
+        self.assertEqual(footage, [])
+        self.assertEqual(len(kenburns), 3)
+
+    def test_both_kinds_are_asked_for_the_same_length(self):
+        """
+        겹침 계산은 자산의 종류를 몰라야 한다 - 두 builder 가 같은
+        길이를 받는 것이 그 증거다.
+        """
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            self._project(tmp_dir, footage_scenes={1, 3})
+
+            kenburns, footage = self._build(tmp_dir)
+
+        # scene 1·2 는 겹침만큼 더 길고, 마지막(scene 3)은 그대로다.
+        self.assertAlmostEqual(
+            footage[0].args[1], 4.0 + CROSSFADE_DURATION, places=9)
+        self.assertAlmostEqual(
+            kenburns[0].args[1], 4.0 + CROSSFADE_DURATION, places=9)
+        self.assertAlmostEqual(footage[1].args[1], 4.0, places=9)
+
+
 if __name__ == "__main__":
     unittest.main()
