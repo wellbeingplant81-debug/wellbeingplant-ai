@@ -2462,6 +2462,50 @@ def review_save_metadata(project_id: str, request: ReviewMetadataRequest):
     return review_state(project_id)
 
 
+def _chosen_image_provider_refused(project_path: str, exc: Exception):
+    """
+    Sprint225 - 고른 것으로 만들지 못했다. 무엇을 골랐는지 함께 말한다.
+
+    고른 것이 없으면(current) None을 돌려준다 - 그때는 부르는 쪽이
+    예전 그대로 그냥 던진다. 이 회차는 고른 사람의 화면만 고친다.
+
+    왜 라우터인가
+    -------------
+    이름표(GENERATED_IMAGE_PROVIDERS)는 app.production에 있고, 서비스가
+    그것을 들이면 test_production_architecture가 막는다. 이 라우터는
+    이미 app.production을 들이는 자리다(script-check가 그렇게 한다).
+
+    무엇을 고쳤는지에 대해 정직하게
+    -------------------------------
+    지금까지 이 자리는 ReviewError만 받았다. 고른 Provider가 내는 것은
+    RuntimeError 갈래라(LocalStockUnavailable · FluxUnavailable ·
+    GptImageUnavailable · ProviderNotWired) 그대로 빠져나가 500이 됐고,
+    화면에는 "Internal Server Error"만 떴다 - 정작 사람이 할 수 있는
+    일(파일 이름을 고치거나 자료를 더 넣는 것)이 적힌 그 문장이
+    사라진 것이다.
+    """
+
+    from app.production.providers.generated_image import (
+        GENERATED_IMAGE_PROVIDERS,
+    )
+    from app.services import provider_selection
+
+    chosen = provider_selection.selected(project_path, "image")
+
+    if not chosen:
+        return None
+
+    display = next(
+        (row[1] for row in GENERATED_IMAGE_PROVIDERS if row[0] == chosen),
+        chosen,
+    )
+
+    return (
+        f"'{display}'(으)로 만들지 못했습니다. {exc} "
+        f"다른 것으로 만들려면 만들 것을 먼저 바꾸십시오."
+    )
+
+
 @router.post("/api/review/{project_id}/images")
 def review_generate_images(project_id: str):
     """STEP1 승인 -> STEP2. 확정된 대본으로 이미지를 만든다."""
@@ -2475,6 +2519,15 @@ def review_generate_images(project_id: str):
         studio_review.generate_images(path, meta.get("channel") or "wellbeing")
     except studio_review.ReviewError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        # Sprint225 - 고른 것이 만들지 못한 경우. 고르지 않았으면
+        # 예전 그대로 던진다.
+        refused = _chosen_image_provider_refused(path, exc)
+
+        if refused is None:
+            raise
+
+        raise HTTPException(status_code=400, detail=refused)
 
     return review_state(project_id)
 
@@ -2494,6 +2547,13 @@ def review_regenerate_image(project_id: str, scene: int):
         )
     except studio_review.ReviewError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        refused = _chosen_image_provider_refused(path, exc)
+
+        if refused is None:
+            raise
+
+        raise HTTPException(status_code=400, detail=refused)
 
     return review_state(project_id)
 

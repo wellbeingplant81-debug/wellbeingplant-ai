@@ -432,9 +432,22 @@ def integrate_asset(
         if best_candidate is not None and not ai_priority_choice:
             result = download_candidate(best_candidate, staging_path)
         else:
+            # Sprint225 - 고른 것을 여기에도 넘긴다.
+            #
+            # 위 두 갈래는 Sprint127부터 provider를 넘겨 왔는데 이 갈래만
+            # 빠져 있었다. 그래서 visual_type이 없는 scene은 사람이 무엇을
+            # 골랐든 current 엔진(Imagen)으로 갔다 - 검수 화면이 만드는
+            # scene에는 visual_type이 없으므로(apply_visual_type을 부르는
+            # 곳은 파이프라인 하나뿐이다) 그 화면에서 "내 PC 자료"를 고른
+            # 사람이 유료 엔진을 부르고 있었다.
+            #
+            # 고르는 순서는 바뀌지 않는다. 스톡을 먼저 보는 것도, 품질
+            # 게이트도 위 그대로다 - 달라지는 것은 "만들어야 할 때 무엇이
+            # 만드는가" 하나뿐이고, 그것이 원래 이 값의 뜻이다.
             result = _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
                 candidate_count=candidate_count, scene=scene,
+                provider=provider,
             )
 
     source = result["source"]
