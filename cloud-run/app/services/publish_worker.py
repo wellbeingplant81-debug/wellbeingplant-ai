@@ -132,6 +132,19 @@ def run_once(store_path: str = None, topic: str = "", steps=None):
         return publish_queue.mark_failed(
             where, row["id"], reason=str(failed), retryable=False)
 
+    # Sprint238 - 집은 뒤에 한 번 더 본다.
+    #
+    # 줄에 세운 다음 누가 손으로 올렸을 수도 있고, 그 사이는 얼마든지
+    # 길 수 있다. 한 겹만 두면 그 겹을 지나온 길이 하나라도 생기는 날
+    # 뚫린다.
+    from app.services import publish_history
+
+    done = publish_history.already_published(project_path, platform)
+
+    if done:
+        return publish_queue.mark_success(
+            where, row["id"], url=done.get("url") or "")
+
     try:
         found = step(topic or row["project_id"], project_path, {}) or {}
     except Exception as failed:

@@ -2768,6 +2768,27 @@ def publish_queue_add(request: QueueUploadRequest):
             status_code=400,
             detail="아직 영상이 없습니다. 영상을 먼저 만들어 주십시오.")
 
+    # Sprint238 - 이미 올린 것은 다시 세우지 않는다.
+    #
+    # 줄은 제 안의 SUCCESS 만 안다. 줄 밖에서 올린 것(손으로 부른
+    # 업로드 스텝)은 모르고, 그대로 두면 같은 영상이 채널에 두 번
+    # 올라간다. 실제로 그런 기록이 이 PC 에 있었다.
+    from app.services import publish_history
+
+    done = publish_history.already_published(project_path, request.platform)
+
+    if done:
+        # 거절이 아니다. 이미 끝난 일이라고 알려 주고 그때 주소를
+        # 그대로 준다 - 사람이 찾아갈 수 있어야 한다.
+        return {
+            "state": publish_queue.SUCCESS,
+            "project_id": request.project_id,
+            "platform": request.platform,
+            "url": done.get("url") or "",
+            "upload_id": done.get("upload_id") or "",
+            "already": True,
+        }
+
     try:
         return publish_queue.add(
             publish_queue.default_store_path(),
