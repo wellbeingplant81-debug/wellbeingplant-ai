@@ -464,6 +464,72 @@ def ask_before_closing(jobs) -> bool:
     return answer == IDYES
 
 
+# --- Sprint222 - 화면이 부를 수 있는 것 하나 -----------------------------
+
+# pywebview 의 FileDialog.FOLDER. 숫자를 적어 두는 이유는 이 파일이
+# webview 를 최상단에서 들이지 않기 때문이다(없는 자리에서도 들어와야
+# 한다). 값이 바뀌면 아래 pick_folder 가 조용히 다른 창을 열게 되므로
+# tests/test_host_desktop.py 가 실제 상수와 대조한다.
+FOLDER_DIALOG = 20
+
+
+class Bridge:
+    """
+    화면과 이 프로그램 사이의 **좁은 문** 하나.
+
+    여는 것은 폴더 선택 창뿐이다
+    ----------------------------
+    자료를 찾거나, 파일을 옮기거나, 프로젝트를 만들거나, 영상을 만드는
+    일은 여기서 하지 않는다. 그런 것을 하나 넣기 시작하면 이 문은 두
+    번째 API 가 되고, 그때부터 같은 기능이 서버와 브리지 두 곳에 살게
+    된다 - 어느 날 한쪽만 고쳐진다.
+
+    돌려주는 것은 고른 폴더의 절대 경로 하나. 취소하면 빈 문자열이다.
+    (None 을 돌려주면 JS 쪽에서 "브리지가 없다"와 구별되지 않는다 -
+    브라우저 모드로 잘못 떨어질 수 있다.)
+
+    왜 필요한가
+    -----------
+    브라우저에는 폴더의 **경로**를 알려 주는 표준 API 가 없다.
+    <input webkitdirectory> 는 파일 목록만 주고 절대 경로는 주지 않는데,
+    free_workspace 가 기억하는 것은 경로다. 그래서 지금까지 화면은
+    prompt() 로 사람에게 경로를 받아 적게 했다 - 데스크톱 앱에서 그것은
+    할 일이 아니다.
+    """
+
+    def __init__(self):
+        # 밑줄로 시작한다. pywebview 는 js_api 객체의 **인스턴스 속성까지**
+        # 화면에 내보내므로, self.window 로 두면 창 객체가
+        # window.pywebview.api.window 로 새어 나간다(실측: 문에 두 개가
+        # 보였다). 문은 하나여야 한다.
+        self._window = None
+
+    def pick_folder(self, start: str = "") -> str:
+        """
+        폴더 선택 창을 연다. 고른 절대 경로, 취소하면 빈 문자열.
+
+        절대 던지지 않는다 - 여기서 예외가 나면 화면 쪽 await 가 깨지고,
+        사람은 창이 열리지도 닫히지도 않는 것을 본다.
+        """
+
+        if self._window is None:
+            return ""
+
+        try:
+            picked = self._window.create_file_dialog(
+                FOLDER_DIALOG, directory=str(start or ""))
+        except Exception:
+            return ""
+
+        if not picked:
+            return ""
+
+        if isinstance(picked, (list, tuple)):
+            return str(picked[0]) if picked else ""
+
+        return str(picked)
+
+
 def _page(title: str, body: str) -> str:
     """창 안에 띄우는 안내 한 장. 바깥을 부르지 않는다."""
 
@@ -624,9 +690,13 @@ def run_window(port: int = None, debug: bool = False,
 
     width, height = initial_size()
 
+    # 화면이 부를 수 있는 좁은 문. 폴더 선택 하나뿐이다.
+    bridge = Bridge()
+
     window = webview.create_window(
         WINDOW_TITLE,
         html=SPLASH,
+        js_api=bridge,
         width=width, height=height,
         min_size=MIN_WINDOW_SIZE,
         resizable=True,
@@ -658,6 +728,8 @@ def run_window(port: int = None, debug: bool = False,
             sys.stdout.flush()
 
         return allowed
+
+    bridge._window = window
 
     window.events.closing += on_closing
 

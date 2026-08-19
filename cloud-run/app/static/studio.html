@@ -1493,6 +1493,30 @@ input[type=radio],input[type=checkbox]{width:auto}
 .s222pin{position:sticky;bottom:0;z-index:3;padding:9px 0 2px;
   background:linear-gradient(to top,var(--bg) 62%,transparent)}
 .s222pin button{width:100%}
+/* Sprint223 - 만드는 순서대로 한 걸음씩.
+   업무 화면이 아니라 만들기 화면으로 보이게 한다. 색은 토큰만 쓴다. */
+.wzrail{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 10px}
+.wzstep{display:inline-flex;align-items:center;gap:5px;
+  padding:5px 11px;border-radius:999px;font-size:12px;cursor:pointer;
+  background:var(--sunken);color:var(--dim);border:1px solid var(--line)}
+.wzstep b{font-weight:700}
+.wzstep:hover{border-color:var(--line2)}
+.wzstep.done{background:var(--ok-soft);color:var(--ok-text);
+  border-color:var(--ok-edge)}
+.wzstep.on{background:var(--accent-soft);color:var(--text);
+  border-color:var(--accent-edge);font-weight:600}
+.wzcard{background:var(--panel2);border:1px solid var(--line);
+  border-radius:var(--radius);padding:16px 16px 14px}
+.wzcard .wzh{font-size:17px;font-weight:700;margin:0 0 10px}
+.wzcard>p.muted:first-of-type{margin-top:0}
+.wznav{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
+.wznav button{min-width:96px}
+@media (max-height:800px){
+  .wzcard{padding:11px 12px 10px}
+  .wzcard .wzh{font-size:15px;margin-bottom:7px}
+  .wzstep{padding:3px 9px;font-size:11px}
+}
+
 /* Sprint222 - 세 칸을 지키는 좁은 구간(1025~1180).
    폴백을 1024로 내린 뒤 생긴 띠다. 여기서는 칸을 없애지 않고 양옆을
    조금 좁혀서 가운데를 지킨다 - 세 칸에서 세로 스택으로 한 번에
@@ -2353,6 +2377,19 @@ function markCreationMode(mode){
 //
 // 새 길을 만들지 않는다. 이 갈래가 하는 일은 Sprint150의 무료 제작
 // 모드로 단계별 선택을 맞추고, Sprint155의 준비 마법사를 여는 것이다.
+// Sprint223 - 배경음악 걸음이 읽을 값. 서버가 준 것을 그대로 담는다.
+async function wizLoadAbout(){
+  if(aboutInfo) return aboutInfo;
+
+  try {
+    aboutInfo = await (await fetch("/studio/api/about")).json();
+  } catch(e) {
+    aboutInfo = null;      // 못 읽으면 그 걸음이 "읽는 중"이라고 말한다
+  }
+
+  return aboutInfo;
+}
+
 async function chooseFree(){
   markCreationMode("free");
 
@@ -2901,17 +2938,36 @@ function renderReadiness(){
   const r = readiness();
   const filled = Math.round(r.percent / 10);
 
+  // Sprint222 - 이 막대가 무엇을 세는지 한 줄로 밝힌다.
+  //
+  // 사람이 "준비도 100%"를 보고 "재료가 다 있다"로 읽었다(실사용).
+  // 실제로 이것이 세는 것은 **각 단계를 무엇으로 만들지 정해졌는가**
+  // 뿐이다 - 대본도 이미지도 음성도 하나 없이 100%가 된다.
+  //
+  // 세는 방식은 바꾸지 않는다(그 자체로는 쓸모가 있다). 무엇을 세는지
+  // 적어 두고, 재료 쪽은 아래 finalCheckPanel 이 말한다.
   $("readiness").innerHTML = `
     <div class="k">제작 준비도</div>
     <div class="bar"><b style="width:${r.percent}%"></b></div>
     <div class="pct">${r.percent}%</div>
     <div class="ticks">${r.rows.map(row =>
       `<span class="${row.ok?"ok":""}">${row.ok?"✓":"□"} ${row.label}</span>`
-    ).join("")}</div>`;
+    ).join("")}</div>
+    <p class="muted" style="margin:6px 0 0;font-size:11px">
+      무엇으로 만들지 정해진 정도입니다. 자료가 실제로 있는지는
+      아래에서 봅니다.</p>
+    ${finalCheck ? finalCheckPanel() : ""}`;
 
-  // 막지 않는다 - 정보만 준다. 짧은 영상이 필요한 날도 있고 그
-  // 판단을 우리가 대신할 근거가 없다.
-  $("go").textContent = `영상 생성 (준비도 ${r.percent}%)`;
+  // Sprint222 - 단추에서 그 숫자를 뗀다.
+  //
+  // 이 단추는 /api/jobs 로 파이프라인 전체를 건다. 그 길의 관문은
+  // 주제 · 과금 확인 · (프로젝트가 있을 때) 대본 계약 셋이고,
+  // 이미지와 음성은 **이 길이 만들어 준다**. 그런데 단추에 위 숫자를
+  // 붙여 두니 "생성 준비 100%"로 읽혔다 - 서로 다른 것을 말하는
+  // 두 값이 한 단추에 붙어 있었다.
+  //
+  // 막지 않는다는 규칙은 그대로다 - 정보만 준다.
+  $("go").textContent = "영상 생성";
 }
 
 function toggleProviders(){
@@ -5222,11 +5278,45 @@ async function loadWorkspace(){
   renderWorkspace();
 }
 
+// Sprint222 - 데스크톱에서는 Windows 폴더 창을 연다.
+//
+// 브라우저에는 폴더의 **경로**를 주는 표준 API가 없다. webkitdirectory는
+// 파일 목록만 주고 절대 경로는 주지 않는데, free_workspace가 기억하는
+// 것은 경로다. 그래서 지금까지 사람에게 경로를 받아 적게 했다 -
+// 데스크톱 앱에서 그것은 사람이 할 일이 아니다.
+//
+// Desktop Host에는 좁은 문이 하나 열려 있다(host_desktop의 Bridge).
+// 있으면 그리로 가고, 없으면(=브라우저) 예전 길로 간다. 브라우저에서
+// pywebview가 없다고 죽지 않는다.
+//
+// 돌려주는 값 셋을 구별한다.
+//   undefined  문이 없다        -> 예전처럼 물어본다
+//   ""         사람이 취소했다  -> 아무 일도 하지 않는다
+//   경로       골랐다
+async function pickFolderNatively(current){
+  const api = window.pywebview && window.pywebview.api;
+
+  if(!api || typeof api.pick_folder !== "function") return undefined;
+
+  try {
+    return await api.pick_folder(current || "");
+  } catch(e) {
+    // 창을 못 열었다. 되는 척하지 않고 예전 길로 보낸다.
+    return undefined;
+  }
+}
+
 async function chooseWorkspace(){
-  const root = prompt(
-    "내 자료 폴더의 전체 경로를 적어 주세요.\n" +
-    "그 아래 images / videos / voices / music 폴더를 봅니다.",
-    (workspace && workspace.root) || "");
+  let root = await pickFolderNatively((workspace && workspace.root) || "");
+
+  if(root === ""){ return; }
+
+  if(root === undefined){
+    root = prompt(
+      "내 자료 폴더의 전체 경로를 적어 주세요.\n" +
+      "그 아래 images / videos / voices / music 폴더를 봅니다.",
+      (workspace && workspace.root) || "");
+  }
 
   if(root === null) return;
 
@@ -5329,6 +5419,10 @@ function renderCostMode(){
 // 어디까지 왔는지는 서버가 준 것으로 정한다. 화면이 따로 세면 서버가
 // 아는 것과 갈리고, 사람은 화면이 초록인데 렌더가 막히는 것을 본다.
 let wizOpen = false;
+// Sprint223 - /studio/api/about 이 준 것. 배경음악 걸음이 이것을
+// 읽는다 - 화면이 폴더를 다시 세지 않는다.
+let aboutInfo = null;
+
 let wizProject = null;
 let wizScript = null;
 let wizError = "";
@@ -6561,6 +6655,9 @@ function toggleFreeWizard(){
   if(wizOpen){ loadWorkspace(); }
 
   renderFreeWizard();
+
+  // 배경음악 걸음이 쓸 값을 미리 읽어 둔다.
+  wizLoadAbout().then(renderFreeWizard);
 }
 
 async function wizBuildPrompt(){
@@ -6697,95 +6794,251 @@ function wizAssetLines(){
     <span class="wc"><b>영상에서</b> ${r.videos || 0}개</span>`;
 }
 
-function renderFreeWizard(){
-  const box = $("freeWizard");
-  if(!box) return;
+// ══════════════════════════════════════════════════════════════════
+// Sprint223 - 만드는 순서대로 한 걸음씩 (Epic 64).
+//
+// 왜 기존 마법사를 확장하는가
+// ---------------------------
+// 무료 제작에는 이미 STEP 1~5 마법사가 있었다(wizStep · wizHead ·
+// renderFreeWizard). 옆에 두 번째 마법사를 세우면 같은 상태를 두 곳이
+// 들고, 어느 날 한쪽만 고쳐진다 - 이 저장소가 여러 번 겪은 그것이다.
+//
+// 그래서 상태(wizProject · scriptPrompt · workspace · preparation)와
+// 함수(wizStep · wizHead · finalCheckPanel)를 그대로 두고, **그리는
+// 방식만** 바꾼다. 한 화면에 다 쌓지 않고 한 걸음씩 보여 준다.
+//
+// 무엇을 새로 만들지 않았는가
+// ---------------------------
+//   판정      preparation · finalCheck 그대로
+//   단계 선택 renderStageBlock(stage) 그대로 - 이미지·음성·영상 정보
+//   비용      서버가 준 값을 그대로(payingStages · planCost)
+//   음악      고르는 API가 없다. 그래서 **고르는 척하지 않는다** -
+//             어디에 넣으면 되는지 말하고 상태만 보여 준다.
+// ══════════════════════════════════════════════════════════════════
 
-  if(!wizOpen){ box.innerHTML = ""; return; }
+// 사람이 걸어간 자리. 0이면 "아직 안 정했다"이고, 그때는 wizStep()이
+// 정한 자리를 보여 준다 - 열자마자 할 일 앞에 서 있게 된다.
+let wizAt = 0;
 
-  const step = wizStep();
-  // Sprint156 - 상태는 셋이다. 서버가 정한 것을 그대로 읽는다.
-  //
-  //   ready    다 되었다
-  //   review   다 있으나 여러 Scene이 같은 그림을 쓴다
-  //   missing  없는 것이 있다
-  //
-  // 검토 필요를 부족으로 처리하면 자동 실패가 된다 - 사람이 정할
-  // 일이므로 버튼은 열어 두고 사실만 말한다.
-  const state = preparation && preparation.state;
-  // Sprint160 - blocked만 막는다. review는 열어 두되 확인을 권한다.
-  const ready = state === "ready" || state === "review";
+const WIZ_STEPS = [
+  {n: 1, label: "주제"},
+  {n: 2, label: "대본"},
+  {n: 3, label: "이미지"},
+  {n: 4, label: "음성"},
+  {n: 5, label: "배경음악"},
+  {n: 6, label: "영상 정보"},
+  {n: 7, label: "확인"},
+];
 
-  box.innerHTML = `
-    ${wizHead(1, "주제")}
-    <p class="muted">위 <b>주제</b> 칸에 적으면 됩니다.
+// 예전 마법사의 다섯 걸음을 새 일곱 걸음 위의 자리로 옮긴다.
+// 지금 할 일이 어디인지는 여전히 wizStep()이 정한다 - 새 판정을
+// 만들지 않는다.
+function wizSuggested(){
+  const old = wizStep();
+
+  if(old <= 2) return old;      // 1 주제 · 2 요청문 -> 대본
+  if(old === 3) return 2;       // 붙여넣기도 대본이다
+  if(old === 4) return 3;       // 내 자료 폴더는 이미지에서 고른다
+  return 7;                     // 다 되었으면 확인
+}
+
+function wizWhere(){
+  return wizAt || wizSuggested();
+}
+
+function wizGo(n){
+  const at = Math.max(1, Math.min(WIZ_STEPS.length, n));
+
+  wizAt = at;
+  renderFreeWizard();
+}
+
+function wizRail(){
+  const now = wizWhere();
+
+  return `<div class="wzrail">${WIZ_STEPS.map(s => {
+    const done = s.n < now;
+    const on = s.n === now;
+
+    return `<button type="button" class="wzstep ${on ? "on" : ""} ${
+      done ? "done" : ""}" onclick="wizGo(${s.n})">
+      <b>${done ? "✓" : s.n}</b> ${s.label}</button>`;
+  }).join("")}</div>`;
+}
+
+function wizNav(){
+  const now = wizWhere();
+
+  return `<div class="wznav">
+    <button type="button" class="sm ghost" ${now <= 1 ? "disabled" : ""}
+            onclick="wizGo(${now - 1})">◀ 이전</button>
+    <button type="button" class="sm" ${now >= WIZ_STEPS.length ? "disabled" : ""}
+            onclick="wizGo(${now + 1})">다음 ▶</button>
+  </div>`;
+}
+
+// ── 걸음마다의 알맹이 ───────────────────────────────────────────
+//
+// 예전 renderFreeWizard가 한 화면에 쌓아 두던 것을 그대로 나눈 것이다.
+// 문구도 손대지 않았다 - 사람이 이미 읽고 익힌 말이다.
+
+function wizCardTopic(){
+  return `<p class="muted">위 <b>주제</b> 칸에 무엇을 만들지 적어 주세요.
       예: "40대 허리 건강 운동"</p>
+    <p class="muted">적으면 다음 걸음이 열립니다.</p>`;
+}
 
-    ${wizHead(2, "Gemini 요청문")}
+function wizCardScript(){
+  return `<p class="muted">장면마다 <b>읽을 문장</b>과 <b>그림 묘사</b>가
+      있어야 합니다. 아래 요청문을 채팅창에 넣고 받은 답이면 둘 다
+      들어 있습니다.</p>
     <div class="rowbtns" style="margin-top:0">
-      <button class="sm ${step === 2 ? "" : "ghost"}"
-              onclick="wizBuildPrompt()">Gemini 요청문 만들기</button>
+      <button type="button" class="sm" onclick="wizBuildPrompt()">
+        요청문 만들기</button>
     </div>
     ${scriptPrompt ? `<textarea class="promptbox" readonly
       >${escHtml(scriptPrompt.prompt)}</textarea>
       <div class="rowbtns">
-        <button class="sm" onclick="copyScriptPrompt()">복사</button>
+        <button type="button" class="sm" onclick="copyScriptPrompt()">복사</button>
         <span class="muted" id="promptCopied"></span>
       </div>
       <p class="muted">${escHtml(scriptPrompt.how_to_use)}</p>` : ""}
-
-    ${wizHead(3, "대본 붙여넣기")}
     ${wizProject ? `<p class="muted">
         <b>${escHtml(wizProject.title)}</b> · scene ${wizProject.scene_count}개
         · 프로젝트 ${wizProject.project_id}</p>`
-      : `<p class="muted">장면마다 <b>읽을 문장</b>과 <b>그림 묘사</b>가
-           있어야 합니다. 위 요청문을 채팅창에 넣고 받은 답이면 둘 다
-           들어 있습니다.</p>
-         <textarea id="wizRaw" placeholder="Gemini 답을 그대로 붙여넣기"
+      : `<textarea id="wizRaw" placeholder="받은 답을 그대로 붙여넣기"
            oninput="wizRawText=this.value"
            >${escHtml(wizRawText)}</textarea>
          <div class="rowbtns">
-           <button class="sm ghost" onclick="wizReadAndCheck()">읽어 보기</button>
-           ${wizScript ? `<button class="sm" onclick="wizCreateProject()">
-             이 대본으로 시작</button>` : ""}
+           <button type="button" class="sm ghost"
+                   onclick="wizReadAndCheck()">읽어 보기</button>
+           ${wizScript ? `<button type="button" class="sm"
+             onclick="wizCreateProject()">이 대본으로 시작</button>` : ""}
          </div>
          ${wizScript ? `<p class="muted"><b>${escHtml(wizScript.title)}</b>
            · scene ${wizScript.scene_count}개</p>` : ""}
-         <div id="wizQuality"></div>`}
+         <div id="wizQuality"></div>`}`;
+}
 
-    ${wizHead(4, "내 자료 폴더")}
-    <div class="rowbtns" style="margin-top:0">
-      <button class="sm ${step === 4 ? "" : "ghost"}"
+// 이미지 · 음성 · 영상 정보는 이미 있는 카드를 그대로 쓴다.
+function wizCardStage(stage){
+  if(!stageSpec) return '<p class="muted">불러오는 중…</p>';
+
+  return renderStageBlock(stage);
+}
+
+function wizCardWorkspace(){
+  return `<div class="rowbtns" style="margin-top:0">
+      <button type="button" class="sm"
               onclick="wizChooseWorkspace()">내 자료 폴더 선택</button>
       ${workspace && workspace.root
         ? `<code class="wpath">${escHtml(workspace.root)}</code>` : ""}
     </div>
+    <p class="muted">직접 준비한 자료로 만들 때만 필요합니다.
+      그 아래 images / videos / voices 폴더를 봅니다.</p>`;
+}
 
-    ${wizHead(5, "준비 상태")}
-    <div class="wcounts">${wizAssetLines()}</div>
+// 배경음악 - **고르는 걸음이 아니다.**
+//
+// 이 엔진에는 곡을 고르는 길이 없다. 렌더가 music/inbox 의 mp3 중
+// 하나를 쓴다. 그래서 라디오 버튼을 만들지 않는다 - 누를 수 있는데
+// 아무것도 달라지지 않는 단추가 가장 나쁜 거짓말이다.
+//
+// 값은 서버가 준다(/studio/api/about). 화면이 폴더를 다시 세지 않는다.
+function wizCardMusic(){
+  const music = (aboutInfo && aboutInfo.music) || null;
+
+  if(!music){
+    return '<p class="muted">음악 상태를 읽는 중…</p>';
+  }
+
+  return `<p class="muted">영상에는 배경음악이 <b>자동으로</b> 깔립니다.
+      내 음악을 쓰려면 아래 폴더에 mp3 를 넣어 주세요.</p>
+    <div class="rowbtns" style="margin-top:0">
+      <code class="wpath" title="${escHtml(music.where)}">${
+        escHtml(music.where)}</code>
+      <button type="button" class="sm ghost"
+              onclick="wizCopyMusicPath()">경로 복사</button>
+      <span class="muted" id="wizMusicCopied"></span>
+    </div>
+    <div class="dcounts">
+      <span class="dc ${music.ready ? "ready" : "blocked"}">${
+        music.ready ? "✓ 음악이 준비되어 있습니다"
+                    : "⚠ 아직 음악이 없습니다"}</span>
+    </div>
+    <p class="muted">AI 음악 생성 — 준비 중</p>`;
+}
+
+async function wizCopyMusicPath(){
+  const music = (aboutInfo && aboutInfo.music) || null;
+  if(!music) return;
+
+  try {
+    await navigator.clipboard.writeText(music.where);
+    $("wizMusicCopied").textContent = "복사했습니다.";
+  } catch(e) {
+    $("wizMusicCopied").textContent = "복사하지 못했습니다. 위 경로를 직접 여십시오.";
+  }
+}
+
+function wizCardFinal(){
+  const state = preparation && preparation.state;
+  const ready = state === "ready" || state === "review";
+
+  return `<div class="wcounts">${wizAssetLines()}</div>
     ${preparation && preparation.counts ? `<div class="dcounts">${
       ["ready", "review", "blocked"].map(key =>
         `<span class="dc ${key} ${preparation.counts[key] ? "" : "zero"}">${
           STATE_MARK[key]} ${STATE_LABEL[key]} ${
           preparation.counts[key] || 0}</span>`).join("")}</div>` : ""}
     ${preparation && (preparation.missing || []).length
-      ? `<div class="short">부족: ${preparation.missing.join(" · ")}</div>
-         <p class="muted">무엇을 어디에 넣으면 되는지는 아래 검토 화면의
-           준비 표에 있습니다.</p>` : ""}
+      ? `<div class="short">부족: ${preparation.missing.join(" · ")}</div>` : ""}
+    ${finalCheck ? finalCheckPanel() : ""}
     ${prepReview()}
     <div class="rowbtns">
-      <button class="sm" ${ready ? "" : "disabled"}
-              onclick="wizStart()">제작 시작</button>
+      <button type="button" class="sm" ${ready ? "" : "disabled"}
+              onclick="wizStart()">영상 만들기</button>
       ${ready ? "" : '<span class="muted">모자란 것을 채우면 열립니다.</span>'}
       ${state === "review"
         ? '<span class="muted">검토할 것이 있지만 이대로 만들 수 있습니다.</span>'
         : ""}
-    </div>
-
-    ${wizError ? `<div class="short">${escHtml(wizError)}</div>` : ""}`;
+    </div>`;
 }
 
-// 만드는 것은 기존 버튼이 한다. 새 생성 경로를 만들지 않는다.
+function wizTitleOf(n){
+  const found = WIZ_STEPS.find(s => s.n === n);
+
+  return found ? found.label : "";
+}
+
+function wizBody(n){
+  if(n === 1) return wizCardTopic();
+  if(n === 2) return wizCardScript();
+  if(n === 3) return wizCardStage("image") + wizCardWorkspace();
+  if(n === 4) return wizCardStage("voice") + wizCardWorkspace();
+  if(n === 5) return wizCardMusic();
+  if(n === 6) return wizCardStage("metadata");
+
+  return wizCardFinal();
+}
+
+function renderFreeWizard(){
+  const box = $("freeWizard");
+  if(!box) return;
+
+  if(!wizOpen){ box.innerHTML = ""; return; }
+
+  const now = wizWhere();
+
+  box.innerHTML = `
+    ${wizRail()}
+    <div class="wzcard">
+      <div class="wzh">${now}. ${wizTitleOf(now)}</div>
+      ${wizBody(now)}
+    </div>
+    ${wizNav()}
+    ${wizError ? `<div class="short">${escHtml(wizError)}</div>` : ""}`;
+}
 async function wizStart(){
   if(!wizProject) return;
 
