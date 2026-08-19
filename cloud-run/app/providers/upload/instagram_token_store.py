@@ -64,7 +64,27 @@ class InstagramTokenStore:
             return {}
 
         with open(self.storage_path, encoding="utf-8") as f:
-            return secret_box.unwrap(json.load(f))
+            raw = json.load(f)
+
+        data = secret_box.unwrap(raw)
+
+        # Sprint236 - 평문이면 그 자리에서 감싸 다시 적는다.
+        #
+        # 예전에는 다음 save() 를 기다렸다. 그런데 access_token 이
+        # 살아 있는 동안에는 저장할 일이 없고, refresh_token 은
+        # 만료되지 않는다 - 이 PC 에서 그 파일은 13일 동안 평문으로
+        # 남아 있었고 그 사이 프로그램은 여러 번 실행됐다.
+        #
+        # 실패해도 읽기는 성공시킨다. 감싸는 것은 곁다리이고, 그것
+        # 때문에 로그인이 사라지면 사람은 이유도 모른 채 다시
+        # 로그인해야 한다.
+        if secret_box.needs_protecting(raw):
+            try:
+                self._write_all(data)
+            except Exception:
+                pass
+
+        return data
 
     def _write_all(self, data: dict) -> None:
         directory = os.path.dirname(self.storage_path)

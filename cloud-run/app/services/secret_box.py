@@ -154,6 +154,30 @@ def wrap(data: dict) -> dict:
     }
 
 
+def needs_protecting(raw: dict) -> bool:
+    """
+    읽은 것이 평문이고, 지금 감쌀 수 있는가.
+
+    Sprint236 - 감싸는 일이 save() 에만 붙어 있었다. load() 는 평문을
+    읽어 넘기기만 해서, 예전에 적힌 파일은 다음 저장이 일어날 때까지
+    그대로 남았다. 이 PC 에서 13일이었다 - access_token 이 살아 있는
+    동안에는 저장할 일이 없고, refresh_token 은 만료되지 않으므로 그
+    기간은 몇 달일 수도 있다.
+
+    빈 것에는 거짓이다 - 적을 것이 없는데 파일을 건드릴 이유가 없다.
+    못 감싸는 자리에서도 거짓이다 - 참이면 읽을 때마다 같은 평문을
+    의미 없이 다시 적는다.
+    """
+
+    if not raw or not isinstance(raw, dict):
+        return False
+
+    if raw.get(MARKER_KEY):
+        return False
+
+    return available()
+
+
 def unwrap(raw: dict) -> dict:
     """
     읽은 것을 푼다.
