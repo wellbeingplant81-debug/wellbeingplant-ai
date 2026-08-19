@@ -60,10 +60,11 @@ def _block(page: str, start: str, length: int = 1600) -> str:
 
 class TheBridgeIsNarrowTest(unittest.TestCase):
     """
-    화면이 부를 수 있는 것은 폴더 선택 하나뿐이다.
+    화면이 부를 수 있는 것은 폴더를 고르는 일과 여는 일뿐이다.
 
-    여기에 하나를 더 넣기 시작하면 같은 기능이 서버와 브리지 두 곳에
-    살게 되고, 어느 날 한쪽만 고쳐진다.
+    Sprint222 는 하나였고 Sprint231 이 여는 일을 더했다. 여기에 계속
+    넣기 시작하면 같은 기능이 서버와 브리지 두 곳에 살게 되고, 어느 날
+    한쪽만 고쳐진다. 그래서 목록을 정확히 적어 둔다.
     """
 
     def test_문은_폴더_선택_하나뿐이다(self):
@@ -80,7 +81,9 @@ class TheBridgeIsNarrowTest(unittest.TestCase):
         public = sorted(name for name in dir(bridge)
                         if not name.startswith("_"))
 
-        self.assertEqual(public, ["pick_folder"], public)
+        # Sprint231 - 문이 하나 늘었다(open_folder). 늘어난 것이 정확히
+        # 무엇인지 계속 못 박는다 - "둘 이하"가 아니라 "이 둘".
+        self.assertEqual(public, ["open_folder", "pick_folder"], public)
 
     def test_창이_없으면_빈_값을_준다(self):
         """

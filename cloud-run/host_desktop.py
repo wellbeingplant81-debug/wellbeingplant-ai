@@ -529,6 +529,98 @@ class Bridge:
 
         return str(picked)
 
+    def open_folder(self, path: str = "") -> str:
+        """
+        탐색기로 그 폴더를 연다. 열었으면 "", 못 열었으면 이유 한 줄.
+
+        왜 아무 데나 열지 않는가
+        ------------------------
+        이 문은 화면이 부른다. 화면이 부르는 값을 그대로 믿고 열면,
+        어느 날 화면의 실수 하나로 이 프로그램이 남의 폴더를 여는
+        도구가 된다. 그래서 **열어도 되는 자리인지 여기서 다시 본다** -
+        부르는 쪽을 믿지 않는 것이 문의 일이다.
+
+        열어도 되는 자리
+        ----------------
+            자료 폴더와 그 아래   free_workspace 가 기억한 root
+            배경음악 자리        렌더가 실제로 보는 그 자리
+
+        판정을 새로 만들지 않는다 - 두 자리 모두 이미 있는 것에게
+        묻는다(free_workspace.remembered · runtime_paths.music_root).
+
+        절대 던지지 않는다.
+        """
+
+        # 빈 값을 먼저 막는다.
+        #
+        # os.path.abspath("") 는 빈 문자열이 아니라 **지금 디렉터리**를
+        # 돌려준다. 그래서 abspath 뒤에 비었는지 보면 그 검사는 영원히
+        # 참이 되지 않고, 빈 경로가 조용히 현재 폴더로 해석된다(실측:
+        # 화면에서 빈 값을 넘겼더니 저장소 폴더가 열렸다).
+        raw = str(path or "").strip()
+
+        if not raw:
+            return "경로가 비어 있습니다."
+
+        try:
+            wanted = os.path.abspath(raw)
+        except Exception:
+            return "경로가 올바르지 않습니다."
+
+        if not os.path.isdir(wanted):
+            return "그런 폴더가 없습니다."
+
+        if not self._allowed(wanted):
+            return "이 프로그램이 쓰는 자료 폴더만 열 수 있습니다."
+
+        try:
+            os.startfile(wanted)          # noqa: S606 - Windows 탐색기
+        except Exception as failed:
+            return f"폴더를 열지 못했습니다: {failed}"
+
+        return ""
+
+    @staticmethod
+    def _allowed(wanted: str) -> bool:
+        """
+        열어도 되는 자리인가.
+
+        자리 목록을 여기서 짓지 않는다 - 지으면 어느 날 엔진이 보는
+        자리와 달라진다.
+        """
+
+        roots = []
+
+        try:
+            from app.services import free_workspace
+
+            remembered = free_workspace.remembered(
+                free_workspace.default_store_path()) or {}
+            root = remembered.get("root")
+
+            if root:
+                roots.append(root)
+        except Exception:
+            pass
+
+        try:
+            from app import runtime_paths
+
+            roots.append(runtime_paths.music_root())
+        except Exception:
+            pass
+
+        for root in roots:
+            try:
+                base = os.path.abspath(root)
+            except Exception:
+                continue
+
+            if wanted == base or wanted.startswith(base + os.sep):
+                return True
+
+        return False
+
 
 def _page(title: str, body: str) -> str:
     """창 안에 띄우는 안내 한 장. 바깥을 부르지 않는다."""

@@ -1927,6 +1927,279 @@ input[type=radio],input[type=checkbox]{width:auto}
 })();
 </script>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     Sprint231 - 자료가 어디 있고 무엇이 있는지 말한다 (Epic 69).
+
+     사람이 보던 것은 "배경음악 없음" 한 줄이었다. 어디서 받아 어디에
+     넣어야 하는지는 어디에도 없었다 - 폴더 구조를 아는 사람만 쓸 수
+     있는 프로그램이었다.
+
+     새 저장소를 만들지 않는다
+     -------------------------
+     자리는 free_workspace 가 기억하고, 개수는 그것이 이미 센다. 여기서
+     세지 않는다 - 두 번 세면 어느 날 두 숫자가 달라진다.
+
+     배경음악만 다른 자리를 본다
+     ---------------------------
+     자료 폴더 아래의 music 과 렌더가 실제로 쓰는 자리는 **같은 곳이
+     아니다**. 자료 폴더의 개수를 "BGM 12개"로 보여 주면, 12개 있다고
+     해놓고 렌더가 "배경음악이 없습니다"로 죽는다. 그래서 배경음악만은
+     /studio/api/about 이 주는 것을 쓴다 - 그것이 렌더가 보는 자리다.
+
+     효과음은 만들지 않는다
+     ----------------------
+     local_library.KINDS 는 넷이고 효과음이 없다. 읽는 provider 도
+     쓰는 자리도 없다. 폴더를 열어 주면 눌러도 아무 데도 쓰이지 않는
+     자리가 열린다 - 그것이 가장 나쁜 거짓말이다.
+     ══════════════════════════════════════════════════════════════════ -->
+<style>
+.mlib{margin:10px 0 4px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--panel);padding:13px 14px 11px}
+.mlib .mh{font-weight:700;font-size:14px;margin:0 0 3px}
+.mlib .mwhere{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  margin:7px 0 10px}
+.mlib code.mpath{background:var(--sunken);border:1px solid var(--line);
+  border-radius:5px;padding:2px 7px;font-size:11px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrows{display:flex;flex-direction:column;gap:7px}
+.mrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:7px 9px;border-radius:var(--radius);background:var(--panel2);
+  border:1px solid var(--line)}
+.mrow .mname{font-weight:600;min-width:84px}
+.mrow .mstate{color:var(--dim);font-size:12px;flex:1 1 auto}
+.mrow.ok{border-color:var(--ok-edge)}
+.mrow.ok .mstate{color:var(--ok-text)}
+.mrow.none .mstate{color:var(--warn-text)}
+.mrow.soon{opacity:.72}
+.mrow.soon .mstate{color:var(--dim)}
+.mhelp{margin-top:9px;padding:9px 11px;border-radius:var(--radius);
+  background:var(--accent-soft);border:1px solid var(--accent-edge);
+  font-size:12px;line-height:1.6}
+.mhelp b{font-weight:600}
+.mhelp .mlinks{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.mhelp .mlinks a{font-size:11px;padding:2px 8px;border-radius:999px;
+  background:var(--panel);border:1px solid var(--line);
+  color:var(--text);text-decoration:none}
+.mhelp .mlinks a:hover{border-color:var(--accent-edge)}
+@media (max-height:800px){
+  .mlib{padding:9px 10px 8px}
+  .mrow{padding:5px 8px}
+}
+</style>
+
+<script>
+/* Sprint231 - 자료 관리.
+ *
+ * 세지 않는다. 서버가 준 것을 그대로 보여 준다.
+ *   이미지·영상  /studio/api/workspace 의 counts
+ *   배경음악     /studio/api/about 의 music (렌더가 보는 자리)
+ */
+(function () {
+  "use strict";
+
+  const SITES = {
+    images: [["Pixabay", "https://pixabay.com/images/search/"],
+             ["Unsplash", "https://unsplash.com/"]],
+    videos: [["Pexels", "https://www.pexels.com/videos/"],
+             ["Pixabay", "https://pixabay.com/videos/"]],
+    music: [["Pixabay Music", "https://pixabay.com/music/"],
+            ["Mixkit", "https://mixkit.co/free-stock-music/"]],
+  };
+
+  function byId(id) { return document.getElementById(id); }
+
+  function esc(text) {
+    return typeof escHtml === "function" ? escHtml(String(text == null ? "" : text))
+                                         : String(text == null ? "" : text);
+  }
+
+  /* 폴더를 연다. 문이 없으면(브라우저) 경로를 복사한다 - 아무 일도
+   * 일어나지 않으면 사람은 프로그램이 멈춘 줄 안다. */
+  async function openMediaFolder(where) {
+    const note = byId("mlibNote");
+    const say = text => { if (note) note.textContent = text; };
+
+    if (!where) { say("아직 자리가 정해지지 않았습니다."); return; }
+
+    const api = window.pywebview && window.pywebview.api;
+
+    if (api && typeof api.open_folder === "function") {
+      const failed = await api.open_folder(where).catch(() => "열지 못했습니다.");
+
+      say(failed ? String(failed) : "폴더를 열었습니다.");
+
+      if (!failed) return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(where);
+      say("이 창에서는 폴더를 열 수 없어 경로를 복사했습니다. 붙여넣어 여십시오.");
+    } catch (e) {
+      say("경로: " + where);
+    }
+  }
+
+  async function copyMediaPath(where) {
+    const note = byId("mlibNote");
+
+    try {
+      await navigator.clipboard.writeText(where || "");
+      if (note) note.textContent = "경로를 복사했습니다.";
+    } catch (e) {
+      if (note) note.textContent = "경로: " + (where || "");
+    }
+  }
+
+  function row(icon, name, klass, state, where, extra) {
+    return '<div class="mrow ' + klass + '">' +
+      '<span class="mname">' + icon + " " + name + "</span>" +
+      '<span class="mstate">' + state + "</span>" +
+      (where
+        ? '<button type="button" class="sm ghost" data-mopen="' +
+          esc(where) + '">폴더 열기</button>' +
+          '<button type="button" class="sm ghost" data-mcopy="' +
+          esc(where) + '">경로 복사</button>'
+        : "") +
+      (extra || "") + "</div>";
+  }
+
+  /* 모자란 것이 있을 때만 어디서 받으면 되는지 말한다. 늘 떠 있으면
+   * 광고가 된다. 받아 오는 일은 사람이 한다 - 대신 받지 않는다. */
+  function mediaHelpCard(missing) {
+    if (!missing.length) return "";
+
+    const lines = missing.map(function (kind) {
+      const label = {images: "이미지", videos: "영상", music: "배경음악"}[kind];
+
+      return "<div><b>" + label + "</b>" +
+        '<span class="mlinks">' +
+        SITES[kind].map(function (site) {
+          return '<a href="' + site[1] + '" target="_blank" rel="noopener">' +
+            site[0] + "</a>";
+        }).join("") + "</span></div>";
+    }).join("");
+
+    return '<div class="mhelp"><b>무료로 받을 수 있는 곳</b>' + lines +
+      '<div class="muted" style="margin-top:4px">받은 파일을 위 폴더에 ' +
+      "넣으면 바로 쓰입니다.</div></div>";
+  }
+
+  function renderMediaLibrary() {
+    const box = byId("mediaLibrary");
+    if (!box) return;
+
+    const space = window.workspace || null;
+    const counts = (space && space.counts) || {};
+    const root = (space && space.root) || "";
+
+    const music = (window.aboutInfo && window.aboutInfo.music) || null;
+
+    const missing = [];
+    if (!counts.images) missing.push("images");
+    if (!counts.videos) missing.push("videos");
+    if (music && !music.ready) missing.push("music");
+
+    const under = name => root ? (root.replace(/[\\/]+$/, "") + "\\" + name) : "";
+
+    box.innerHTML =
+      '<div class="mh">📦 내 영상 자료 관리</div>' +
+      '<div class="muted" style="font-size:12px">' +
+      (root ? "지금 이 폴더에서 자료를 찾습니다."
+            : "아직 자료 폴더를 고르지 않았습니다.") + "</div>" +
+      '<div class="mwhere">' +
+      (root ? '<code class="mpath" title="' + esc(root) + '">' + esc(root) +
+              "</code>" : '<span class="muted">없음</span>') +
+      '<button type="button" class="sm" data-mpick="1">' +
+      (root ? "변경" : "자료 폴더 고르기") + "</button>" +
+      (root
+        ? '<button type="button" class="sm ghost" data-mopen="' +
+          esc(root) + '">폴더 열기</button>' +
+          '<button type="button" class="sm ghost" data-mcopy="' +
+          esc(root) + '">경로 복사</button>'
+        : "") +
+      "</div>" +
+
+      '<div class="mrows">' +
+      row("🖼", "이미지", counts.images ? "ok" : "none",
+          counts.images ? counts.images + "개" : "아직 없습니다",
+          under("images")) +
+      row("🎬", "영상", counts.videos ? "ok" : "none",
+          counts.videos ? counts.videos + "개" : "아직 없습니다",
+          under("videos")) +
+      row("🎵", "배경음악", music && music.ready ? "ok" : "none",
+          music
+            ? (music.ready ? "준비되었습니다" : "아직 없습니다")
+            : "확인 중…",
+          music ? music.where : "") +
+      row("🔊", "효과음", "soon",
+          "준비 중입니다. 현재 버전에서는 지원하지 않습니다.", "") +
+      "</div>" +
+
+      mediaHelpCard(missing) +
+      '<div class="muted" id="mlibNote" style="margin-top:7px;font-size:11px">' +
+      "</div>";
+  }
+
+  /* 자리를 만들고, 값이 생길 때마다 다시 그린다. */
+  function mount() {
+    const anchor = byId("s222Start") || byId("creationModes");
+    if (!anchor || byId("mediaLibrary")) return;
+
+    anchor.insertAdjacentHTML(
+      "afterend", '<div class="mlib" id="mediaLibrary"></div>');
+
+    /* 단추를 하나씩 묶지 않는다 - 카드는 다시 그려질 때마다 새로
+     * 만들어지므로, 그때마다 다시 묶으면 언젠가 하나를 빠뜨린다.
+     * 카드 한 곳에서 받아 넘긴다. */
+    byId("mediaLibrary").addEventListener("click", function (ev) {
+      const target = ev.target.closest("[data-mopen],[data-mcopy],[data-mpick]");
+      if (!target) return;
+
+      if (target.hasAttribute("data-mpick")) {
+        if (typeof chooseWorkspace === "function") chooseWorkspace();
+        return;
+      }
+
+      if (target.hasAttribute("data-mopen")) {
+        openMediaFolder(target.getAttribute("data-mopen"));
+      } else {
+        copyMediaPath(target.getAttribute("data-mcopy"));
+      }
+    });
+
+    refresh();
+  }
+
+  async function refresh() {
+    try {
+      window.workspace = await (await fetch("/studio/api/workspace")).json();
+    } catch (e) { /* 못 읽으면 화면이 "없음"이라고 말한다 */ }
+
+    if (!window.aboutInfo && typeof wizLoadAbout === "function") {
+      try { await wizLoadAbout(); } catch (e) { }
+    }
+
+    renderMediaLibrary();
+  }
+
+  function start() {
+    try { mount(); } catch (e) { }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+
+  window.openMediaFolder = openMediaFolder;
+  window.copyMediaPath = copyMediaPath;
+  window.renderMediaLibrary = renderMediaLibrary;
+  window.mediaHelpCard = mediaHelpCard;
+  window.refreshMediaLibrary = refresh;
+})();
+</script>
+
 <script>
 const $ = (id) => document.getElementById(id);
 let currentProject = null, currentDetail = null, jobId = null;
