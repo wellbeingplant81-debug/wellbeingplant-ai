@@ -53,23 +53,61 @@ PERSON_WORDS = {
 }
 
 
+def _slug_of(url: str) -> str:
+    """주소의 끝 조각을 말로. 확장자는 뗀다."""
+
+    if not url:
+        return ""
+
+    parts = [part for part in str(url).split("?")[0].rstrip("/").split("/")
+             if part]
+
+    if not parts:
+        return ""
+
+    stem = parts[-1]
+
+    if "." in stem:
+        stem = stem.rsplit(".", 1)[0]
+
+    return stem.replace("-", " ").replace("_", " ")
+
+
 def _candidate_text(candidate: dict) -> str:
     """후보에 대해 우리가 아는 말 전부.
 
     alt는 Pexels 사진 응답의 설명이고, 슬러그는 url에 들어 있다. 비디오
     응답에는 alt가 없어 슬러그가 유일한 단서다.
+
+    Sprint233 - 영상은 미리보기 그림의 파일 이름도 읽는다
+    -----------------------------------------------------
+    실측한 것(표본 75, 2026-08-19): 사진은 alt 13낱말 + 슬러그 7낱말쯤을
+    들고 오는데 영상은 슬러그 6낱말이 전부였다. tags 칸이 응답에 있긴
+    하지만 30개 중 30개가 비어 있었고, user.name 은 찍은 사람의 이름이라
+    내용과 상관이 없다.
+
+    남은 것이 미리보기 주소의 파일 이름이었다. 그 이름에 url 과 **다른**
+    슬러그가 들어 있는 경우가 있다.
+
+        url   .../video/a-woman-stretching-5510121/
+        image .../videos/5510121/coaching-crossfit-training-fast-workout-
+              at-home-fitness-5510121.jpeg
+
+    75개 중 27개(36%)가 이렇게 새 낱말을 얻고 나머지는 pexels-photo 같은
+    껍데기라 아무것도 늘지 않는다.
+
+    영상에게 점수를 얹는 것이 아니다. 사진이 이미 두 자리에서 말을
+    가져오는데 영상만 한 자리에서 가져오던 것을, 있는 자리를 마저 읽어
+    같은 조건으로 맞추는 것이다.
+
+    이 칸이 없는 후보(사진 · 옛 기록)는 예전과 한 글자도 다르지 않다.
     """
 
     alt = candidate.get("alt") or ""
-    url = candidate.get("source_url") or ""
+    slug = _slug_of(candidate.get("source_url"))
+    preview = _slug_of(candidate.get("preview_url"))
 
-    slug = ""
-    if url:
-        parts = [part for part in url.rstrip("/").split("/") if part]
-        if parts:
-            slug = parts[-1].replace("-", " ").replace("_", " ")
-
-    return f"{alt} {slug}".strip()
+    return " ".join(part for part in (alt, slug, preview) if part).strip()
 
 
 def _scene_words(scene: dict) -> set:

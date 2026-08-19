@@ -136,6 +136,21 @@ def search_videos(
             "height": best_file.get("height"),
             "alt": "",
             "duration": video.get("duration"),
+            # Sprint233 - 미리보기 그림의 자리.
+            #
+            # 그림을 쓰려는 것이 아니라 그 **파일 이름**을 쓴다. 영상
+            # 응답에는 alt 가 없어서(사진에는 있다) 관련도 판정에 넣을
+            # 말이 슬러그 하나뿐이었는데, 이 주소의 파일 이름에 다른
+            # 슬러그가 들어 있는 경우가 있다.
+            #
+            #   url   .../video/a-woman-stretching-5510121/
+            #   image .../videos/5510121/coaching-crossfit-training-fast-
+            #         workout-at-home-fitness-5510121.jpeg
+            #
+            # 실측(2026-08-19, 표본 75): 36%가 새 낱말을 얻고(평균 1.7개)
+            # 나머지 64%는 pexels-photo 같은 껍데기라 아무것도 늘지
+            # 않는다. 새 API 를 부르지 않는다 - 같은 응답의 한 칸이다.
+            "preview_url": video.get("image"),
             "query": query,
         })
 

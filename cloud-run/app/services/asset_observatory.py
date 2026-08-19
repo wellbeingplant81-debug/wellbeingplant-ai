@@ -198,6 +198,12 @@ def record_ranking(scene_number: int, scene: dict, candidates: list,
             "alt": candidate.get("alt") or "",
             "slug": _slug(candidate),
             "source_url": candidate.get("source_url"),
+            # Sprint233 - 관련도 판정에 실제로 들어간 재료를 남긴다.
+            #
+            # 이 회차가 저장된 후보 풀로 전/후를 견주려 했는데 이 칸이
+            # 없어서 재현할 수 없었다. 다음에 같은 자리에서 막히지
+            # 않도록 적어 둔다.
+            "preview_url": candidate.get("preview_url"),
             "download_url": candidate.get("download_url"),
             "width": candidate.get("width"),
             "height": candidate.get("height"),
