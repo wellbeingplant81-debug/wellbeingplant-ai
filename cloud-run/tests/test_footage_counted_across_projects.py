@@ -53,8 +53,28 @@ def _candidate(selected=True):
     }
 
 
+def _my_own(number, footage):
+    """
+    내 자료 영상을 쓴 scene. 스톡 검색을 거치지 않으므로 후보가 없다.
+
+    Sprint230 이전에는 이런 scene이 표에 아예 오르지 않았다.
+    """
+
+    return {
+        "scene": number,
+        "searches": [],
+        "candidates": [],
+        "scene_terms": [],
+        "planned": {},
+        "selection_reason": "스톡 검색 없이 갔습니다.",
+        "final_provider": "local_stock",
+        "final_asset": "images/scene%d.png" % number,
+        "footage": footage,
+    }
+
+
 def _scene(number, footage=None):
-    """관측 파일 안의 scene 한 덩이."""
+    """관측 파일 안의 scene 한 덩이. 스톡 검색을 거친 쪽이다."""
 
     entry = {
         "scene": number,
@@ -246,6 +266,159 @@ class ItCountsAcrossProjectsTest(_Root):
                 self.assertIn(field, found)
 
 
+class MyOwnVideoIsCountedTooTest(_Root):
+    """
+    Sprint230 - 무료 경로가 집계에서 통째로 빠져 있었다.
+
+    내 자료 영상은 스톡 검색을 거치지 않아 후보가 없고, build()는 후보가
+    없는 scene의 행을 만들지 않았다. 그래서 보고서에 적힌 hold 비율이
+    스톡만의 값이면서 전체인 척했다 - 재는 숫자가 무엇을 재는지 틀리면
+    그 숫자로 내리는 판단이 전부 틀린다.
+    """
+
+    def _summary(self):
+        return asset_dataset.summarize(asset_dataset.build(self.root))
+
+    def test_a_scene_without_candidates_now_makes_a_row(self):
+        self.place("free_proj", [_my_own(1, _footage("hold", 0.4, 5.0))])
+
+        rows = asset_dataset.build(self.root)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["provider"], "local_stock")
+        self.assertEqual(rows[0]["footage_mode"], "hold")
+
+    def test_that_row_says_it_had_no_candidates(self):
+        """
+        "후보가 없었다"와 "후보는 있었는데 그것을 골랐다"는 다르다.
+        """
+
+        self.place("free_proj", [_my_own(1, _footage("hold"))])
+        self.place("stock_proj", [_scene(1, _footage("trim"))])
+
+        by_provider = {r["provider"]: r
+                       for r in asset_dataset.build(self.root)}
+
+        self.assertFalse(by_provider["local_stock"]["has_candidates"])
+        self.assertTrue(by_provider["pexels_video"]["has_candidates"])
+
+    def test_a_scene_with_neither_is_still_skipped(self):
+        """
+        후보도 영상도 없는 scene은 예전 그대로 행이 되지 않는다 -
+        고를 것도 없었고 잰 것도 없다.
+        """
+
+        self.place("nothing", [_my_own(1, None)])
+
+        self.assertEqual(asset_dataset.build(self.root), [])
+
+    def test_my_own_video_is_in_the_hold_count(self):
+        self.place("free_proj", [_my_own(1, _footage("hold", 0.4, 5.0)),
+                                 _my_own(2, _footage("trim"))])
+
+        found = self._summary()
+
+        self.assertEqual(found["footage_scenes"], 2)
+        self.assertEqual(found["footage_hold"], 1)
+        self.assertAlmostEqual(found["footage_hold_rate"], 50.0)
+
+    def test_the_two_sources_are_counted_apart(self):
+        """
+        합쳐 세면 무료 경로가 늘었는지 줄었는지 영영 모른다.
+        """
+
+        self.place("stock_proj", [_scene(1, _footage("trim")),
+                                  _scene(2, _footage("trim"))])
+        self.place("free_proj", [_my_own(1, _footage("hold", 0.4))])
+
+        found = self._summary()
+
+        self.assertEqual(found["footage_scenes"], 3)
+        self.assertEqual(found["footage_stock"], 2)
+        self.assertEqual(found["footage_local"], 1)
+
+
+class TheRankingNumbersMustNotMoveTest(_Root):
+    """
+    이번 회차가 지켜야 할 것. 새 행이 들어왔다고 순위 숫자가 달라지면,
+    지금까지 쌓아 온 값과 앞으로의 값이 서로 다른 것을 뜻하게 된다.
+    """
+
+    def _stock_only(self):
+        return [_scene(1, _footage("trim")), _scene(2, None),
+                _scene(3, _footage("loop"))]
+
+    def test_the_numbers_are_the_same_with_and_without_the_new_rows(self):
+        self.place("stock_proj", self._stock_only())
+
+        before = asset_dataset.summarize(asset_dataset.build(self.root))
+
+        self.place("free_proj", [_my_own(n, _footage("hold", 0.4))
+                                 for n in range(1, 8)])
+
+        after = asset_dataset.summarize(asset_dataset.build(self.root))
+
+        for field in ("failures", "failure_rate", "picked_first",
+                      "picked_lower", "mean_candidates", "with_evaluation",
+                      "duplicates", "ranking_rows"):
+            with self.subTest(field=field):
+                self.assertEqual(after[field], before[field])
+
+    def test_the_total_row_count_does_grow(self):
+        """
+        순위 숫자는 그대로이되, 표가 커진 것은 사실대로 말한다 - 한
+        숫자가 두 뜻을 갖지 않게 둘을 나란히 둔다.
+        """
+
+        self.place("stock_proj", self._stock_only())
+
+        before = asset_dataset.summarize(asset_dataset.build(self.root))
+
+        self.place("free_proj", [_my_own(1, _footage("hold", 0.4))])
+
+        after = asset_dataset.summarize(asset_dataset.build(self.root))
+
+        self.assertEqual(after["rows"], before["rows"] + 1)
+        self.assertEqual(after["ranking_rows"], before["ranking_rows"])
+
+    def test_an_old_table_without_the_field_is_read_as_ranking_rows(self):
+        """
+        Sprint230 이전에 쌓인 행에는 has_candidates 칸이 없다. 그때는
+        후보가 있는 scene만 행이 됐으므로 후보 수로 판단한다 - 옛
+        파일을 고치라고 하지 않는다.
+        """
+
+        old_row = {"project": "p", "scene": 1, "candidate_count": 3,
+                   "selected_rank": 0, "regenerate": False,
+                   "has_evaluation": True}
+
+        self.assertTrue(asset_dataset.has_candidates(old_row))
+
+        found = asset_dataset.summarize([old_row])
+
+        self.assertEqual(found["ranking_rows"], 1)
+        self.assertEqual(found["picked_first"], 1)
+
+    def test_the_readiness_gate_does_not_come_early(self):
+        """
+        readiness는 "실패 스톡 scene"과 "누적 scene"을 센다. 내 자료
+        영상 행이 거기 들어가면 Ranking v3 착수 시점이 실제보다 빨리
+        온 것처럼 보인다.
+        """
+
+        self.place("stock_proj", self._stock_only())
+
+        before = asset_dataset.readiness(asset_dataset.build(self.root))
+
+        self.place("free_proj", [_my_own(n, _footage("hold", 0.4))
+                                 for n in range(1, 30)])
+
+        after = asset_dataset.readiness(asset_dataset.build(self.root))
+
+        self.assertEqual(after["scenes"], before["scenes"])
+        self.assertEqual(after["ready"], before["ready"])
+
+
 class TheNamesMustNotDriftTest(unittest.TestCase):
     """
     이 파일은 세 글자를 직접 적는다 - footage 모듈을 들이면 moviepy가
@@ -261,6 +434,28 @@ class TheNamesMustNotDriftTest(unittest.TestCase):
         self.assertEqual(asset_dataset.FOOTAGE_TRIM, footage.TRIM)
         self.assertEqual(asset_dataset.FOOTAGE_LOOP, footage.LOOP)
         self.assertEqual(asset_dataset.FOOTAGE_HOLD, footage.HOLD)
+
+    def test_the_local_name_is_the_one_the_project_records(self):
+        from app.services import provider_selection
+
+        self.assertEqual(asset_dataset.FOOTAGE_LOCAL_PROVIDER,
+                         provider_selection.LOCAL_STOCK)
+
+    def test_stock_video_names_end_the_way_we_expect(self):
+        """
+        provider_factory가 업체_video로 짓는다. 그 규칙이 바뀌면 스톡
+        영상이 "그 밖"으로 새어 나간다.
+        """
+
+        for name in ("pexels_video", "pixabay_video"):
+            with self.subTest(name=name):
+                self.assertTrue(
+                    asset_dataset.is_stock_footage({"provider": name}))
+
+        self.assertFalse(
+            asset_dataset.is_stock_footage({"provider": "local_stock"}))
+        self.assertFalse(
+            asset_dataset.is_stock_footage({"provider": "pexels_image"}))
 
     def test_reading_the_table_does_not_drag_in_the_renderer(self):
         """
@@ -312,6 +507,8 @@ class TheReportPrintsItTest(_Root):
             asset_dataset.summarize(asset_dataset.build(self.root)))
 
         self.assertIn("영상 scene 수 : 2", said)
+        self.assertIn("스톡 영상", said)
+        self.assertIn("내 자료 영상", said)
         self.assertIn("trim", said)
         self.assertIn("loop", said)
         self.assertIn("hold", said)

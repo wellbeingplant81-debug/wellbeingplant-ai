@@ -31,6 +31,14 @@ OBSERVATORY_FILENAME = "asset_observatory.json"
 FOOTAGE_TRIM = "trim"
 FOOTAGE_LOOP = "loop"
 FOOTAGE_HOLD = "hold"
+
+# Sprint230 - 그 영상이 어디서 왔는가.
+#
+# 스톡은 이름이 <업체>_video 다(provider_factory 가 그렇게 짓는다).
+# 내 자료는 provider_selection.LOCAL_STOCK 이고, 그 글자도 여기 다시
+# 적는다 - 위와 같은 이유이며 갈라지지 않는 것은 시험으로 잠근다.
+FOOTAGE_LOCAL_PROVIDER = "local_stock"
+FOOTAGE_STOCK_SUFFIX = "_video"
 REPORT_FILENAME = "quality_report.json"
 
 # Sprint79 - 축적 파일. 영상을 만들 때마다 여기 쌓인다.
@@ -113,6 +121,33 @@ def _load(path: str):
         return None
 
 
+def has_candidates(row: dict) -> bool:
+    """
+    이 행이 순위를 말할 수 있는가. 순수 함수입니다.
+
+    Sprint230 이전에 쌓인 표에는 이 칸이 없다 - 그때는 후보가 있는
+    scene 만 행이 됐으므로 후보 수로 판단한다. 옛 파일을 고치라고
+    하지 않는다.
+    """
+
+    if "has_candidates" in row:
+        return bool(row["has_candidates"])
+
+    return bool(row.get("candidate_count"))
+
+
+def is_stock_footage(row: dict) -> bool:
+    """스톡에서 받아 온 영상인가. 순수 함수입니다."""
+
+    return str(row.get("provider") or "").endswith(FOOTAGE_STOCK_SUFFIX)
+
+
+def is_local_footage(row: dict) -> bool:
+    """사람이 제 폴더에 넣어 둔 영상인가. 순수 함수입니다."""
+
+    return row.get("provider") == FOOTAGE_LOCAL_PROVIDER
+
+
 def build(root: str) -> list:
     """
     누적된 Observatory를 scene 한 줄씩의 표로. 순수 읽기입니다.
@@ -140,7 +175,24 @@ def build(root: str) -> list:
         for entry in observatory.get("scenes", []):
             candidates = entry.get("candidates") or []
 
-            if not candidates:
+            # Sprint229 - 고른 영상이 이 scene 을 어떻게 채웠는가.
+            footage = entry.get("footage") or {}
+
+            # Sprint230 - 후보가 없어도 영상을 썼으면 행을 만든다.
+            #
+            # 예전에는 후보가 없으면 그냥 넘겼다("고를 후보가 없었으므로
+            # 순위 분석의 대상이 아니다", Sprint79). 그 판단은 순위에
+            # 대해서는 여전히 옳다.
+            #
+            # 그런데 내 자료 영상은 스톡 검색을 거치지 않는다 - 후보가
+            # 없다. 그래서 무료 경로로 만든 scene 이 hold 집계에서 통째로
+            # 빠졌고, 보고서에 적힌 비율이 스톡만의 값이면서 전체인 척
+            # 했다. 재는 숫자가 무엇을 재는지 틀리면 그 숫자로 내리는
+            # 판단이 전부 틀린다.
+            #
+            # 행은 만들되 순위 지표에는 넣지 않는다 - 아래 has_candidates
+            # 가 그 경계다.
+            if not candidates and not footage:
                 continue
 
             selected = next(
@@ -160,11 +212,6 @@ def build(root: str) -> list:
             result = by_scene.get(entry.get("scene")) or {}
             searches = entry.get("searches") or []
 
-            # Sprint229 - 고른 영상이 이 scene을 어떻게 채웠는가
-            # (Sprint227이 남긴 것). 그 이전에 쌓인 기록에는 없다 -
-            # 그때는 전부 None이고, 없다고 행을 버리지 않는다.
-            # planned(Sprint83)가 같은 이유로 그렇게 했다.
-            footage = entry.get("footage") or {}
 
             rows.append({
                 "project": os.path.basename(project),
@@ -176,6 +223,9 @@ def build(root: str) -> list:
                     1 for s in searches if s.get("cache_hit")
                 ),
                 "candidate_count": len(candidates),
+                # Sprint230 - "후보가 없었다"와 "후보는 있었는데 그것을
+                # 골랐다"를 가른다. 순위 지표는 이것이 참인 행만 센다.
+                "has_candidates": bool(candidates),
                 # provider가 준 순서에서 몇 번째를 골랐나. 점수 순위로
                 # 재면 항상 0이 나온다 - 선택이 곧 최고점이기 때문이다.
                 # 알고 싶은 것은 "Pexels의 1번을 뒤집었는가"이고, 그건
@@ -237,7 +287,17 @@ def summarize(rows: list) -> dict:
 
     rows = list(rows or [])
 
-    failures = [r for r in rows if r.get("regenerate")]
+    # Sprint230 - 순위를 말하는 숫자는 후보가 있던 행만 센다.
+    #
+    # 내 자료 영상 scene 은 후보가 없다(스톡 검색을 거치지 않는다).
+    # 그 행이 분모에 들어가면 "provider 가 준 1번을 뒤집었는가" 같은
+    # 지표가 조용히 묽어진다 - 뒤집을 1번이 애초에 없던 행이다.
+    #
+    # 옛 표에는 이 칸이 없다. 그때는 후보가 있는 scene 만 행이 됐으므로
+    # 후보 수로 판단한다 - migration 을 강요하지 않는다.
+    ranking = [r for r in rows if has_candidates(r)]
+
+    failures = [r for r in ranking if r.get("regenerate")]
 
     # Sprint229 - 고른 영상이 scene을 어떻게 채웠는가.
     #
@@ -245,32 +305,42 @@ def summarize(rows: list) -> dict:
     # 잃는다 - 영상 10개 중 hold 2개면 20%여야 하는데, 그림 90개가
     # 함께 세어지면 2%로 보인다. 그러면 이 숫자를 보고 아무도 아무
     # 판단도 하지 않는다.
+    #
+    # 이쪽은 순위와 무관하다. 후보가 있었든 없었든, 영상을 썼으면 센다.
     footage_rows = [r for r in rows if r.get("footage_mode")]
     footage_modes = Counter(r["footage_mode"] for r in footage_rows)
 
     causes = Counter(classify(r.get("gemini_reason")) for r in failures)
 
     used = Counter(
-        r.get("selected_asset") for r in rows if r.get("selected_asset")
+        r.get("selected_asset") for r in ranking if r.get("selected_asset")
     )
     duplicates = sum(1 for count in used.values() if count > 1)
 
     return {
+        # 표에 있는 행 전부. Sprint230 부터 후보 없는 영상 scene 도
+        # 여기 들어간다.
         "rows": len(rows),
+        # 그중 순위를 말할 수 있는 행. 아래 지표들의 분모다.
+        "ranking_rows": len(ranking),
         "projects": len({r.get("project") for r in rows}),
         "failures": len(failures),
-        "failure_rate": (100.0 * len(failures) / len(rows)) if rows else 0.0,
+        "failure_rate": (
+            100.0 * len(failures) / len(ranking) if ranking else 0.0
+        ),
         "causes": causes.most_common(10),
         "duplicates": duplicates,
-        "picked_first": sum(1 for r in rows if r.get("selected_rank") == 0),
+        "picked_first": sum(
+            1 for r in ranking if r.get("selected_rank") == 0),
         "picked_lower": sum(
-            1 for r in rows
+            1 for r in ranking
             if r.get("selected_rank") not in (None, 0)
         ),
-        "with_evaluation": sum(1 for r in rows if r.get("has_evaluation")),
+        "with_evaluation": sum(
+            1 for r in ranking if r.get("has_evaluation")),
         "mean_candidates": (
-            sum(r.get("candidate_count") or 0 for r in rows) / len(rows)
-            if rows else 0.0
+            sum(r.get("candidate_count") or 0 for r in ranking) / len(ranking)
+            if ranking else 0.0
         ),
         # Sprint229 - 영상을 쓴 scene이 실제로 어떻게 채워졌는가.
         "footage_scenes": len(footage_rows),
@@ -283,6 +353,10 @@ def summarize(rows: list) -> dict:
             100.0 * footage_modes.get(FOOTAGE_HOLD, 0) / len(footage_rows)
             if footage_rows else None
         ),
+        # Sprint230 - 그 영상이 어디서 왔는가. 둘을 합쳐 세면 무료
+        # 경로가 늘었는지 줄었는지 영영 모른다.
+        "footage_stock": sum(1 for r in footage_rows if is_stock_footage(r)),
+        "footage_local": sum(1 for r in footage_rows if is_local_footage(r)),
     }
 
 
@@ -366,7 +440,10 @@ def readiness(rows: list) -> dict:
     넘어가는 것이 정확히 Best-of-N에서 한 실수이기 때문이다.
     """
 
-    rows = list(rows or [])
+    # Sprint230 - 여기 세는 것은 "실패 스톡 scene"과 "누적 scene"이다.
+    # 후보가 없던 행(내 자료 영상)은 스톡 scene 이 아니므로 넣지 않는다 -
+    # 넣으면 Ranking v3 를 착수할 시점이 실제보다 빨리 온 것처럼 보인다.
+    rows = [r for r in (rows or []) if has_candidates(r)]
     failures = sum(1 for row in rows if row.get("regenerate"))
 
     by_failures = failures >= READY_FAILED_STOCK_SCENES

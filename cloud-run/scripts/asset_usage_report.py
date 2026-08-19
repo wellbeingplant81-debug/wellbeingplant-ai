@@ -114,7 +114,21 @@ def print_footage_report(summary: dict, where: str):
               "확인하세요.")
         return
 
+    stock = summary.get("footage_stock", 0)
+    local = summary.get("footage_local", 0)
+
     print(f"  영상 scene 수 : {total}")
+    print(f"    스톡 영상   : {stock}")
+    print(f"    내 자료 영상 : {local}")
+
+    other = total - stock - local
+
+    if other:
+        # 둘 중 어느 쪽도 아닌 것이 있으면 조용히 삼키지 않는다 -
+        # 합이 안 맞는 표를 보고 사람이 먼저 눈치채는 것이 가장 나쁘다.
+        print(f"    그 밖       : {other}")
+
+    print()
     print(f"  trim (한 번에 덮음)      : {summary.get('footage_trim', 0)}")
     print(f"  loop (되풀이해서 덮음)   : {summary.get('footage_loop', 0)}")
     print(f"  hold (마지막 프레임 정지) : {summary.get('footage_hold', 0)}")
