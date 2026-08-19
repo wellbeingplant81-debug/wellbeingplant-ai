@@ -361,7 +361,13 @@ class ErrorReportTest(unittest.TestCase):
         self.assertNotIn("blows_up", shown)
         self.assertIn(error_log.DIRNAME, shown)
 
-        logs = os.listdir(os.path.join(home, error_log.DIRNAME))
+        # Sprint219 - 같은 폴더에 켜는 자취(startup.log)도 함께 쌓인다.
+        # 세는 것은 여전히 "이번에 죽어서 남은 오류 기록"이고 그것은
+        # 하나여야 한다 - 자취까지 세면 무엇을 지키는 시험인지가
+        # 흐려진다.
+        logs = [name
+                for name in os.listdir(os.path.join(home, error_log.DIRNAME))
+                if name.startswith("error-")]
 
         self.assertEqual(len(logs), 1)
 

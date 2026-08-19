@@ -38,7 +38,127 @@ import webbrowser
 HOST = "127.0.0.1"
 
 # 켜지자마자 열지 않는다. 서버가 뜨기 전에 열면 빈 화면이 뜬다.
+#
+# Sprint219 - 이 값만으로는 부족하다는 것이 드러났다. 아래
+# _wait_until_serving를 함께 읽을 것. 이 값은 포트를 모르는 자리에서만
+# 쓰인다.
 OPEN_AFTER_SECONDS = 1.5
+
+# Sprint219 - 서버가 실제로 받을 때까지 기다리는 최대 시간.
+#
+# 왜 필요한가 - 아래 _wait_until_serving의 설명을 볼 것. 넉넉히 둔다.
+# 이 시간을 넘겨도 안 뜨면 브라우저를 열지 않는다 - 죽은 주소를 여는
+# 것은 아무것도 안 여는 것보다 나쁘다("안 된다"고 잘못 가르친다).
+WAIT_FOR_SERVER_SECONDS = 90.0
+
+# Sprint219 - 켜지는 동안 무엇을 지났는지 적어 두는 자리.
+STARTUP_LOG = "startup.log"
+
+# 그 파일이 무한정 자라지 않게 한다. 한 번 켤 때 열 줄쯤이다.
+STARTUP_LOG_MAX_LINES = 400
+
+# 자취가 사는 폴더. logs/ 가 **아니다.**
+#
+# logs/ 는 "무언가 잘못됐다"는 뜻으로 지켜 온 자리다 - 잘 켜졌을 때는
+# 만들지도 않는다("빈 logs 폴더는 무슨 일이 있었나 하게 만든다",
+# test_rc_final_check가 그것을 붙잡고 있다). 켤 때마다 남기는 자취를
+# 거기 두면 그 뜻이 사라진다.
+#
+# .dataset 은 쌓인 관측이 사는 자리이고 어차피 켤 때마다 생긴다.
+# 자취는 그쪽이 맞다. 대신 죽을 때는 이 자취를 오류 기록에 함께
+# 붙인다 - README가 "logs 폴더의 파일을 보내 주십시오"라고 말하므로,
+# 보내 준 그 파일 하나에 다 들어 있어야 한다.
+TRAIL_DIRNAME = ".dataset"
+
+
+def _trail_dir() -> str:
+    """
+    자취를 남길 자리. 못 구하면 빈 문자열.
+
+    runtime_paths를 먼저 쓰되 실패하면 손으로 구한다.
+
+    왜 이 중복을 허용하는가
+    -----------------------
+    이 함수가 존재하는 이유가 "app 패키지가 안 올라와도 이유를
+    남긴다"이다. 그런데 app.runtime_paths를 들이는 데 실패하면 바로
+    그 순간 아무것도 못 남긴다 - 가장 알고 싶은 실패에서 입을 다무는
+    셈이다. 그래서 그때만 쓰는 최소한의 대체 경로를 둔다.
+    """
+
+    try:
+        from app import runtime_paths
+
+        return os.path.join(runtime_paths.home(), TRAIL_DIRNAME)
+    except Exception:
+        pass
+
+    given = os.environ.get("AI_STUDIO_HOME")
+
+    if given:
+        return os.path.join(given, TRAIL_DIRNAME)
+
+    if getattr(sys, "frozen", False):
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+
+        return os.path.join(base, "AI영상제작소", TRAIL_DIRNAME)
+
+    return ""
+
+
+def trail_path() -> str:
+    """자취 파일의 자리. 못 구하면 빈 문자열."""
+
+    where = _trail_dir()
+
+    return os.path.join(where, STARTUP_LOG) if where else ""
+
+
+def note(step: str) -> None:
+    """
+    켜는 도중 어디까지 왔는지 한 줄 적는다. 절대 던지지 않는다.
+
+    왜 이것이 이번 Sprint의 중심인가
+    --------------------------------
+    사용자가 "두 번 눌러도 아무 반응이 없다"고 했을 때, 이 프로그램이
+    남긴 것은 **아무것도 없었다** - 스물네 번 켜는 동안 logs 폴더는
+    만들어진 적조차 없다(실측). 창은 순식간에 닫히고, 오류 기록은
+    예외가 났을 때만 쓰이는데 조용히 return으로 끝나는 길이 여럿이다.
+
+    그래서 무엇이 잘못됐는지 우리도 사용자도 알 수 없었다. 다음에는
+    이 파일이 답한다.
+
+    기록 자체가 프로그램을 멈추게 하면 안 된다 - 그래서 무슨 일이
+    있어도 조용히 넘긴다. 관찰이 제품을 멈추게 하면 관찰을 켠 것이
+    잘못이 된다(beta_telemetry가 이미 그렇게 한다).
+    """
+
+    where = _trail_dir()
+
+    if not where:
+        return
+
+    try:
+        os.makedirs(where, exist_ok=True)
+
+        path = os.path.join(where, STARTUP_LOG)
+
+        # 너무 길어지면 앞을 버린다. 최근 것이 알고 싶은 것이다.
+        lines = []
+
+        if os.path.exists(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    lines = f.readlines()[-STARTUP_LOG_MAX_LINES:]
+            except Exception:
+                lines = []
+
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        lines.append(f"{stamp}  {step}\n")
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+    except Exception:
+        pass
 
 # Sprint174 - 피드백 폴더에 남겨 두는 안내.
 #
@@ -279,9 +399,60 @@ def use_our_ffmpeg():
     return found
 
 
-def _open_browser(url: str):
+def _serving(port: int) -> bool:
+    """그 자리가 지금 연결을 받는가."""
+
+    try:
+        with socket.create_connection((HOST, port), 0.25):
+            return True
+    except OSError:
+        return False
+
+
+def _wait_until_serving(port: int,
+                        timeout: float = None) -> bool:
     """
-    잠시 뒤에 브라우저를 연다. 띄운 스레드를 돌려준다.
+    서버가 실제로 받기 시작할 때까지 기다린다. 받으면 True.
+
+    Sprint219 - 이 함수가 고치는 실제 결함
+    --------------------------------------
+    예전에는 1.5초를 세고 브라우저를 열었다. 그런데 그 1.5초 뒤에
+    일어나는 일이 이 프로그램에서 가장 무거운 것이다.
+
+        import uvicorn
+        from app.main import app     <- moviepy · google · fastapi …
+
+    묶은 프로그램을 찬 상태에서 켜면 이 두 줄이 1.5초를 훌쩍 넘긴다.
+    그 사이에 브라우저는 아직 아무도 듣지 않는 주소를 열고, 사람은
+    "연결할 수 없음"을 본다. 서버가 몇 초 뒤에 떠도 그 탭은 그대로다 -
+    새로 고치라고 알려 주는 것도 없다.
+
+    받는 사람에게 이것은 "눌렀는데 안 켜진다"와 구별되지 않는다.
+
+    1.5초를 늘리는 것으로는 못 고친다 - 빠른 PC에서는 그만큼 늦어지고
+    느린 PC에서는 여전히 모자란다. 시간을 재지 말고 **실제로 받는지**를
+    본다.
+    """
+
+    deadline = time.time() + (
+        WAIT_FOR_SERVER_SECONDS if timeout is None else timeout)
+
+    while time.time() < deadline:
+        if _serving(port):
+            return True
+
+        time.sleep(0.2)
+
+    return _serving(port)
+
+
+def _open_browser(url: str, ready_port: int = None):
+    """
+    브라우저를 연다. 띄운 스레드를 돌려준다.
+
+    ready_port를 주면 그 자리가 실제로 받을 때까지 기다렸다가 연다.
+    주지 않으면 예전처럼 잠깐 세고 연다 - 포트를 모르면 기다릴 방법이
+    없다.
 
     daemon이다 - 끄는 순간 이것 때문에 프로그램이 안 끝나면, 창은
     닫혔는데 포트는 물려 있는 상태가 된다.
@@ -291,14 +462,37 @@ def _open_browser(url: str):
     """
 
     def later():
-        time.sleep(OPEN_AFTER_SECONDS)
+        if ready_port is None:
+            time.sleep(OPEN_AFTER_SECONDS)
+        elif not _wait_until_serving(ready_port):
+            # 죽은 주소를 열지 않는다. 여는 것이 "안 된다"고 잘못
+            # 가르치는 것보다, 아직 준비 중이라고 말하는 편이 낫다.
+            note("browser: server never came up, not opening")
+
+            print()
+            print("  [알림] 서버가 아직 응답하지 않아 브라우저를 열지 "
+                  "않았습니다.")
+            print(f"         준비되면 이 주소를 여십시오: {url}")
+
+            sys.stdout.flush()
+
+            return
+
+        note("browser: opening")
 
         try:
-            webbrowser.open(url)
+            opened = webbrowser.open(url)
         except Exception:
+            opened = False
+
+        if opened is False:
+            note("browser: could not open")
+
             print()
             print("  [알림] 브라우저를 열지 못했습니다. "
                   f"주소를 직접 여십시오: {url}")
+
+            sys.stdout.flush()
 
     thread = threading.Thread(target=later, daemon=True)
     thread.start()
@@ -309,12 +503,18 @@ def _open_browser(url: str):
 def _serve(argv) -> int:
     """켜는 일 전부. 죽으면 그대로 던진다 - 받는 자리는 main이다."""
 
+    note("serve: importing app_info/settings")
+
     from app import app_info, settings
 
     port = choose_port(_asked_port(argv))
     url = f"http://{HOST}:{port}/studio"
 
+    note(f"serve: port {port}")
+
     home = _prepare_home()
+
+    note("serve: home ready")
 
     print()
     print(f"  {app_info.title()}")
@@ -350,6 +550,8 @@ def _serve(argv) -> int:
     if use_our_ffmpeg() is None:
         from app.services import media_tools
 
+        note("serve: STOP - ffmpeg not found")
+
         print("  ffmpeg 가 없어 시작할 수 없습니다.")
         print(f"  프로그램 옆 {media_tools.BESIDE_DIRNAME} 폴더에 "
               "ffmpeg.exe 를 넣고 다시 켜십시오.")
@@ -359,30 +561,111 @@ def _serve(argv) -> int:
 
         return 1
 
+    note("serve: ffmpeg ok")
+
     if wanted:
-        _open_browser(url)
+        # Sprint219 - 포트를 함께 준다. 이것이 있어야 브라우저가
+        # 서버보다 먼저 열리지 않는다.
+        _open_browser(url, ready_port=port)
+
+    note("serve: importing uvicorn and app (the heavy part)")
 
     import uvicorn
 
     from app.main import app
 
+    note("serve: engine imported, handing over to uvicorn")
+
     uvicorn.run(app, host=HOST, port=port, log_level="warning")
 
+    note("serve: uvicorn returned (window closed or Ctrl+C)")
+
     return 0
+
+
+def _attach_trail(error_log_path: str) -> None:
+    """
+    켤 때 남긴 자취를 오류 기록 끝에 붙인다. 절대 던지지 않는다.
+
+    붙이는 이유는 하나다 - 사람이 보내 주는 것이 그 파일 한 개다.
+    """
+
+    if not error_log_path:
+        return
+
+    path = trail_path()
+
+    if not path or not os.path.exists(path):
+        return
+
+    try:
+        with open(path, encoding="utf-8") as f:
+            trail = f.readlines()[-60:]
+
+        with open(error_log_path, "a", encoding="utf-8") as f:
+            f.write("\n\n--- 켤 때 지나온 자취 ---\n")
+            f.writelines(trail)
+    except Exception:
+        pass
+
+
+def _hold_console(argv) -> None:
+    """
+    켜지 못했을 때 창을 붙잡아 둔다.
+
+    Sprint219 - 왜 필요한가
+    -----------------------
+    아이콘을 두 번 눌러 켜면 Windows가 새 콘솔 창을 만든다. 그 창은
+    프로그램이 끝나는 순간 사라진다 - 무엇이 잘못됐다고 적어 놓아도
+    사람이 읽을 시간이 없다. 화면이 번쩍하고 마는 것이 곧 "아무 반응
+    없음"이다.
+
+    자동으로 돌리는 자리에서는 붙잡지 않는다 - 붙잡으면 그 자리가
+    영원히 멈춘다. 사람이 보고 있는 창인지는 stdin이 말해 준다.
+    """
+
+    if "--no-hold" in argv:
+        return
+
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            return
+    except Exception:
+        return
+
+    try:
+        print()
+        print("  이 창을 닫으면 끝납니다. Enter 를 누르셔도 됩니다.")
+        sys.stdout.flush()
+        sys.stdin.readline()
+    except Exception:
+        pass
 
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
 
+    note("=" * 8 + " launch " + "=" * 8)
+    note(f"frozen={bool(getattr(sys, 'frozen', False))} cwd={os.getcwd()}")
+
     try:
-        return _serve(argv)
+        code = _serve(argv)
     except KeyboardInterrupt:
         # 사람이 끈 것이다. 오류가 아니다.
+        note("exit: Ctrl+C")
+
         return 0
     except BaseException as failed:
+        note(f"exit: FAILED {type(failed).__name__}: {failed}")
+
         from app import error_log
 
         written = error_log.write(failed)
+
+        # 자취를 그 파일에 함께 붙인다. README는 "logs 폴더의 파일을
+        # 보내 주십시오"라고 말한다 - 보내 준 그 하나에 어디까지
+        # 갔었는지도 들어 있어야 우리가 읽을 수 있다.
+        _attach_trail(written)
 
         print()
         print("  프로그램을 켜지 못했습니다.")
@@ -396,7 +679,18 @@ def main(argv=None) -> int:
 
         sys.stdout.flush()
 
+        _hold_console(argv)
+
         return 1
+
+    note(f"exit: code {code}")
+
+    # 조용히 1로 끝나는 길이 여럿이다(ffmpeg 없음 등). 그때도 창이
+    # 사라지면 적어 놓은 이유를 아무도 못 읽는다.
+    if code != 0:
+        _hold_console(argv)
+
+    return code
 
 
 if __name__ == "__main__":

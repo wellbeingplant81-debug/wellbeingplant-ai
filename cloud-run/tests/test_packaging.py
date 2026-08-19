@@ -112,14 +112,41 @@ class ServerStartsTest(unittest.TestCase):
 
         opened = []
 
+        # Sprint219 - _open_browser 가 포트를 함께 받는다(서버가 실제로
+        # 받을 때까지 기다리려면 무엇을 두드릴지 알아야 한다). 대역도
+        # 그 모양이어야 한다 - 확인하는 것은 예전 그대로 "쓰는 화면을
+        # 연다"이다.
         with patch.dict(os.environ, {runtime_paths.HOME_ENV: home}), \
                 patch("uvicorn.run"), \
-                patch.object(launcher, "_open_browser", opened.append):
+                patch.object(launcher, "_open_browser",
+                             lambda url, **kw: opened.append(url)):
 
             launcher.main([])
 
         self.assertEqual(len(opened), 1)
         self.assertTrue(opened[0].endswith("/studio"))
+
+    def test_it_waits_for_the_server_before_opening(self):
+        """
+        Sprint219 - 브라우저에게 넘기는 주소가 실제로 받는 자리여야
+        한다. 포트를 함께 넘기지 않으면 기다릴 방법이 없다.
+        """
+
+        home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, home, ignore_errors=True)
+
+        given = {}
+
+        with patch.dict(os.environ, {runtime_paths.HOME_ENV: home}), \
+                patch("uvicorn.run"), \
+                patch.object(launcher, "_open_browser",
+                             lambda url, **kw: given.update(
+                                 url=url, **kw)):
+
+            launcher.main([])
+
+        self.assertIn("ready_port", given)
+        self.assertIn(f":{given['ready_port']}/", given["url"])
 
 
 class StaticFilesTest(unittest.TestCase):

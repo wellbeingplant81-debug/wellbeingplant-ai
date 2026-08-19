@@ -64,9 +64,74 @@ WINDOW_TITLE = "AI영상제작소"
 # 작은 노트북에서 창이 화면 밖으로 나간다.
 WINDOW_SIZE = (1280, 800)
 
-# 이보다 작게 줄이지 못하게 한다. studio.html 의 좌우 2단이 이 아래에서
-# 겹치기 시작한다.
-MIN_WINDOW_SIZE = (1024, 640)
+# 이보다 작게 줄이지 못하게 한다.
+#
+# Sprint222 - 1024 였는데 낮췄다. 1366x768 화면을 125% 로 쓰면 논리
+# 데스크톱이 1093x614 이고, 작업 표시줄을 빼면 세로가 566 쯤이다.
+# 최소를 640 으로 두면 그 PC 에서 창이 화면보다 커진다.
+MIN_WINDOW_SIZE = (940, 520)
+
+
+def _work_area():
+    """
+    작업 표시줄을 뺀 화면 크기. 못 구하면 None.
+
+    왜 배율을 따로 안 나누는가
+    --------------------------
+    이 함수는 pywebview 가 SetProcessDPIAware 를 부르기 **전에** 불린다.
+    그 전의 프로세스에게 Windows 는 화면을 이미 배율로 나눈 값으로
+    말해 준다 - 1366x768 을 125% 로 쓰면 1093x614 라고 답한다. 그것이
+    바로 pywebview 가 쓰는 단위라서, 여기서 다시 나누면 두 번 나뉜다.
+    """
+
+    if not sys.platform.startswith("win"):
+        return None
+
+    import ctypes
+    from ctypes import wintypes
+
+    SPI_GETWORKAREA = 0x0030
+
+    rect = wintypes.RECT()
+
+    try:
+        ok = ctypes.windll.user32.SystemParametersInfoW(
+            SPI_GETWORKAREA, 0, ctypes.byref(rect), 0)
+    except Exception:
+        return None
+
+    if not ok:
+        return None
+
+    width = rect.right - rect.left
+    height = rect.bottom - rect.top
+
+    return (width, height) if width > 0 and height > 0 else None
+
+
+def initial_size():
+    """
+    첫 창 크기. 화면 밖으로 나가지 않는다.
+
+    작은 화면에서 1280x800 을 고집하면 창의 오른쪽과 아래가 화면 밖으로
+    나가고, 거기 있는 [영상 생성] 을 사람이 볼 수 없다.
+
+    가장자리를 조금 남긴다 - 창이 작업 영역에 딱 붙으면 사람이 창을
+    잡아 옮길 자리가 없다.
+    """
+
+    width, height = WINDOW_SIZE
+    area = _work_area()
+
+    if not area:
+        return width, height
+
+    margin = 40
+
+    return (
+        max(MIN_WINDOW_SIZE[0], min(width, area[0] - margin)),
+        max(MIN_WINDOW_SIZE[1], min(height, area[1] - margin)),
+    )
 
 # 서버가 실제로 받을 때까지 기다리는 최대 시간. launcher 와 같은 값을
 # 쓰되, 그쪽을 못 가져오면 이 값으로 선다.
@@ -557,10 +622,12 @@ def run_window(port: int = None, debug: bool = False,
 
     holder = {}
 
+    width, height = initial_size()
+
     window = webview.create_window(
         WINDOW_TITLE,
         html=SPLASH,
-        width=WINDOW_SIZE[0], height=WINDOW_SIZE[1],
+        width=width, height=height,
         min_size=MIN_WINDOW_SIZE,
         resizable=True,
         background_color="#16181d",
