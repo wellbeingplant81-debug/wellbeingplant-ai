@@ -24,7 +24,24 @@ def clear() -> None:
         _entries.clear()
 
 
-def has(provider: str, query: str) -> bool:
+def _key(provider: str, query: str, variant=None):
+    """
+    캐시의 열쇠.
+
+    Sprint228 - variant 가 붙었다
+    ----------------------------
+    같은 검색어라도 조건이 다르면 다른 결과다. 12초짜리 scene 이
+    "최소 12초"로 물어 받아 둔 것을, 2초짜리 scene 이 그대로 물려받으면
+    그쪽은 묻지도 않은 조건으로 고르게 된다 - 반대로 짧은 조건으로
+    받아 둔 것을 긴 scene 이 물려받으면 짧은 것만 보고 hold 가 난다.
+
+    조건이 없으면 None 이고, 그때 열쇠는 예전과 같은 뜻이다.
+    """
+
+    return (provider, (query or "").strip().lower(), variant)
+
+
+def has(provider: str, query: str, variant=None) -> bool:
     """Sprint77 - 이 질의가 이미 캐시에 있는가. 부작용 없는 조회다.
 
     Observatory가 적중/미스를 기록하려면 search()를 부르기 전에 알아야
@@ -33,10 +50,10 @@ def has(provider: str, query: str) -> bool:
     """
 
     with _lock:
-        return ((provider, (query or "").strip().lower())) in _entries
+        return _key(provider, query, variant) in _entries
 
 
-def search(provider: str, query: str, search_fn):
+def search(provider: str, query: str, search_fn, variant=None):
     """
     캐시에 있으면 그것을, 없으면 search_fn(query)를 부르고 저장한다.
 
@@ -50,7 +67,7 @@ def search(provider: str, query: str, search_fn):
     망가지지 않아야 한다.
     """
 
-    key = (provider, (query or "").strip().lower())
+    key = _key(provider, query, variant)
 
     with _lock:
         if key in _entries:

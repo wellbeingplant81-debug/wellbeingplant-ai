@@ -7,6 +7,7 @@ from app.providers import pixabay_provider
 from app.services.image_service import generate_image
 from app.services.provider_factory import build_provider_chain
 from app.services import asset_observatory
+from app.services import asset_relevance
 from app.services import search_cache
 from app.services import search_query_builder
 from app.services.search_query_extractor import extract_search_query
@@ -210,9 +211,23 @@ def get_candidates(
     candidates = []
     status_log = []
 
-    for source, search_fn in build_provider_chain(allow_video=allow_video):
+    # Sprint228 - 이 scene 을 채우려면 몇 초가 필요한가.
+    #
+    # 고른 뒤에 순위를 매기는 것만으로는 부족하다. 받아 온 다섯 개가
+    # 전부 scene 보다 짧으면 고를 것이 없고 결과는 hold(마지막 프레임
+    # 정지)다. 그래서 검색에 실어 보낸다.
+    #
+    # scene 을 모르면 None 이고, 그때는 예전 요청 그대로다.
+    min_seconds = asset_relevance.needed_seconds(scene)
+
+    for source, search_fn in build_provider_chain(
+            allow_video=allow_video, min_seconds=min_seconds):
 
         key_present = _has_api_key(source)
+
+        # 조건이 걸린 검색은 조건 없는 검색과 다른 결과다. 사진에는
+        # 길이가 없으므로 영상 쪽에만 붙는다.
+        variant = min_seconds if "video" in source else None
 
         print(f"[ProviderLog] {source}: ATTEMPTING (API Key 보유={key_present})")
 
@@ -222,8 +237,9 @@ def get_candidates(
             # 그러면 바로 AI 폴백이었다. 같은 질의는 캐시가 막는다.
             results = []
             for attempt in queries:
-                cache_hit = search_cache.has(source, attempt)
-                results = search_cache.search(source, attempt, search_fn)
+                cache_hit = search_cache.has(source, attempt, variant)
+                results = search_cache.search(
+                    source, attempt, search_fn, variant)
 
                 # Sprint77 - 무엇을 몇 번 시도했고 어디서 결과가 나왔는지.
                 # 확장이 몇 단계 돌았는지가 이 기록의 개수로 드러난다.

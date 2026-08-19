@@ -1,3 +1,4 @@
+import math
 import os
 
 import requests
@@ -69,16 +70,38 @@ def search_videos(
     query: str,
     orientation: str = "portrait",
     per_page: int = 5,
+    min_duration=None,
 ) -> list:
+    """
+    Sprint228 - 필요한 길이를 검색에 실어 보낸다.
+
+    순위를 아무리 잘 매겨도 받아 온 다섯 개가 전부 scene 보다 짧으면
+    결과는 hold(마지막 프레임 정지)다 - 고를 것이 없다. 그래서 짧은
+    것을 아예 받지 않는다.
+
+    실제로 되는 것을 확인하고 넣었다(손검증, 2026-08-19).
+
+        조건 없이         [5, 8, 10, 10, 10, 12, 18, 19, 22, 24]
+        min_duration=10   [10, 10, 10, 10, 12, 18, 19, 22, 24, 26]
+
+    없으면 안 보낸다. 지어낸 질의 항목을 붙이지 않는다.
+    """
+
+    params = {
+        "query": query,
+        "orientation": orientation,
+        "per_page": per_page,
+    }
+
+    if min_duration and min_duration > 0:
+        # API 는 초 단위 정수를 받는다. 올려서 보낸다 - 내림하면
+        # 필요한 길이보다 짧은 것이 다시 섞인다.
+        params["min_duration"] = math.ceil(min_duration)
 
     response = requests.get(
         VIDEO_SEARCH_URL,
         headers={"Authorization": _api_key()},
-        params={
-            "query": query,
-            "orientation": orientation,
-            "per_page": per_page,
-        },
+        params=params,
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
 
