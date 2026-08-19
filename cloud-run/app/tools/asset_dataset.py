@@ -14,6 +14,23 @@ from collections import Counter
 
 
 OBSERVATORY_FILENAME = "asset_observatory.json"
+
+# Sprint229 - footage.plan이 정하는 세 갈래.
+#
+# 왜 여기에 글자를 다시 적는가
+# ----------------------------
+# footage 모듈에서 가져오는 것이 옳아 보이지만, 그것은 moviepy를 들고
+# 있다. 이 파일은 쌓인 JSON을 읽는 자리이고 영상을 열지 않는데,
+# 라우터가 이 모듈을 최상단에서 들이므로(studio.py) 가져오는 순간
+# 화면을 켜는 것만으로 moviepy가 딸려 온다.
+#
+# 그래서 값은 여기 적고, **두 곳이 갈라지지 않는 것은 시험으로
+# 잠근다**(test_footage_counted_across_projects). 갈라지는 날 이
+# 집계는 조용히 0을 세게 되므로, 조용히 지나가지 않게 하는 것이
+# 요점이다.
+FOOTAGE_TRIM = "trim"
+FOOTAGE_LOOP = "loop"
+FOOTAGE_HOLD = "hold"
 REPORT_FILENAME = "quality_report.json"
 
 # Sprint79 - 축적 파일. 영상을 만들 때마다 여기 쌓인다.
@@ -143,6 +160,12 @@ def build(root: str) -> list:
             result = by_scene.get(entry.get("scene")) or {}
             searches = entry.get("searches") or []
 
+            # Sprint229 - 고른 영상이 이 scene을 어떻게 채웠는가
+            # (Sprint227이 남긴 것). 그 이전에 쌓인 기록에는 없다 -
+            # 그때는 전부 None이고, 없다고 행을 버리지 않는다.
+            # planned(Sprint83)가 같은 이유로 그렇게 했다.
+            footage = entry.get("footage") or {}
+
             rows.append({
                 "project": os.path.basename(project),
                 "scene": entry.get("scene"),
@@ -193,6 +216,11 @@ def build(root: str) -> list:
                     (entry.get("planned") or {}).get(field)
                     for field in PLANNED_FIELDS
                 ),
+                # Sprint229 - trim / loop / hold. 영상이 아니었던
+                # scene은 셋 다 None이다.
+                "footage_mode": footage.get("mode"),
+                "source_seconds": footage.get("source_seconds"),
+                "scene_seconds": footage.get("scene_seconds"),
             })
 
     return rows
@@ -210,6 +238,15 @@ def summarize(rows: list) -> dict:
     rows = list(rows or [])
 
     failures = [r for r in rows if r.get("regenerate")]
+
+    # Sprint229 - 고른 영상이 scene을 어떻게 채웠는가.
+    #
+    # 분모는 **영상을 쓴 scene**이다. 그림 scene을 섞으면 비율이 뜻을
+    # 잃는다 - 영상 10개 중 hold 2개면 20%여야 하는데, 그림 90개가
+    # 함께 세어지면 2%로 보인다. 그러면 이 숫자를 보고 아무도 아무
+    # 판단도 하지 않는다.
+    footage_rows = [r for r in rows if r.get("footage_mode")]
+    footage_modes = Counter(r["footage_mode"] for r in footage_rows)
 
     causes = Counter(classify(r.get("gemini_reason")) for r in failures)
 
@@ -234,6 +271,17 @@ def summarize(rows: list) -> dict:
         "mean_candidates": (
             sum(r.get("candidate_count") or 0 for r in rows) / len(rows)
             if rows else 0.0
+        ),
+        # Sprint229 - 영상을 쓴 scene이 실제로 어떻게 채워졌는가.
+        "footage_scenes": len(footage_rows),
+        "footage_trim": footage_modes.get(FOOTAGE_TRIM, 0),
+        "footage_loop": footage_modes.get(FOOTAGE_LOOP, 0),
+        "footage_hold": footage_modes.get(FOOTAGE_HOLD, 0),
+        # 영상이 하나도 없으면 비율이라는 것이 없다. 0.0으로 적으면
+        # "영상을 썼는데 hold가 하나도 없었다"와 구별되지 않는다.
+        "footage_hold_rate": (
+            100.0 * footage_modes.get(FOOTAGE_HOLD, 0) / len(footage_rows)
+            if footage_rows else None
         ),
     }
 

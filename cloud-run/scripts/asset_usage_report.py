@@ -7,7 +7,9 @@ sys.path.insert(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 )
 
+from app import runtime_paths  # noqa: E402
 from app.services import asset_feedback_service  # noqa: E402
+from app.tools import asset_dataset  # noqa: E402
 
 
 def build_parser():
@@ -80,6 +82,50 @@ def print_report(summary: dict):
         print(format_row(row))
 
 
+def dataset_path() -> str:
+    """쌓인 관측이 사는 자리. 파이프라인이 쓰는 그 자리다."""
+
+    return os.path.join(
+        runtime_paths.dataset_root(), asset_dataset.DATASET_FILENAME,
+    )
+
+
+def print_footage_report(summary: dict, where: str):
+    """
+    Sprint229 - 고른 영상이 그 장면을 어떻게 채웠는가.
+
+    Sprint227이 프로젝트마다 남기기 시작한 것을 여러 편에 걸쳐 센다.
+    알고 싶은 것은 hold다 - 받아 온 영상이 scene보다 많이 짧아 마지막
+    프레임을 붙잡은 scene이고, 그 scene은 영상을 골랐는데도 사실상
+    정지 사진으로 되돌아간다.
+
+    분모는 영상을 쓴 scene뿐이다. 그림 scene을 섞으면 비율이 뜻을
+    잃는다.
+    """
+
+    print()
+    print("고른 영상이 그 장면을 어떻게 채웠는가")
+
+    total = summary.get("footage_scenes") or 0
+
+    if not total:
+        print(f"  아직 영상을 쓴 scene이 없습니다 ({where}).")
+        print("  스톡 영상이나 내 자료 영상으로 몇 편 만든 뒤 다시 "
+              "확인하세요.")
+        return
+
+    print(f"  영상 scene 수 : {total}")
+    print(f"  trim (한 번에 덮음)      : {summary.get('footage_trim', 0)}")
+    print(f"  loop (되풀이해서 덮음)   : {summary.get('footage_loop', 0)}")
+    print(f"  hold (마지막 프레임 정지) : {summary.get('footage_hold', 0)}")
+
+    rate = summary.get("footage_hold_rate")
+
+    if rate is not None:
+        print(f"  hold 비율 : {rate:.1f}%  <- 사실상 정지 사진으로 "
+              "되돌아간 scene")
+
+
 def main():
 
     sys.stdout.reconfigure(encoding="utf-8")
@@ -90,6 +136,12 @@ def main():
     summary = asset_feedback_service.summarize_usage(records)
 
     print_report(summary)
+
+    # Sprint229 - 같은 자리에서 이어 적는다. 새 화면을 만들지 않는다.
+    where = dataset_path()
+    print_footage_report(
+        asset_dataset.summarize(asset_dataset.load(where)), where,
+    )
 
     sys.exit(0)
 
