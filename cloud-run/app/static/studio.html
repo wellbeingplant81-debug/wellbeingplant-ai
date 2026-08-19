@@ -863,11 +863,26 @@ input[type=radio],input[type=checkbox]{width:auto}
 #troubleClose{width:auto;padding:2px 9px;font-size:11px;float:right}
 
 /* ── 창이 작아질 때 ─────────────────────────────────────────────
-   1920 · 1600 · 1366 은 모두 위의 세 칸 그대로다(1366에서도 폭이
-   1180을 넘는다). 사람이 창을 그보다 좁히면 칸을 더 쪼개지 않고
-   예전처럼 세로로 쌓고 페이지 스크롤을 되돌려 준다 - 좁은 칸에
-   단추를 밀어 넣어 못 누르게 만드는 것보다 낫다. */
-@media (max-width:1180px){
+   Sprint216은 "1366에서도 폭이 1180을 넘는다"고 적고 이 자리를
+   1180으로 잡았다. **그 가정이 틀렸다.**
+
+   Windows 배율을 계산에 넣지 않았다. 1366x768 화면을 125%로 쓰면
+   논리 데스크톱 자체가 1093x614 이다 - 그 PC에서는 창을 최대로 키워도
+   CSS 폭이 1180에 닿을 수 없다. 즉 이 폴백은 "창을 좁혔을 때"가 아니라
+   **그 PC의 항상**이었고, 세 칸 화면을 본 적이 없다.
+
+   Sprint222 실측(WebView2, dpr=1.25):
+       CSS 1352 -> 세 칸, 페이지 스크롤 0
+       CSS 1186 -> 세 칸, 페이지 스크롤 0
+       CSS 1079 -> 폴백, 페이지 스크롤 1118px
+
+   그래서 자리를 1024로 내린다. 1079에서도 가운데가 555px 남아 세 칸이
+   실제로 쓸 만하다(왼쪽 196 + 오른쪽 292 + 여백 36). 1025~1180 은
+   Sprint222가 칸을 조금 좁혀 받는다(아래 .s222 스타일).
+
+   그보다 좁으면 예전처럼 세로로 쌓는다 - 좁은 칸에 단추를 밀어 넣어
+   못 누르게 만드는 것보다 낫다. */
+@media (max-width:1024px){
   html,body{height:auto}
   body{overflow:auto;display:block}
   #work{display:block;overflow:visible;padding:0}
@@ -1405,6 +1420,482 @@ input[type=radio],input[type=checkbox]{width:auto}
     </div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     Sprint222 - 자료를 넣는 것이 첫 행동이 된다 (Epic 64).
+
+     왜 기존 마크업을 다시 쓰지 않는가
+     ---------------------------------
+     이 파일에는 fetch가 68곳, 이름으로 찾는 요소가 수백 개다. 그것을
+     통째로 옮겨 적으면 무엇이 끊겼는지 알 방법이 없다. 그래서 이
+     묶음은 **기존 것을 건드리지 않고 옆에 붙는다** - 붙일 자리만
+     이름으로 찾아 끼운다. 이 묶음을 지우면 예전 화면이 그대로 남는다.
+
+     무엇을 고치는가
+     ---------------
+     "먼저 프로젝트를 고르거나 만들어 주십시오." 를 없앤다. 자료를
+     놓으면 프로젝트는 프로그램이 만든다 - 사람이 그 개념을 알 이유가
+     없다.
+
+     색을 새로 만들지 않는다 - :root의 토큰만 쓴다(테마 4개가 그것으로
+     갈린다).
+     ══════════════════════════════════════════════════════════════════ -->
+<style>
+.s222{margin:10px 0 4px}
+
+.s222drop{border:2px dashed var(--line2);border-radius:var(--radius);
+  padding:18px 14px;text-align:center;background:var(--panel2);
+  transition:border-color .12s,background .12s}
+.s222drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.s222drop .dt{font-weight:600;margin-bottom:3px}
+.s222drop .ds{color:var(--dim);font-size:12px;margin-bottom:9px}
+
+.s222sum{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.s222chip{display:inline-flex;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:999px;font-size:12px;
+  background:var(--ok-soft);color:var(--ok-text);
+  border:1px solid var(--ok-edge)}
+.s222chip.none{background:var(--sunken);color:var(--dim);
+  border-color:var(--line)}
+
+.s222guide{margin-top:9px;padding:9px 11px;border-radius:var(--radius);
+  background:var(--accent-soft);border:1px solid var(--accent-edge);
+  font-size:13px;line-height:1.5}
+.s222guide.warn{background:var(--warn-soft);border-color:var(--warn-edge);
+  color:var(--warn-text)}
+.s222guide b{font-weight:600}
+.s222guide .how{display:block;margin-top:3px;color:var(--dim);font-size:12px}
+
+.s222steps{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 2px}
+.s222step{font-size:11px;padding:2px 8px;border-radius:999px;
+  background:var(--sunken);color:var(--dim);border:1px solid var(--line)}
+.s222step.on{background:var(--accent-soft);color:var(--text);
+  border-color:var(--accent-edge);font-weight:600}
+.s222step.done{background:var(--ok-soft);color:var(--ok-text);
+  border-color:var(--ok-edge)}
+
+.s222adv{margin-top:9px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--panel)}
+.s222adv>summary{cursor:pointer;padding:9px 12px;font-weight:600;
+  font-size:13px;list-style:none}
+.s222adv>summary::-webkit-details-marker{display:none}
+.s222adv>summary::before{content:"▸ ";color:var(--dim)}
+.s222adv[open]>summary::before{content:"▾ "}
+.s222adv .s222advbody{display:flex;flex-direction:column;gap:9px;
+  padding:0 0 9px}
+
+.s222pin{position:sticky;bottom:0;z-index:3;padding:9px 0 2px;
+  background:linear-gradient(to top,var(--bg) 62%,transparent)}
+.s222pin button{width:100%}
+/* Sprint222 - 세 칸을 지키는 좁은 구간(1025~1180).
+   폴백을 1024로 내린 뒤 생긴 띠다. 여기서는 칸을 없애지 않고 양옆을
+   조금 좁혀서 가운데를 지킨다 - 세 칸에서 세로 스택으로 한 번에
+   떨어지는 큰 변화를 피한다. */
+@media (min-width:1025px) and (max-width:1180px){
+  #work{grid-template-columns:clamp(168px,15vw,206px) minmax(0,1fr)
+        clamp(246px,22vw,292px);gap:7px;padding:7px}
+  .s222drop{padding:12px 10px}
+  .s222guide{font-size:12px;padding:7px 9px}
+}
+
+</style>
+
+<script>
+/* Sprint222 - 자료가 먼저다.
+ *
+ * 여기서 매칭을 하지 않는다. 어느 파일이 몇 번 장면으로 가는지는
+ * 서버의 provider가 정한다(image_import._place). 이 스크립트는
+ * "받아서 서버에 넘기고, 지금 무엇을 하면 되는지 말한다" 까지다.
+ */
+(function () {
+  "use strict";
+
+  const IMAGE_EXT = [".png", ".jpg", ".jpeg", ".webp", ".zip"];
+  const VOICE_EXT = [".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".zip"];
+
+  function byId(id) { return document.getElementById(id); }
+
+  function extOf(name) {
+    var at = String(name || "").lastIndexOf(".");
+    return at < 0 ? "" : name.slice(at).toLowerCase();
+  }
+
+  /* zip은 양쪽에 다 들어갈 수 있다. 사람이 이미지 zip을 놓았는지
+   * 음성 zip을 놓았는지 우리는 모른다 - 이미지로 본다. 서버가
+   * 거절하면 그 문장을 그대로 보여 준다(짐작해서 숨기지 않는다). */
+  function kindOf(name) {
+    var ext = extOf(name);
+    if (IMAGE_EXT.indexOf(ext) >= 0) return "image";
+    if (VOICE_EXT.indexOf(ext) >= 0) return "voice";
+    return null;
+  }
+
+  function today() {
+    var now = new Date();
+    return now.getFullYear() + "-" +
+      String(now.getMonth() + 1).padStart(2, "0") + "-" +
+      String(now.getDate()).padStart(2, "0");
+  }
+
+  /* 프로젝트를 만드는 코드를 새로 쓰지 않는다. /api/review 가
+   * "검토하며 만들 빈 프로젝트"를 이미 만든다. */
+  async function ensureProject() {
+    if (window.currentProject) return window.currentProject;
+
+    var topicEl = byId("topic");
+    var typed = topicEl && topicEl.value ? topicEl.value.trim() : "";
+    var name = typed || ("새 영상 " + today());
+
+    var answer = await fetch("/studio/api/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: name, channel: "wellbeing" })
+    });
+
+    if (!answer.ok) {
+      var why = await answer.json().catch(function () { return {}; });
+      throw new Error(why.detail || "프로젝트를 만들지 못했습니다.");
+    }
+
+    var made = await answer.json();
+
+    /* 나머지 화면이 따라오게 한다 - 우리가 전역만 바꾸면 최근 목록과
+     * 오른쪽 판이 예전 프로젝트를 계속 보여 준다. */
+    if (typeof openProject === "function") {
+      try { await openProject(made.project_id); } catch (e) { /* 화면만 못 따라온 것 */ }
+    }
+    if (typeof loadProjects === "function") {
+      try { await loadProjects(); } catch (e) { /* 목록만 못 고친 것 */ }
+    }
+
+    window.currentProject = made.project_id;
+
+    return made.project_id;
+  }
+
+  async function send(projectId, kind, files) {
+    var form = new FormData();
+    form.append("kind", kind);
+    files.forEach(function (f) { form.append("files", f); });
+
+    var answer = await fetch(
+      "/studio/api/projects/" + encodeURIComponent(projectId) + "/staging",
+      { method: "POST", body: form });
+
+    var said = await answer.json().catch(function () { return {}; });
+
+    if (!answer.ok) throw new Error(said.detail || "자료를 넣지 못했습니다.");
+
+    return said;
+  }
+
+  async function take(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+
+    var groups = { image: [], voice: [] };
+    var skipped = [];
+
+    files.forEach(function (f) {
+      var kind = kindOf(f.name);
+      if (kind) groups[kind].push(f); else skipped.push(f.name);
+    });
+
+    if (!groups.image.length && !groups.voice.length) {
+      say("받을 수 없는 파일입니다.",
+          "이미지(png·jpg·webp·zip) 또는 음성(wav·mp3·m4a·zip)을 넣어 주세요.",
+          true);
+      return;
+    }
+
+    say("자료를 넣는 중입니다…", "", false);
+
+    try {
+      var projectId = await ensureProject();
+      var added = 0;
+
+      for (var kind in groups) {
+        if (groups[kind].length) {
+          var said = await send(projectId, kind, groups[kind]);
+          added += said.added;
+        }
+      }
+
+      await refresh(added, skipped);
+    } catch (failed) {
+      say("자료를 넣지 못했습니다.", String(failed.message || failed), true);
+    }
+  }
+
+  function say(text, how, warn) {
+    var box = byId("s222Guide");
+    if (!box) return;
+    box.className = "s222guide" + (warn ? " warn" : "");
+    box.innerHTML = "<b>" + text + "</b>" +
+      (how ? '<span class="how">' + how + "</span>" : "");
+  }
+
+  /* 대본이 없을 때. 무엇을 하라고만 말하지 않고, 그리로 가는 단추를
+   * 함께 준다 - 말만 하면 사람은 그 자리를 또 찾아야 한다. */
+  function needScript() {
+    var box = byId("s222Guide");
+    if (!box) return;
+
+    box.className = "s222guide";
+    box.innerHTML =
+      "<b>먼저 대본이 필요합니다.</b>" +
+      '<span class="how">자료는 그대로 있습니다. 대본이 생기면 ' +
+      "장면에 붙습니다.</span>" +
+      '<div class="rowbtns" style="margin-top:8px">' +
+      '  <button class="sm" type="button" onclick="chooseFree()">대본 작성</button>' +
+      '  <button class="sm ghost" type="button" onclick="chooseFullAuto()">AI 대본 만들기</button>' +
+      "</div>";
+
+    steps("content");
+  }
+
+  function chips(counts) {
+    var box = byId("s222Sum");
+    if (!box) return;
+
+    var total = (counts.image || 0) + (counts.voice || 0);
+
+    box.style.display = total ? "flex" : "none";
+    box.innerHTML =
+      '<span class="s222chip' + (counts.image ? "" : " none") + '">✓ 이미지 ' +
+      (counts.image || 0) + "</span>" +
+      '<span class="s222chip' + (counts.voice ? "" : " none") + '">✓ 음성 ' +
+      (counts.voice || 0) + "</span>";
+
+    var link = byId("s222Apply");
+    if (link) link.style.display = total ? "" : "none";
+  }
+
+  async function refresh(justAdded, skipped) {
+    if (!window.currentProject) {
+      chips({});
+      say("이미지나 음성을 넣으면 바로 시작합니다.",
+          "프로젝트를 먼저 만들 필요가 없습니다.", false);
+      steps("asset");
+      return;
+    }
+
+    var answer = await fetch("/studio/api/projects/" +
+      encodeURIComponent(window.currentProject) + "/staging");
+
+    if (!answer.ok) return;
+
+    var said = await answer.json();
+
+    chips(said.counts || {});
+
+    var tail = (skipped && skipped.length)
+      ? " (받을 수 없는 파일 " + skipped.length + "개는 건너뛰었습니다)" : "";
+
+    if (justAdded) {
+      say("자료 " + justAdded + "개를 넣었습니다." + tail,
+          "이제 영상 내용을 정해 보세요. 대본이 준비되면 [장면에 연결]로 " +
+          "자료를 장면에 붙입니다.", false);
+      steps("content");
+    } else if (said.total) {
+      say("자료 " + said.total + "개가 준비되어 있습니다.",
+          "대본이 준비되면 [장면에 연결]을 누르세요.", false);
+      steps("content");
+    } else {
+      say("이미지나 음성을 넣으면 바로 시작합니다.",
+          "프로젝트를 먼저 만들 필요가 없습니다.", false);
+      steps("asset");
+    }
+  }
+
+  function steps(now) {
+    var box = byId("s222Steps");
+    if (!box) return;
+
+    var order = ["asset", "content", "voice", "check", "make"];
+    var label = { asset: "자료", content: "내용", voice: "음성",
+                  check: "확인", make: "생성" };
+    var at = order.indexOf(now);
+
+    box.innerHTML = order.map(function (key, i) {
+      var cls = i < at ? "done" : (i === at ? "on" : "");
+      return '<span class="s222step ' + cls + '">' + label[key] + "</span>";
+    }).join("");
+  }
+
+  async function apply() {
+    if (!window.currentProject) return;
+
+    say("자료를 장면에 연결하는 중입니다…", "", false);
+
+    var answer = await fetch("/studio/api/projects/" +
+      encodeURIComponent(window.currentProject) + "/staging/apply",
+      { method: "POST" });
+
+    var said = await answer.json().catch(function () { return {}; });
+
+    if (!answer.ok) {
+      const detail = String(said.detail || "");
+
+      /* 대본이 없는 것은 오류가 아니라 **아직 안 한 일**이다.
+       * 그런데 서버 문장은 "script.json이 없습니다"라고 말한다 - 그건
+       * 우리 파일 이름이지 사람이 할 일이 아니다. 사람에게 내부 파일을
+       * 넣으라고 요구하지 않는다.
+       *
+       * 그 자리에 실제로 갈 수 있는 두 길을 준다. 새 흐름을 만들지
+       * 않는다 - 화면에 이미 있는 그 두 단추다(비용 안내와 cost gate도
+       * 그쪽 흐름이 그대로 들고 있다). */
+      if (detail.indexOf("script.json") >= 0 || detail.indexOf("대본") >= 0) {
+        needScript();
+      } else {
+        say("아직 장면에 연결할 수 없습니다.", detail, true);
+      }
+
+      return;
+    }
+
+    var kinds = Object.keys(said.applied || {});
+    var many = kinds.reduce(function (sum, k) {
+      return sum + (said.applied[k].count || 0); }, 0);
+
+    say("자료 " + many + "개를 장면 " + said.scene_count + "개에 연결했습니다.",
+        "왼쪽 자료는 그대로 남아 있습니다. 다시 연결할 수 있습니다.", false);
+    steps("check");
+  }
+
+  /* ---- 화면에 끼운다 ---- */
+
+  function mount() {
+    var anchor = byId("creationModes");
+    if (!anchor || byId("s222Start")) return;
+
+    anchor.insertAdjacentHTML("afterend", [
+      '<div class="s222" id="s222Start">',
+      '  <div class="s222steps" id="s222Steps"></div>',
+      '  <div class="s222drop" id="s222Drop">',
+      '    <div class="dt">이미지 또는 음성을 여기에 놓으세요</div>',
+      '    <div class="ds">프로젝트를 먼저 만들 필요가 없습니다 — ',
+      '        놓으면 프로그램이 준비합니다</div>',
+      '    <div class="rowbtns">',
+      '      <button class="sm ghost" type="button" id="s222PickFile">파일 선택</button>',
+      '      <button class="sm ghost" type="button" id="s222PickDir">폴더 선택</button>',
+      '      <button class="sm ghost" type="button" id="s222Apply"',
+      '              style="display:none">장면에 연결</button>',
+      '    </div>',
+      '    <input type="file" id="s222Files" multiple style="display:none">',
+      '  </div>',
+      '  <div class="s222sum" id="s222Sum" style="display:none"></div>',
+      '  <div class="s222guide" id="s222Guide"></div>',
+      '</div>'
+    ].join("\n"));
+
+    var drop = byId("s222Drop");
+    var input = byId("s222Files");
+
+    ["dragenter", "dragover"].forEach(function (name) {
+      drop.addEventListener(name, function (ev) {
+        ev.preventDefault();
+        drop.classList.add("over");
+        var dt = drop.querySelector(".dt");
+        if (dt) dt.textContent = "여기에 놓으면 자료가 추가됩니다";
+      });
+    });
+
+    ["dragleave", "drop"].forEach(function (name) {
+      drop.addEventListener(name, function (ev) {
+        ev.preventDefault();
+        drop.classList.remove("over");
+        var dt = drop.querySelector(".dt");
+        if (dt) dt.textContent = "이미지 또는 음성을 여기에 놓으세요";
+      });
+    });
+
+    drop.addEventListener("drop", function (ev) {
+      if (ev.dataTransfer && ev.dataTransfer.files.length) {
+        take(ev.dataTransfer.files);
+      }
+    });
+
+    input.addEventListener("change", function () {
+      if (input.files.length) take(input.files);
+      input.value = "";
+    });
+
+    byId("s222PickFile").addEventListener("click", function () {
+      input.removeAttribute("webkitdirectory");
+      input.click();
+    });
+
+    byId("s222PickDir").addEventListener("click", function () {
+      input.setAttribute("webkitdirectory", "");
+      input.click();
+    });
+
+    byId("s222Apply").addEventListener("click", apply);
+
+    refresh(0, []);
+  }
+
+  /* 오른쪽 판이 여덟 장이라 세로로 길다. 앞의 둘만 두고 나머지를
+   * 접는다 - 지우지 않는다. */
+  function fold() {
+    var stacks = document.querySelectorAll(".layout>.stack");
+    if (stacks.length < 3) return;
+
+    var side = stacks[2];
+    if (side.querySelector(".s222adv")) return;
+
+    var panels = Array.prototype.slice.call(side.children).filter(
+      function (el) { return el.classList.contains("panel"); });
+
+    if (panels.length <= 2) return;
+
+    var box = document.createElement("details");
+    box.className = "s222adv";
+    box.innerHTML = '<summary>고급 · 자세히 보기</summary>' +
+                    '<div class="s222advbody"></div>';
+
+    side.appendChild(box);
+
+    var body = box.querySelector(".s222advbody");
+    panels.slice(2).forEach(function (p) { body.appendChild(p); });
+  }
+
+  /* [영상 생성]이 어디에 있든 오른쪽에서 항상 보이게 한다. 버튼을
+   * 옮기지 않는다 - 옮기면 그 버튼을 찾는 코드가 끊긴다. 대신 여기서
+   * 진짜 버튼을 누른다. */
+  function pin() {
+    var stacks = document.querySelectorAll(".layout>.stack");
+    var real = byId("go");
+    if (!stacks.length || !real || byId("s222Go")) return;
+
+    var side = stacks[stacks.length - 1];
+    var bar = document.createElement("div");
+    bar.className = "s222pin";
+    bar.innerHTML = '<button id="s222Go" type="button">영상 생성</button>';
+
+    side.appendChild(bar);
+
+    byId("s222Go").addEventListener("click", function () { real.click(); });
+  }
+
+  function start() {
+    try { mount(); } catch (e) { }
+    try { fold(); } catch (e) { }
+    try { pin(); } catch (e) { }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+
+  window.s222Refresh = refresh;
+  window.s222Take = take;
+  window.s222Apply = apply;
+})();
+</script>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -4810,6 +5301,23 @@ let wizOpen = false;
 let wizProject = null;
 let wizScript = null;
 let wizError = "";
+// Sprint222 - 사람이 붙여넣은 대본 원문.
+//
+// 왜 상태로 들고 있어야 하는가
+// ----------------------------
+// wizReadScript는 끝나면서 renderFreeWizard를 부르고, 그 렌더가
+// 붙여넣는 칸을 **빈 채로** 다시 만든다. 그래서 [읽어 보기]를 누르는
+// 순간 사람이 붙여넣은 글이 사라졌다(실측). 이어서 도는 검사도 빈
+// 칸을 읽어, 검사 결과까지 거짓이 됐다.
+//
+// 주석에 그 칸의 마크업을 그대로 적지 않는다 - 이 저장소의 화면
+// 가드들은 id를 글자로 찾고, 그중 몇은 **첫 등장**을 진짜로 여긴다.
+// 설명을 적었을 뿐인데 가드가 엉뚱한 자리를 보고 걸린다(실제로 걸렸다).
+//
+// 화면을 다시 그리는 것은 이 마법사의 방식이므로 그대로 둔다. 대신
+// 사람이 넣은 것을 화면 밖에 두고, 다시 그릴 때 되돌려 놓는다 -
+// "사람이 정한 것은 사람이 지울 때까지 남는다".
+let wizRawText = "";
 
 // 무료 모드에서 고르는 Provider. 대본은 여기 없다 - 붙여넣은 대본은
 // *_source가 기록하고, *_provider는 "누가 만드는가"의 칸이다.
@@ -6033,6 +6541,8 @@ async function wizBuildPrompt(){
 // 붙여넣은 것을 읽어 본다. 아직 아무것도 만들지 않는다.
 async function wizReadScript(){
   const raw = ($("wizRaw") || {value: ""}).value;
+  // 렌더가 이 칸을 다시 만들기 전에 원문을 붙잡아 둔다.
+  wizRawText = raw;
   wizError = "";
 
   const r = await fetch("/studio/api/production/import", {
@@ -6201,7 +6711,8 @@ function renderFreeWizard(){
            있어야 합니다. 위 요청문을 채팅창에 넣고 받은 답이면 둘 다
            들어 있습니다.</p>
          <textarea id="wizRaw" placeholder="Gemini 답을 그대로 붙여넣기"
-           ></textarea>
+           oninput="wizRawText=this.value"
+           >${escHtml(wizRawText)}</textarea>
          <div class="rowbtns">
            <button class="sm ghost" onclick="wizReadAndCheck()">읽어 보기</button>
            ${wizScript ? `<button class="sm" onclick="wizCreateProject()">
@@ -7024,5 +7535,7 @@ wireDrop("voiceDrop", "voiceFiles", pickVoiceFiles, uploadVoice);
   if(wanted){ await openProject(wanted); }
 })();
 </script>
+
+
 </body>
 </html>

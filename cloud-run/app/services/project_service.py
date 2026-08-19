@@ -62,7 +62,24 @@ def resolve_project_path(project_id: str) -> str:
 
 def create_project(topic: str, channel: str):
 
-    project_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Sprint222 - 같은 초에 두 번 만들면 같은 이름이 나온다.
+    #
+    # 사람이 손으로 만들 때는 드러나지 않았다. 그런데 이제 화면이
+    # 자료를 받으면서 프로젝트를 대신 만든다 - 파일을 고르고 곧바로
+    # 폴더를 고르거나, 창이 둘이거나, 두 번 눌리면 같은 초에 두 번
+    # 부른다. 그때 두 번째 프로젝트는 첫 번째와 **같은 폴더**가 되고,
+    # 사람이 넣은 자료가 남의 프로젝트에 섞인다(실측: test_staging의
+    # 기존_프로젝트에_넣으면_그_프로젝트로_간다가 이것으로 걸렸다).
+    #
+    # 이름의 앞부분은 그대로 둔다 - list_projects가 "이름이 타임스탬프라
+    # 이름 역순이 곧 최신순"이라고 적어 두고 그 규칙으로 센다.
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    project_id = stamp
+    nth = 2
+
+    while (Path(OUTPUT_ROOT) / project_id).exists():
+        project_id = f"{stamp}_{nth}"
+        nth += 1
 
     project_path = Path(OUTPUT_ROOT) / project_id
 

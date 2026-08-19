@@ -2715,3 +2715,153 @@ def dataset():
     summary["readiness"] = asset_dataset.readiness(rows)
 
     return summary
+
+
+# ══════════════════════════════════════════════════════════════════
+# Sprint222 - 대본보다 먼저 온 자료 (Epic 64).
+#
+# 왜 studio.py 안인가
+# -------------------
+# 처음에는 app/routers/staging.py 로 따로 두었다. 그런데
+# test_production_architecture 가 "제작 Provider 등록부를 쓰는 라우터는
+# studio.py 하나뿐"이라는 규칙을 지키고 있고, apply 는 그 등록부를
+# 쓴다(기존 매칭을 그대로 쓰려면 반드시 그래야 한다).
+#
+# 가드를 고치는 대신 이쪽을 옮겼다. 등록부를 두 라우터가 쓰기 시작하면
+# 어느 날 두 화면이 서로 다른 Provider 로 만들게 된다 - 그 규칙이 옳다.
+#
+#     POST    /studio/api/projects/{id}/staging          받는다 (대본 불필요)
+#     GET     /studio/api/projects/{id}/staging          무엇이 담겼나
+#     DELETE  /studio/api/projects/{id}/staging/{asset}  하나 뺀다
+#     POST    /studio/api/projects/{id}/staging/apply    scene 에 연결한다
+#
+# 매칭을 새로 만들지 않았다 - apply 는 위의 production_images 가 하던
+# 일에서 mkdtemp 와 rmtree 두 줄만 뺀 것이다.
+# ══════════════════════════════════════════════════════════════════
+
+from app.services import staging as staging_service
+
+
+def _staging_scenes(path: str) -> list:
+    """
+    대본에서 나온 scene 들. 없으면 400.
+
+    Resolver 를 그대로 쓴다 - 새 읽기 경로를 만들지 않는다(Sprint106).
+    """
+
+    from app.steps.step01_script_resolve import ScriptResolveError, load_prepared
+
+    try:
+        return load_prepared(path)["scenes"]
+    except ScriptResolveError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/projects/{project_id}/staging")
+async def staging_add(
+    project_id: str,
+    kind: str = Form(...),
+    files: list[UploadFile] = File(...),
+):
+    """
+    자료를 받아 둔다. **대본이 없어도 받는다.**
+
+    여기서 아무것도 놓지 않는다 - 어느 scene 으로 갈지는 대본이 생긴
+    뒤 apply 가 기존 provider 에게 묻는다.
+    """
+
+    path = _project_path(project_id)
+
+    try:
+        added = staging_service.add(
+            path, kind, [(upload.filename, upload.file) for upload in files],
+        )
+    except staging_service.StagingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    found = staging_service.listing(path)
+
+    return {
+        "added": len(added),
+        "assets": added,
+        "counts": found["counts"],
+        "total": found["total"],
+    }
+
+
+@router.get("/api/projects/{project_id}/staging")
+def staging_view(project_id: str):
+    """무엇이 담겼는가. 디스크에 실제로 있는 것만 센다."""
+
+    return staging_service.listing(_project_path(project_id))
+
+
+@router.delete("/api/projects/{project_id}/staging/{asset_id}")
+def staging_remove(project_id: str, asset_id: str):
+    path = _project_path(project_id)
+
+    if not staging_service.remove(path, asset_id):
+        raise HTTPException(status_code=404, detail="그런 자료가 없습니다.")
+
+    found = staging_service.listing(path)
+
+    return {"removed": asset_id, "counts": found["counts"],
+            "total": found["total"]}
+
+
+@router.post("/api/projects/{project_id}/staging/apply")
+def staging_apply(project_id: str, kind: str = Form(None)):
+    """
+    담아 둔 자료를 scene 에 연결한다.
+
+    kind 를 주지 않으면 담긴 종류를 전부 연결한다. 비어 있는 종류는
+    건너뛴다 - 없는 것을 놓으라고 provider 를 부르면 그쪽이 던진다.
+
+    원본은 지우지 않는다. provider 가 복사만 하므로(image_import.
+    _place: "원본은 손대지 않는다") 사람이 다시 연결할 수 있다.
+    """
+
+    path = _project_path(project_id)
+
+    kinds = [kind] if kind else list(staging_service.KINDS)
+
+    for one in kinds:
+        if one not in staging_service.KINDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"받을 수 없는 종류입니다: {one!r}")
+
+    ready = {one: staging_service.paths_for(path, one) for one in kinds}
+
+    if not any(ready.values()):
+        raise HTTPException(status_code=400,
+                            detail="연결할 자료가 없습니다.")
+
+    scenes = _staging_scenes(path)
+
+    # studio 라우터의 등록부를 그대로 쓴다. 두 벌을 만들지 않는다.
+    from app.production.stage_request import StageRequest
+
+    applied = {}
+
+    for one, given in ready.items():
+        if not given:
+            continue
+
+        provider = _registry().get(one, staging_service.provider_name(one))
+
+        try:
+            result = provider.accept_manual(
+                given, StageRequest(project_path=path, scenes=scenes),
+            )
+        except ValueError as exc:
+            # ImageImportError · VoiceImportError 가 전부 ValueError 다.
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        applied[one] = {
+            "count": len(given),
+            "scene_count": result.get("scene_count"),
+            "warnings": result.get("warnings", []),
+        }
+
+    return {"applied": applied, "scene_count": len(scenes)}

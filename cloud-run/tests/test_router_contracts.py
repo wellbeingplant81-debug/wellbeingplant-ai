@@ -139,6 +139,20 @@ ENDPOINTS = [
     # Sprint112 - 음성 업로드.
     ("POST", "/studio/api/production/voice", None, []),
 
+    # Sprint222 - 대본보다 먼저 온 자료. 받는 것은 multipart 라 아래
+    # MULTIPART_ENDPOINTS 가 실제 호출을 맡고, 여기서는 등록만 덮는다.
+    ("POST", "/studio/api/projects/{project_id}/staging", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/staging"),
+    ("GET", "/studio/api/projects/{project_id}/staging", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/staging"),
+    ("DELETE", "/studio/api/projects/{project_id}/staging/{asset_id}", None,
+     ["app.services.staging.remove", "app.services.staging.listing"],
+     f"/studio/api/projects/{PROJECT_ID}/staging/어떤자산",
+     {"app.services.staging.remove": True,
+      "app.services.staging.listing": {"assets": [], "counts": {}, "total": 0}}),
+    ("POST", "/studio/api/projects/{project_id}/staging/apply", None, [],
+     f"/studio/api/projects/{PROJECT_ID}/staging/apply"),
+
     # Sprint121 - 승인 기반 제작. 한 단계씩 만들고 사람이 승인한다.
     # 엔진을 부르는 것들은 studio_review 쪽을 패치해 실제 호출을 막는다.
     ("POST", "/studio/api/review", {"topic": "주제"},
@@ -486,6 +500,17 @@ class TestEveryEndpointIsCovered(RouterContractTestCase):
 MULTIPART_ENDPOINTS = {
     ("POST", "/studio/api/production/images"),
     ("POST", "/studio/api/production/voice"),
+    # Sprint222 - 자료를 받는 자리. 실제 호출은 tests/test_staging.py 가 한다.
+    ("POST", "/studio/api/projects/{project_id}/staging"),
+}
+
+
+# Sprint222 - 200을 받으려면 프로젝트에 대본·scene·자료가 실제로 있어야
+# 하는 자리. 그 셋을 흉내 내면 계약이 아니라 흉내를 재게 되므로 이
+# 루프에서는 부르지 않는다 - 등록 여부는 위 표가 덮고, 실제 호출은
+# tests/test_staging.py 가 대본을 놓고 자료를 넣어 끝까지 한다.
+NEEDS_PROJECT_STATE_ENDPOINTS = {
+    ("POST", "/studio/api/projects/{project_id}/staging/apply"),
 }
 
 
@@ -498,6 +523,9 @@ class TestValidRequestsNeverRaiseTypeError(RouterContractTestCase):
             method, path, payload, services = entry[:4]
 
             if (method, path) in MULTIPART_ENDPOINTS:
+                continue
+
+            if (method, path) in NEEDS_PROJECT_STATE_ENDPOINTS:
                 continue
 
             # 경로 파라미터가 있는 엔드포인트는 구체 경로로 호출한다.
