@@ -204,7 +204,8 @@ def build_video(project_path: str):
         # 소리 없음) 아래 겹침 계산은 종류를 몰라도 된다 - 그 계산은
         # 이번에 한 줄도 바뀌지 않았다.
         clip = (
-            build_footage_clip(asset_path, clip_duration)
+            build_footage_clip(asset_path, clip_duration,
+                               scene_number=scenes[index]["scene"])
             if is_footage(asset_path)
             else build_kenburns_clip(asset_path, clip_duration)
         )

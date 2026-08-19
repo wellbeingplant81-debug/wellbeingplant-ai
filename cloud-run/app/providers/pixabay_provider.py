@@ -105,6 +105,13 @@ def search_videos(
             "download_url": best_variant.get("url"),
             "width": best_variant.get("width"),
             "height": best_variant.get("height"),
+            # Sprint227 - 응답에 이미 있던 값이다. 버리고 있었다.
+            #
+            # 이것이 없으면 이 영상이 그 scene을 채울 수 있는지 알 방법이
+            # 없고(asset_relevance.motion_score), 그래서 Pixabay 영상은
+            # 길이가 무엇이든 늘 같은 점수를 받았다. 새 API를 부르지
+            # 않는다 - 같은 응답에서 한 칸 더 읽을 뿐이다.
+            "duration": hit.get("duration"),
             "query": query,
         })
 

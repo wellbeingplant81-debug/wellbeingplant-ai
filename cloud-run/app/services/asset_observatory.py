@@ -79,6 +79,9 @@ def _entry(scene_number: int) -> dict:
         "selection_reason": None,
         "final_provider": None,
         "final_asset": None,
+        # Sprint227 - 고른 영상이 이 scene을 실제로 어떻게 채웠는가.
+        # 영상이 아니었던 scene에는 끝까지 None으로 남는다.
+        "footage": None,
     })
 
 
@@ -208,7 +211,9 @@ def record_ranking(scene_number: int, scene: dict, candidates: list,
             "composition": round(
                 asset_relevance.composition_score(candidate), 4,
             ),
-            "motion": round(asset_relevance.motion_score(candidate), 4),
+            "motion": round(
+                asset_relevance.motion_score(candidate, scene), 4,
+            ),
             "ranking_score": (
                 round(scores[index], 4)
                 if scores and index < len(scores) else None
@@ -229,6 +234,40 @@ def record_ranking(scene_number: int, scene: dict, candidates: list,
         entry["scene_terms"] = terms
         entry["planned"] = plan
         entry["selection_reason"] = reason
+
+
+def record_footage(scene_number: int, mode: str,
+                   source_seconds: float, scene_seconds: float) -> None:
+    """
+    Sprint227 - 고른 영상이 이 scene을 실제로 어떻게 채웠는가.
+
+    무엇을 알고 싶은가
+    ------------------
+    Sprint223·224가 스톡 영상과 내 자료 영상을 재생시켰다. 그런데 고른
+    영상이 scene보다 많이 짧으면 footage.plan이 마지막 프레임을 붙잡고
+    (hold), 그 scene은 사실상 예전의 정지 사진으로 되돌아간다.
+
+    그 일이 얼마나 자주 일어나는지 지금까지 아무 데도 남지 않았다.
+    남지 않으면 "고르는 규칙을 고쳐야 하는가"를 판단할 근거가 없다.
+
+        trim   받아 온 것이 더 길어 앞에서 잘라 썼다
+        loop   짧아서 되풀이했다
+        hold   너무 짧아 마지막 프레임을 붙잡았다  <- 이것이 알고 싶다
+
+    판정하지 않는다. 무엇이 있었는지만 적는다 - 이 파일의 다른 기록과
+    같은 성격이다.
+    """
+
+    with _lock:
+        if not _active:
+            return
+
+        entry = _entry(scene_number)
+        entry["footage"] = {
+            "mode": mode,
+            "source_seconds": round(float(source_seconds), 3),
+            "scene_seconds": round(float(scene_seconds), 3),
+        }
 
 
 def record_outcome(scene_number: int, provider: str, asset_path: str) -> None:

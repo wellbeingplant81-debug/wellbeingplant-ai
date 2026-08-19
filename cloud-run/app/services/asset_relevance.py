@@ -36,7 +36,14 @@ DUPLICATE_PENALTY = 0.50
 
 # Shorts의 한 scene은 몇 초짜리다. 이 범위를 벗어난 영상은 쓸 구간이
 # 없거나(너무 짧음) 대부분을 버린다(너무 김).
+#
+# Sprint227 - 이 창은 이제 **이 scene이 몇 초인지 모를 때만** 쓴다.
+# 아래 motion_score를 볼 것.
 USABLE_DURATION_SECONDS = (3, 30)
+
+# 되풀이해야 겨우 덮는 영상. 덮기는 덮으므로 0은 아니고, 한 번에 덮는
+# 것과 같지도 않다.
+MOTION_LOOP_BONUS = MOTION_BONUS * 0.5
 
 PERSON_WORDS = {
     "man", "men", "woman", "women", "person", "people", "boy", "girl",
@@ -133,8 +140,62 @@ def composition_score(candidate: dict) -> float:
     return PORTRAIT_BONUS if height > width else 0.0
 
 
-def motion_score(candidate: dict) -> float:
-    """영상 후보의 길이가 쓸 만한가. 사진은 해당 없음."""
+def needed_seconds(scene: dict):
+    """
+    이 scene을 채우려면 몇 초가 필요한가. 모르면 None.
+
+    Sprint227 - 고를 때는 아직 소리가 없다
+    --------------------------------------
+    scene의 진짜 길이는 나레이션 오디오가 정한다(scene_timeline). 그런데
+    자산을 고르는 것은 step02이고 소리는 step03에서 나온다 - 고르는
+    시점에는 잴 것이 없다.
+
+    그래서 대본으로 미리 센다. duration_estimator가 TTS를 부르지 않고
+    글자 수와 문장 사이 쉼으로 예상 길이를 내는 그 함수이고, Duration
+    Gate가 이미 그 값으로 대본을 되돌린다 - 새 기준을 만들지 않는다.
+
+    나레이션이 없으면 None이다. 지어내지 않는다.
+    """
+
+    if not scene:
+        return None
+
+    narration = (scene.get("narration") or "").strip()
+
+    if not narration:
+        return None
+
+    from app.services.duration_estimator import estimate_duration
+
+    seconds = estimate_duration(narration)
+
+    return seconds if seconds > 0 else None
+
+
+def motion_score(candidate: dict, scene: dict = None) -> float:
+    """
+    이 영상이 이 scene을 채울 수 있는가. 사진은 해당 없음.
+
+    Sprint227 - 길수록 좋은 것이 아니다
+    -----------------------------------
+    6초짜리와 20초짜리가 5초 scene을 채우는 데는 아무 차이가 없다 -
+    둘 다 앞에서 잘라 쓰고 남는 것은 버린다. 그래서 "덮는다"에서 점수가
+    멈춘다. 길이 자체에 점수를 주면 쓰지도 않을 15초를 이유로 더 맞는
+    영상을 밀어낸다.
+
+    판정을 여기서 새로 짜지 않는다
+    ------------------------------
+    그 영상이 실제로 어떻게 쓰일지는 footage.plan이 정한다(Sprint223).
+    같은 함수에게 묻는다 - 여기서 따로 셈하면 점수와 실제 결과가 어느
+    날 서로 다른 말을 한다.
+
+        trim   이 scene을 한 번에 덮는다
+        loop   되풀이해야 덮는다
+        hold   마지막 프레임을 붙잡는다 = 사실상 정지 사진
+
+    scene을 모르면 예전 그대로다 - 넓은 창(USABLE_DURATION_SECONDS)으로
+    본다. 기존 호출부(인자 하나로 부르는 자리)가 그 길이다.
+    """
 
     if "video" not in (candidate.get("source") or ""):
         return 0.0
@@ -144,9 +205,30 @@ def motion_score(candidate: dict) -> float:
     if not duration:
         return 0.0
 
-    low, high = USABLE_DURATION_SECONDS
+    needed = needed_seconds(scene)
 
-    return MOTION_BONUS if low <= duration <= high else 0.0
+    if needed is None:
+        low, high = USABLE_DURATION_SECONDS
+
+        return MOTION_BONUS if low <= duration <= high else 0.0
+
+    # 늦게 들인다 - 이 모듈은 순수 계산만 하는 자리이고, footage는
+    # 영상을 여는 무거운 것을 들고 있다.
+    from app.services import footage
+
+    try:
+        how = footage.plan(duration, needed)
+    except ValueError:
+        # 잴 수 없는 길이. 지어내지 않는다.
+        return 0.0
+
+    if how["mode"] == footage.TRIM:
+        return MOTION_BONUS
+
+    if how["mode"] == footage.LOOP:
+        return MOTION_LOOP_BONUS
+
+    return 0.0
 
 
 def duplicate_penalty(candidate: dict, used) -> float:
@@ -166,7 +248,7 @@ def score(candidate: dict, scene: dict, used=None) -> float:
     return (
         RELEVANCE_WEIGHT * relevance_score(candidate, scene)
         + composition_score(candidate)
-        + motion_score(candidate)
+        + motion_score(candidate, scene)
         - human_penalty(candidate, scene)
         - duplicate_penalty(candidate, used)
     )

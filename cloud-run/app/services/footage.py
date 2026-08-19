@@ -208,11 +208,23 @@ def _stretched(clip, how: dict):
     return clip.with_effects([Freeze(t="end", total_duration=how["take"])])
 
 
-def build_footage_clip(footage_path: str, duration: float):
+def build_footage_clip(footage_path: str, duration: float,
+                       scene_number=None):
     """
     그 영상으로 이 길이짜리 clip 하나. Ken Burns 쪽과 같은 모양이다.
 
     돌려주는 것은 항상 1080x1920 · duration · fps 30 · 소리 없음이다.
+
+    Sprint227 - scene 번호를 주면 어떻게 채웠는지 적어 둔다
+    ------------------------------------------------------
+    받아 온 영상이 scene보다 많이 짧으면 마지막 프레임을 붙잡게 되고
+    (hold), 그 scene은 사실상 예전의 정지 사진으로 되돌아간다. 그 일이
+    얼마나 자주 일어나는지 지금까지 아무 데도 남지 않았다.
+
+    적는 것은 관측이지 판정이 아니다. 못 적어도 렌더는 그대로 간다 -
+    관측이 제품을 멈추게 하면 관찰을 켠 것이 잘못이 된다.
+
+    번호를 주지 않으면 아무것도 적지 않는다. 예전 호출부가 그 길이다.
     """
 
     if not os.path.exists(footage_path):
@@ -221,6 +233,16 @@ def build_footage_clip(footage_path: str, duration: float):
     raw = VideoFileClip(footage_path).without_audio()
 
     how = plan(raw.duration, duration)
+
+    if scene_number is not None:
+        try:
+            from app.services import asset_observatory
+
+            asset_observatory.record_footage(
+                scene_number, how["mode"], raw.duration, duration,
+            )
+        except Exception as exc:
+            print(f"[Footage] 관측 기록 실패(무시): {exc}")
 
     clip = _fitted(_stretched(raw, how), raw.w, raw.h)
 

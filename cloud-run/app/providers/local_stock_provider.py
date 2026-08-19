@@ -177,6 +177,41 @@ def _first_frame(video_path: str, output_file: str) -> None:
         )
 
 
+def seconds_of(video_path: str):
+    """
+    그 영상이 몇 초인가. 못 재면 None.
+
+    Sprint227 - 왜 재는가
+    ---------------------
+    스톡 영상은 검색 응답이 길이를 알려 준다(pexels · pixabay). 내 자료는
+    알려 줄 사람이 없다 - 사람이 제 폴더에 넣어 둔 파일이다. 그래서
+    고른 뒤에 한 번 잰다.
+
+    훑을 때 재지 않는다. 폴더에 영상이 백 개 있으면 백 번 ffprobe 를
+    띄우는 일이고, 그중 실제로 쓰이는 것은 scene 수만큼뿐이다.
+
+    0 을 돌려주지 않는다. 못 잰 것과 "0초"는 다르고, 0 은 아래 판단에서
+    "영상 길이를 알 수 없습니다"로 거절당해야 할 값이다.
+    """
+
+    result = subprocess.run(
+        [media_tools.resolve(media_tools.FFPROBE), "-v", "error",
+         "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", video_path],
+        capture_output=True, encoding="utf-8", errors="replace",
+    )
+
+    if result.returncode != 0:
+        return None
+
+    try:
+        found = float((result.stdout or "").strip())
+    except ValueError:
+        return None
+
+    return found if found > 0 else None
+
+
 def _info(item, matched, words, chosen_by) -> dict:
     """고른 것과 그 까닭. 한 자리에서만 짓는다."""
 
@@ -388,4 +423,9 @@ def place(prompt: str, output_file: str) -> dict:
         "kind": picked["kind"],
         # 사람의 폴더에 있는 파일이다. 읽기만 한다.
         "footage_source": picked["path"] if from_video else None,
+        # Sprint227 - 영상이면 몇 초인가. 그림이면 None 이다.
+        #
+        # 못 재도 None 이고, 그때는 아무도 이 값을 근거로 삼지 않는다 -
+        # 지어낸 숫자로 판단하는 것보다 모른다고 하는 편이 낫다.
+        "duration": seconds_of(picked["path"]) if from_video else None,
     }
