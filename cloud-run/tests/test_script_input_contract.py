@@ -109,7 +109,42 @@ class Base(unittest.TestCase):
         self.project = runtime_paths.ensure(
             os.path.join(project_service.OUTPUT_ROOT, self.project_id))
 
+        # Sprint226 - 회귀는 실제 생성 엔진을 부르지 않는다.
+        #
+        # 결과를 지어내지 않는다. 문을 닫을 뿐이다 - 부르면 거절하고,
+        # 부른 사실은 남긴다. 이 파일의 시험이 보는 것은 "작업이
+        # 시작되는가"이고 그 판정은 요청이 200으로 받아들여지는 순간에
+        # 끝난다. 그 뒤에 엔진이 무엇을 하는지는 여기서 볼 일이 아니다.
+        #
+        # 막지 않으면 이 세 시험이 실제로 Vertex를 부른다 - 회귀가 돈을
+        # 쓰고, 답이 네트워크에 따라 흔들린다.
+        self.engine_calls = []
+
+        def refuse_to_run_the_engine(**asked):
+            self.engine_calls.append(asked)
+
+            raise RuntimeError("회귀에서는 실제 생성 엔진을 부르지 않습니다.")
+
+        closed = patch("app.services.factory_service.generate_short_video",
+                       refuse_to_run_the_engine)
+        closed.start()
+        self.addCleanup(closed.stop)
+
         self.addCleanup(self._forget_jobs)
+
+        # 마지막에 적은 것이 가장 먼저 치워진다. 시작한 작업을 끝까지
+        # 책임지는 일이 그 자리다 - 임시 집을 지우기 전에, 문을 다시
+        # 열기 전에 끝나 있어야 한다.
+        self.addCleanup(self._settle_jobs)
+
+    def _settle_jobs(self):
+        """시작한 작업이 끝난 뒤에 나간다. 안 끝나면 그렇다고 말한다."""
+
+        left = studio_jobs.settle(timeout=30.0)
+
+        self.assertEqual(
+            left, [],
+            f"시험이 끝났는데 아직 도는 작업이 있습니다: {left}")
 
     def _forget_jobs(self):
         studio_jobs._jobs.clear()
@@ -193,12 +228,32 @@ class RefusedTest(Base):
 
 
 class StillWorksTest(Base):
-    """2. 건드리지 않은 것."""
+    """
+    2. 건드리지 않은 것.
+
+    Sprint226 - 보는 것을 한 가지 늘렸다. 200으로 받아들여지는 것만
+    보면, 요청은 통과했는데 엔진까지 가지 않는 날에도 이 시험은
+    통과한다. 실제로 무엇이 들어갔는지까지 본다 - 판정을 낮춘 것이
+    아니라 올린 것이다.
+    """
+
+    def entered(self):
+        """엔진 문 앞까지 실제로 갔는가. 문은 닫혀 있다(Base)."""
+
+        studio_jobs.settle(timeout=30.0)
+
+        return self.engine_calls
 
     def test_a_whole_script_still_starts(self):
         self.place(WHOLE)
 
         self.assertEqual(self.ask(self.project_id).status_code, 200)
+
+    def test_a_whole_script_reaches_the_engine(self):
+        self.place(WHOLE)
+        self.ask(self.project_id)
+
+        self.assertEqual(len(self.entered()), 1)
 
     def test_without_a_project_it_is_unchanged(self):
         """
@@ -207,12 +262,30 @@ class StillWorksTest(Base):
 
         self.assertEqual(self.ask().status_code, 200)
 
+    def test_without_a_project_it_still_reaches_the_engine(self):
+        self.ask()
+
+        self.assertEqual(len(self.entered()), 1)
+
     def test_a_project_without_a_script_is_unchanged(self):
         """
         script.json이 없으면 미리 놓인 대본을 쓰는 길이 아니다.
         """
 
         self.assertEqual(self.ask(self.project_id).status_code, 200)
+
+    def test_the_engine_is_asked_for_what_the_person_typed(self):
+        """
+        무엇을 들고 갔는지까지 본다. 주제가 바뀌어 들어가면 사람은
+        시킨 적 없는 영상을 받는다.
+        """
+
+        self.ask(self.project_id)
+
+        asked = self.entered()[0]
+
+        self.assertEqual(asked["topic"], "무릎 통증 완화 스트레칭")
+        self.assertEqual(asked["channel"], "wellbeing")
 
 
 class TheScreenConnectsItTest(Base):

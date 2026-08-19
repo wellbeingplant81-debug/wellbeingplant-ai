@@ -70,6 +70,17 @@ STARTUP_LOG_MAX_LINES = 400
 # 보내 준 그 파일 하나에 다 들어 있어야 한다.
 TRAIL_DIRNAME = ".dataset"
 
+# Sprint226 - 그만 기다려도 된다는 신호.
+#
+# 브라우저를 여는 일은 서버가 실제로 받을 때까지 기다린다(최대 90초).
+# 그런데 그 사이에 서버 쪽이 먼저 끝나 버리면, 기다림은 뜻을 잃는다 -
+# 창이 닫혔는데 브라우저를 열려고 90초를 더 기다리는 셈이다.
+#
+# 실측으로 걸렸다. 회귀가 끝난 뒤에도 이 스레드 하나가 남아 있었다
+# (Thread-N (later), daemon). 데몬이라 프로그램을 붙잡지는 않지만,
+# "끝났는데 아직 무언가 돌고 있다"는 상태 자체가 결함이다.
+_STOP_WAITING = threading.Event()
+
 
 def _trail_dir() -> str:
     """
@@ -419,7 +430,8 @@ def _serving(port: int) -> bool:
 
 
 def _wait_until_serving(port: int,
-                        timeout: float = None) -> bool:
+                        timeout: float = None,
+                        stop=None) -> bool:
     """
     서버가 실제로 받기 시작할 때까지 기다린다. 받으면 True.
 
@@ -447,6 +459,10 @@ def _wait_until_serving(port: int,
         WAIT_FOR_SERVER_SECONDS if timeout is None else timeout)
 
     while time.time() < deadline:
+        # Sprint226 - 서버 쪽이 먼저 끝났으면 더 기다릴 것이 없다.
+        if stop is not None and stop.is_set():
+            return _serving(port)
+
         if _serving(port):
             return True
 
@@ -486,10 +502,17 @@ def _open_browser(url: str, ready_port: int = None):
     # 지금 정한다. 90초 뒤가 아니라.
     trail = _trail_dir()
 
+    # Sprint226 - 이 기다림은 지금 시작한다.
+    #
+    # "그만 기다려도 된다"는 신호는 **이 켜기의 서버가 끝났다**는 뜻이다.
+    # 지난번 켜기가 남긴 신호가 그대로 있으면 새 기다림이 시작하자마자
+    # 포기한다 - 실측으로 걸렸다(한 프로세스에서 두 번 켜는 시험).
+    _STOP_WAITING.clear()
+
     def later():
         if ready_port is None:
             time.sleep(OPEN_AFTER_SECONDS)
-        elif not _wait_until_serving(ready_port):
+        elif not _wait_until_serving(ready_port, stop=_STOP_WAITING):
             # 죽은 주소를 열지 않는다. 여는 것이 "안 된다"고 잘못
             # 가르치는 것보다, 아직 준비 중이라고 말하는 편이 낫다.
             note("browser: server never came up, not opening", where=trail)
@@ -527,6 +550,10 @@ def _open_browser(url: str, ready_port: int = None):
 
 def _serve(argv) -> int:
     """켜는 일 전부. 죽으면 그대로 던진다 - 받는 자리는 main이다."""
+
+    # Sprint226 - 이번 켜기는 이제부터다. 지난번의 "그만"이 남아
+    # 있으면 브라우저가 열리기도 전에 포기한다.
+    _STOP_WAITING.clear()
 
     note("serve: importing app_info/settings")
 
@@ -601,7 +628,12 @@ def _serve(argv) -> int:
 
     note("serve: engine imported, handing over to uvicorn")
 
-    uvicorn.run(app, host=HOST, port=port, log_level="warning")
+    try:
+        uvicorn.run(app, host=HOST, port=port, log_level="warning")
+    finally:
+        # Sprint226 - 서버가 끝났다. 브라우저를 기다리던 쪽에게
+        # 그만해도 된다고 말한다 - 죽어도 알려 주고 나간다.
+        _STOP_WAITING.set()
 
     note("serve: uvicorn returned (window closed or Ctrl+C)")
 

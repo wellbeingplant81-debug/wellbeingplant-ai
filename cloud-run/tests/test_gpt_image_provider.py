@@ -509,11 +509,26 @@ class TestTheOutputContractIsUnchanged(_Case):
 class TestCurrentIsUntouched(_Case):
 
     def test_gpt_image_never_runs_when_nothing_is_chosen(self):
-        from app.services import asset_integration_service
+        from app.services import asset_integration_service, best_of_n_service
 
         with patch.object(gpt_image_provider, "generate_image") as generate:
-            with patch.object(asset_integration_service, "get_candidates",
-                              return_value=[]):
+            # Sprint226 - 여기서 바깥으로 나가지 않는다.
+            #
+            # 고른 것이 없으면 current 엔진으로 흘러가고, 그 끝은 실제
+            # Imagen 호출이다(실측: 회귀가 Vertex 로 나가는 것을 소켓에서
+            # 잡았다). 아래 try/except 가 그 실패를 삼키고 있어 아무도
+            # 몰랐다 - 회귀가 돈을 쓰고, 답이 네트워크에 따라 흔들린다.
+            #
+            # 보는 것은 "고르지 않았을 때 이 Provider 가 불리지 않는가"
+            # 하나뿐이다. 엔진이 실제로 그림을 만들어야 알 수 있는 것이
+            # 아니므로, 문 앞에서 거절해도 판정은 그대로다.
+            with patch.object(
+                    best_of_n_service, "generate_candidates",
+                    side_effect=RuntimeError(
+                        "회귀에서는 실제 엔진을 부르지 않습니다.")), \
+                    patch.object(asset_integration_service,
+                                 "get_candidates",
+                                 return_value=[]):
                 try:
                     asset_integration_service.integrate_asset(
                         self._scene(1), self.project, "wellbeing")

@@ -17,6 +17,7 @@ import io
 import os
 import re
 import threading
+import time
 import traceback
 import uuid
 
@@ -120,6 +121,114 @@ MAX_CONSOLE_LINES = 400
 
 _lock = threading.Lock()
 _jobs = {}
+
+# Sprint226 - 시작한 것을 붙잡아 둔다.
+#
+# start*()는 스레드를 띄우고 job_id만 돌려준다. 그 스레드가 언제 끝나는지
+# 아무도 몰랐고, 아무도 기다릴 수 없었다.
+#
+# 기록과 스레드는 다른 것이다
+# ---------------------------
+#     _jobs      무엇을 시작했고 지금 어떤 상태인가   기록
+#     _threads   그 일이 실제로 아직 도는가            스레드
+#
+# 기록은 스레드가 죽어도 남고, 스레드는 기록을 지워도 산다. 창을 닫을 때
+# "무엇이 돌고 있는가"를 묻는 자리(host_desktop.running_jobs)는 기록을
+# 보고, 여기 settle()은 실제로 도는 것을 기다린다.
+#
+# 왜 이것이 필요해졌는가 - 실측
+# -----------------------------
+# 시험이 끝난 뒤에도 살아 있던 작업 스레드가 실패를 적으면서 **그때의**
+# 사용자 자리를 다시 구했다.
+#
+#     _run -> beta_render_events.crashed -> beta_telemetry
+#          -> runtime_paths.dataset_root()
+#
+# 그 자리가 다음 시험의 임시 집이면 거기에 .dataset이 생기고, "읽어 보는
+# 것만으로 아무것도 생기면 안 된다"는 무관한 시험이 깨진다. 회귀가
+# 돌릴 때마다 다른 답을 냈다.
+_threads = {}
+
+# 진짜 스레드가 무엇인지 지금 붙잡아 둔다.
+#
+# 아래 _remember 가 threading.Thread 를 이름으로 다시 찾으면, 그것을
+# 대역으로 바꿔 놓은 자리에서는 대역과 견주게 되어 터진다 - 견줄 대상
+# 자체가 더 이상 타입이 아니기 때문이다(실측: TypeError).
+_REAL_THREAD = threading.Thread
+
+
+def _remember(job_id: str, thread) -> None:
+    """이 작업이 어느 스레드에서 도는지 적어 둔다.
+
+    끝난 것은 그때그때 버린다 - 오래 켜 두는 프로그램에서 죽은 스레드
+    객체가 쌓이지 않게 한다.
+
+    진짜 스레드만 적는다
+    --------------------
+    Thread 자체를 대역으로 바꿔 놓고 부르는 자리가 있다(작업 기록만
+    보는 시험들). 그 대역의 is_alive()는 무엇을 물어도 참 같은 것을
+    돌려주므로, 그것을 적어 두면 running()이 영원히 "아직 돈다"고
+    말한다 - 기다릴 것이 없는데 기다리라고 하는 셈이다.
+
+    적지 않는 것이 옳다. 띄운 스레드가 없으면 기다릴 것도 없다.
+    """
+
+    if not isinstance(thread, _REAL_THREAD):
+        return
+
+    with _lock:
+        for done in [name for name, one in _threads.items()
+                     if not one.is_alive()]:
+            _threads.pop(done, None)
+
+        _threads[job_id] = thread
+
+
+def running() -> list:
+    """
+    지금 **실제로** 도는 작업들의 job_id.
+
+    기록(state)이 아니라 스레드를 본다 - 기록이 running인 채로 스레드가
+    죽어 있을 수도 있고(그 자체가 결함이다), 그 둘을 같은 것으로 보면
+    무엇을 기다려야 하는지 알 수 없다.
+    """
+
+    with _lock:
+        found = list(_threads.items())
+
+    return [job_id for job_id, thread in found if thread.is_alive()]
+
+
+def settle(timeout: float = 30.0) -> list:
+    """
+    시작한 작업들이 끝날 때까지 기다린다. 끝내 안 끝난 것들을 돌려준다.
+
+    돌려주는 것이 비어 있지 않다는 것은 "아직 도는 것이 있다"는 뜻이고,
+    그것을 삼키지 않는다 - 부르는 쪽이 그 사실을 보고 판단해야 한다.
+
+    강제로 죽이지 않는다. 파이썬에서 남의 스레드를 끊을 방법이 없고,
+    있다 해도 반쯤 쓰다 만 파일을 남기는 쪽이 더 나쁘다. 이 함수가
+    하는 일은 기다리는 것과, 못 기다렸다고 말하는 것뿐이다.
+    """
+
+    deadline = time.monotonic() + max(0.0, timeout)
+
+    with _lock:
+        found = list(_threads.items())
+
+    for _, thread in found:
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+
+    still = []
+
+    with _lock:
+        for job_id, thread in found:
+            if thread.is_alive():
+                still.append(job_id)
+            else:
+                _threads.pop(job_id, None)
+
+    return still
 
 
 class _Tee(io.TextIOBase):
@@ -239,6 +348,7 @@ def start(topic: str, channel: str = "wellbeing",
         target=_run, args=(job_id, topic, channel, project_id), daemon=True,
     )
     thread.start()
+    _remember(job_id, thread)
 
     return job_id
 
@@ -266,6 +376,7 @@ def start_regeneration(project_id: str, project_path: str,
         daemon=True,
     )
     thread.start()
+    _remember(job_id, thread)
 
     return job_id
 
@@ -410,6 +521,7 @@ def start_oauth(action: str) -> str:
         target=_run_oauth, args=(job_id, run), daemon=True,
     )
     thread.start()
+    _remember(job_id, thread)
 
     return job_id
 
@@ -455,6 +567,7 @@ def start_social(platform: str, action: str) -> str:
         target=_run_social, args=(job_id, run), daemon=True,
     )
     thread.start()
+    _remember(job_id, thread)
 
     return job_id
 
@@ -533,6 +646,7 @@ def start_upload(project_id: str, project_path: str) -> str:
         target=_run_upload, args=(job_id, run), daemon=True,
     )
     thread.start()
+    _remember(job_id, thread)
 
     return job_id
 
@@ -664,7 +778,16 @@ def recent(limit: int = 10) -> list:
 
 
 def reset() -> None:
-    """테스트용. 작업 기록을 비운다."""
+    """
+    테스트용. 작업 기록을 비운다.
+
+    Sprint226 - 기다리지 않는다. 기록을 지우는 것과 스레드가 끝나는
+    것은 다른 일이다 - 도는 것까지 끝내고 나가려면 settle()을 부를 것.
+    """
 
     with _lock:
         _jobs.clear()
+
+        for job_id in [name for name, one in _threads.items()
+                       if not one.is_alive()]:
+            _threads.pop(job_id, None)

@@ -287,6 +287,64 @@ class TheBrowserWaitsForTheServerTest(unittest.TestCase):
         self.assertTrue(any("주소" in line for line in said), said)
 
 
+class TheWaitStopsWhenTheServerIsOverTest(unittest.TestCase):
+    """
+    Sprint226 - 창이 닫혔는데 브라우저를 열려고 90초를 더 기다리지
+    않는다.
+
+    회귀가 끝난 뒤에도 이 스레드 하나가 남아 있었다(Thread-N (later),
+    daemon). 데몬이라 프로그램을 붙잡지는 않지만, "끝났는데 아직
+    무언가 돌고 있다"는 상태 자체가 결함이다.
+    """
+
+    def setUp(self):
+        launcher._STOP_WAITING.clear()
+        self.addCleanup(launcher._STOP_WAITING.clear)
+
+    def _a_port_nobody_serves(self):
+        probe = socket.socket()
+        probe.bind((launcher.HOST, 0))
+        port = probe.getsockname()[1]
+        probe.close()
+
+        return port
+
+    def test_it_gives_up_as_soon_as_the_server_is_over(self):
+        port = self._a_port_nobody_serves()
+
+        launcher._STOP_WAITING.set()
+
+        started = time.time()
+        came = launcher._wait_until_serving(
+            port, timeout=30.0, stop=launcher._STOP_WAITING)
+        took = time.time() - started
+
+        self.assertFalse(came)
+        self.assertLess(took, 5.0, f"{took:.1f}초나 기다렸다")
+
+    def test_without_the_signal_it_waits_as_before(self):
+        """신호를 주지 않으면 예전 그대로다 - 기존 호출부가 그 길이다."""
+
+        port = self._a_port_nobody_serves()
+
+        started = time.time()
+        launcher._wait_until_serving(port, timeout=0.6)
+
+        self.assertGreaterEqual(time.time() - started, 0.5)
+
+    def test_the_browser_thread_does_not_outlive_the_server(self):
+        port = self._a_port_nobody_serves()
+
+        with patch("builtins.print", lambda *a, **k: None):
+            thread = launcher._open_browser("http://x/studio",
+                                            ready_port=port)
+
+            launcher._STOP_WAITING.set()
+            thread.join(timeout=10)
+
+        self.assertFalse(thread.is_alive(), "브라우저 대기가 남아 있다")
+
+
 class TheTrailGoesToTheHouseWeStartedInTest(unittest.TestCase):
     """
     Sprint224 - 늦게 적는 자리 하나가 엉뚱한 집에 적고 있었다.
