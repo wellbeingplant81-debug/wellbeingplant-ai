@@ -2088,11 +2088,19 @@ input[type=radio],input[type=checkbox]{width:auto}
     const box = byId("mediaLibrary");
     if (!box) return;
 
-    const space = window.workspace || null;
+    /* Sprint232 - 이름 그대로 읽는다.
+     *
+     * studio.html 은 `let workspace` · `let aboutInfo` 로 들고 있다.
+     * 최상위 let 은 window 속성이 **되지 않는다**. 그래서 전역 객체로
+     * 돌아가 읽으면 영영 undefined 였고, 배경음악 줄이 늘 "확인 중…"
+     * 이었다 - 서버는 ready 를 주고 있었는데 카드만 못 보았다.
+     *
+     * 여기서 제 사본을 두지 않는다 - 두면 어느 날 두 값이 갈라진다. */
+    const space = workspace || null;
     const counts = (space && space.counts) || {};
     const root = (space && space.root) || "";
 
-    const music = (window.aboutInfo && window.aboutInfo.music) || null;
+    const music = (aboutInfo && aboutInfo.music) || null;
 
     const missing = [];
     if (!counts.images) missing.push("images");
@@ -2167,19 +2175,47 @@ input[type=radio],input[type=checkbox]{width:auto}
       }
     });
 
+    followWorkspace();
+
     refresh();
   }
 
+  /* 화면이 이미 가진 것으로 채운다. 새 API 도, 두 번째 fetch 도
+   * 만들지 않는다 - loadWorkspace 는 GET /studio/api/workspace 를,
+   * wizLoadAbout 은 GET /studio/api/about 을 이미 부른다. */
   async function refresh() {
-    try {
-      window.workspace = await (await fetch("/studio/api/workspace")).json();
-    } catch (e) { /* 못 읽으면 화면이 "없음"이라고 말한다 */ }
+    if (!workspace && typeof loadWorkspace === "function") {
+      try { await loadWorkspace(); } catch (e) { }
+    }
 
-    if (!window.aboutInfo && typeof wizLoadAbout === "function") {
+    if (!aboutInfo && typeof wizLoadAbout === "function") {
       try { await wizLoadAbout(); } catch (e) { }
     }
 
     renderMediaLibrary();
+  }
+
+  /* 자료 폴더가 바뀌면 카드도 따라 바뀐다.
+   *
+   * 새 신호를 만들지 않는다. workspace 에 값이 들어가는 자리는 둘
+   * (loadWorkspace · chooseWorkspace)뿐이고 둘 다 renderWorkspace 로
+   * 끝난다 - 그 하나에 얹으면 어느 쪽으로 바꾸든 따라온다. */
+  function followWorkspace() {
+    if (typeof renderWorkspace !== "function") return;
+    if (renderWorkspace.__mlib) return;
+
+    const drawn = renderWorkspace;
+
+    function alsoDrawTheCard() {
+      const out = drawn.apply(this, arguments);
+
+      try { renderMediaLibrary(); } catch (e) { }
+
+      return out;
+    }
+
+    alsoDrawTheCard.__mlib = true;
+    window.renderWorkspace = alsoDrawTheCard;
   }
 
   function start() {
@@ -7989,8 +8025,39 @@ function openScriptFix(){
 //
 // 무엇을 열지는 글자가 아니라 state로 정한다. 문구는 바뀔 수 있고,
 // 그때 글자를 보고 있던 화면은 조용히 틀린다.
+// Sprint232 - 입력 검사에 걸리면 detail 이 **배열**로 온다.
+//
+// FastAPI 는 422 의 detail 을 [{type, loc, msg, input}, ...] 로 준다.
+// 아래 showScriptRefused 는 typeof 로만 갈랐는데 배열도 "object" 라
+// 객체 가지로 그냥 들어갔고, message 도 reasons 도 없어서 제목만 남은
+// 빈 상자가 떴다 - 사람은 "시작하지 못했습니다" 다섯 글자만 보았다.
+//
+// 서버 문구를 여기서 짓지 않는다는 원칙은 그대로다. 다만 이 배열에는
+// 사람이 읽을 문장이 애초에 없다(msg 는 영문 스키마 말이다). 그래서
+// **어느 값이 문제인지**만 옮겨 적는다.
+function refusalSentence(found){
+  const fields = found.map(item => {
+    const where = ((item && item.loc) || []).filter(
+      part => typeof part === "string" && part !== "body");
+
+    return where.length ? where.join(".") : "요청";
+  });
+
+  const once = fields.filter((name, at) => fields.indexOf(name) === at);
+
+  return "입력값을 확인해주세요: " +
+    once.map(name => `${name} 값이 올바르지 않습니다`).join(" · ");
+}
+
 function showScriptRefused(found){
   const box = $("troubleBox");
+
+  if(Array.isArray(found)){
+    box.innerHTML = `<div class="dh"><b>시작하지 못했습니다</b></div>
+      <p class="muted">${escHtml(refusalSentence(found))}</p>`;
+    box.style.display = "block";
+    return;
+  }
 
   if(!found || typeof found !== "object"){
     box.innerHTML = `<div class="dh"><b>시작하지 못했습니다</b></div>

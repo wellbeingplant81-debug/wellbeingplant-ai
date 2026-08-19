@@ -59,9 +59,18 @@ def _page() -> str:
 
 
 def _markup() -> str:
-    """줄 주석을 걷어낸 화면. 설명이 가드를 속이지 않게 한다."""
+    """
+    주석을 걷어낸 화면. 설명이 가드를 속이지 않게 한다.
 
-    return re.sub(r"(?m)^[ \t]*//.*$", "", _page())
+    Sprint232 - 덩어리 주석(슬래시-별)도 걷는다. 줄 주석만 걷던 때,
+    무엇을 고쳤는지 설명한 주석 안에 잘못된 읽기의 이름을 그대로 적어
+    두었더니 "그 이름을 쓰지 않는다"는 가드가 제 설명에 걸렸다. 같은
+    일을 이 저장소에서 두 번 겪었다.
+    """
+
+    page = re.sub(r"(?m)^[ \t]*//.*$", "", _page())
+
+    return re.sub(r"/\*.*?\*/", "", page, flags=re.S)
 
 
 def _block(page: str, start: str, length: int = 2600) -> str:
@@ -308,6 +317,103 @@ class TheWizardMusicStepStillTellsTheTruthTest(unittest.TestCase):
         block = _block(_markup(), "function wizCardMusic()")
 
         self.assertIn("준비 중", block)
+
+
+class TheCardReadsTheScreensOwnStateTest(unittest.TestCase):
+    """
+    Sprint232 - 카드가 화면의 상태를 그대로 읽는다 (E2E 후속).
+
+    무엇이 있었나
+    -------------
+    카드는 전역 객체를 거쳐 상태를 읽었다. 그런데 studio.html 은
+    `let aboutInfo` · `let workspace` 로 들고 있고, **최상위 let 은
+    전역 객체의 속성이 되지 않는다**. 그 읽기는 영영 undefined 였고,
+    배경음악 줄이 늘 "확인 중…" 이었다 - 서버는 ready 를 주고 있었는데
+    카드만 못 보았다.
+
+    실제 영상 E2E 에서 드러났다. 그 전의 시험은 renderMediaLibrary 안에
+    "aboutInfo" 라는 **글자가 있는지**만 보았고, 그 글자는 잘못된
+    읽기에도 들어 있었다. 이름이 있는지가 아니라 값이 닿는지를 봐야
+    한다.
+    """
+
+    def _card(self) -> str:
+        """
+        카드 묶음만 잘라 온다. 주석이 걷힌 뒤에도 남는 것에 기대야
+        한다 - 설명 문장을 표지로 삼으면 주석을 걷는 순간 사라진다
+        (실제로 그렇게 걸렸다).
+        """
+
+        page = _markup()
+        at = page.index("const SITES = {")
+
+        return page[at:page.index("</script>", at)]
+
+    def test_전역_객체를_거쳐_읽지_않는다(self):
+        card = self._card()
+
+        for wrong in ("window.aboutInfo", "window.workspace"):
+            with self.subTest(reading=wrong):
+                self.assertNotIn(wrong, card,
+                                 "최상위 let 은 전역 객체에 없다")
+
+    def test_제_사본을_만들지_않는다(self):
+        """
+        두 곳이 같은 것을 따로 들고 있으면 어느 날 두 값이 갈라진다.
+        카드는 화면이 이미 들고 있는 것을 읽기만 한다.
+        """
+
+        card = self._card()
+
+        self.assertNotIn("window.workspace =", card)
+        self.assertNotIn("window.aboutInfo =", card)
+
+    def test_이미_있는_loader_를_쓴다(self):
+        """새 API 도, 두 번째 fetch 도 만들지 않는다."""
+
+        card = self._card()
+        at = card.index("async function refresh(")
+        block = card[at:at + 700]
+
+        self.assertIn("loadWorkspace", block)
+        self.assertIn("wizLoadAbout", block)
+
+        self.assertNotIn('fetch("/studio/api/workspace")', block,
+                         "loadWorkspace 가 이미 그것을 부른다")
+
+    def test_자료_폴더가_바뀌면_카드도_따라간다(self):
+        """
+        workspace 에 값이 들어가는 자리는 loadWorkspace 와
+        chooseWorkspace 둘뿐이고, 둘 다 renderWorkspace 로 끝난다.
+        그 하나에 얹는다 - 새 신호를 만들지 않는다.
+        """
+
+        card = self._card()
+
+        self.assertIn("function followWorkspace(", card)
+
+        at = card.index("function followWorkspace(")
+        block = card[at:at + 700]
+
+        self.assertIn("renderWorkspace", block)
+        self.assertIn("renderMediaLibrary()", block)
+
+        # 두 번 얹으면 그릴 때마다 겹쳐 부른다.
+        self.assertIn("__mlib", block, "이미 얹혔는지 보고 한 번만 얹는다")
+
+        self.assertIn("followWorkspace();", card, "mount 에서 불러야 한다")
+
+    def test_화면의_선언은_여전히_let_이다(self):
+        """
+        이 시험이 지키는 것은 "전역 객체로 읽지 마라"이고, 그 이유는
+        선언이 let 이기 때문이다. 언젠가 화면이 전역 객체에 얹도록
+        바뀌면 이유가 사라진다 - 그때 이 시험이 알려 준다.
+        """
+
+        page = _page()
+
+        self.assertIn("let aboutInfo = null;", page)
+        self.assertIn("let workspace = null;", page)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ Sprint65에서 만든 것이고, 요청 하나로 output 밖을 가리키는 것
 
 import os
 
+from typing import Optional
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -46,11 +48,21 @@ class GenerateRequest(BaseModel):
     channel: str = "wellbeing"
     # Sprint107 - 붙여넣기/직접 작성으로 미리 만들어 둔 프로젝트가
     # 있으면 그것으로 만든다. 없으면(기본값) 예전과 똑같이 새로 만든다.
-    project_id: str = None
+    #
+    # Sprint232 - Optional 이어야 한다. pydantic v2 에서 `str = None` 은
+    # "없어도 되는 문자열"이 아니라 "문자열인데 기본값이 None" 이다.
+    # 키를 빼면 지나가지만 null 을 실어 보내면 422 로 막힌다 - 화면은
+    # 늘 후자를 한다.
+    project_id: Optional[str] = None
     # Sprint218 - 어느 갈래로 눌렀는가. 보내지 않으면 예전과 똑같다
     # (직접 고르기 화면의 [영상 생성]이 그렇다) - 기존 동작을 바꾸지
     # 않기 위해 기본값을 None으로 둔다.
-    creation_mode: str = None
+    #
+    # Sprint232 - 그 "보내지 않으면"이 실제로는 닫혀 있었다. 화면은
+    # `creationMode || null` 로 늘 null 을 실어 보내고, pydantic v2 는
+    # 명시된 null 을 str 로 받지 않는다. 아래 검사에 `is None` 가지가
+    # 있는데 요청이 거기까지 닿지 못했다.
+    creation_mode: Optional[str] = None
     # 비용이 발생할 수 있다는 안내를 사람이 확인했는가. 유료 API를
     # 부를 수 있는 갈래에서는 이것이 없으면 시작하지 않는다.
     cost_ack: bool = False
