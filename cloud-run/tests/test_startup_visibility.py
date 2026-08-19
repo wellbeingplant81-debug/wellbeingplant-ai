@@ -287,6 +287,90 @@ class TheBrowserWaitsForTheServerTest(unittest.TestCase):
         self.assertTrue(any("주소" in line for line in said), said)
 
 
+class TheTrailGoesToTheHouseWeStartedInTest(unittest.TestCase):
+    """
+    Sprint224 - 늦게 적는 자리 하나가 엉뚱한 집에 적고 있었다.
+
+    이 스레드는 서버를 최대 90초 기다린 뒤에야 적는다. 그 안에서
+    자리를 다시 구하면 그 사이에 바뀐 자리에 적힌다.
+
+    실제로 회귀에서 걸렸다 - 이 스레드가 90초 뒤 깨어나 **다른
+    시험의 임시 집**에 .dataset을 만들었고, "읽어 보는 것만으로
+    아무것도 생기면 안 된다"는 시험이 그것을 잡았다
+    (test_script_input_contract).
+    """
+
+    def _trail(self, home):
+        return os.path.join(home, launcher.TRAIL_DIRNAME,
+                            launcher.STARTUP_LOG)
+
+    def test_a_late_note_lands_where_it_was_born(self):
+        first = tempfile.TemporaryDirectory()
+        second = tempfile.TemporaryDirectory()
+        self.addCleanup(first.cleanup)
+        self.addCleanup(second.cleanup)
+
+        probe = socket.socket()
+        probe.bind((launcher.HOST, 0))
+        port = probe.getsockname()[1]
+        probe.close()
+
+        with patch.object(launcher, "WAIT_FOR_SERVER_SECONDS", 0.5), \
+                patch("builtins.print", lambda *a, **k: None):
+
+            with patch.dict(os.environ, {"AI_STUDIO_HOME": first.name}):
+                thread = launcher._open_browser("http://x/studio",
+                                                ready_port=port)
+
+            # 스레드가 아직 기다리는 동안 집이 바뀐다.
+            with patch.dict(os.environ, {"AI_STUDIO_HOME": second.name}):
+                thread.join(timeout=10)
+
+        self.assertTrue(os.path.exists(self._trail(first.name)),
+                        "켠 집에 자취가 없다")
+        self.assertFalse(os.path.exists(self._trail(second.name)),
+                         "바뀐 집에 자취가 남았다")
+
+    def test_the_changed_house_gets_nothing_at_all(self):
+        """
+        파일 하나가 아니라 폴더조차 생기면 안 된다 - 걸린 시험이 본
+        것이 "무엇이 생겼는가"였다.
+        """
+
+        first = tempfile.TemporaryDirectory()
+        second = tempfile.TemporaryDirectory()
+        self.addCleanup(first.cleanup)
+        self.addCleanup(second.cleanup)
+
+        probe = socket.socket()
+        probe.bind((launcher.HOST, 0))
+        port = probe.getsockname()[1]
+        probe.close()
+
+        with patch.object(launcher, "WAIT_FOR_SERVER_SECONDS", 0.5), \
+                patch("builtins.print", lambda *a, **k: None):
+
+            with patch.dict(os.environ, {"AI_STUDIO_HOME": first.name}):
+                thread = launcher._open_browser("http://x/studio",
+                                                ready_port=port)
+
+            with patch.dict(os.environ, {"AI_STUDIO_HOME": second.name}):
+                thread.join(timeout=10)
+
+        self.assertEqual(os.listdir(second.name), [])
+
+    def test_the_note_still_writes_where_it_is_told(self):
+        """where를 주지 않으면 예전 그대로 지금 집에 적는다."""
+
+        home = tempfile.TemporaryDirectory()
+        self.addCleanup(home.cleanup)
+
+        with patch.dict(os.environ, {"AI_STUDIO_HOME": home.name}):
+            launcher.note("여기까지 왔다")
+
+        self.assertTrue(os.path.exists(self._trail(home.name)))
+
+
 # ══ 3. 실패했을 때 창이 사라지지 않는다 ═════════════════════════════
 
 class TheWindowDoesNotVanishTest(unittest.TestCase):

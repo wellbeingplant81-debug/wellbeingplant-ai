@@ -113,7 +113,7 @@ def trail_path() -> str:
     return os.path.join(where, STARTUP_LOG) if where else ""
 
 
-def note(step: str) -> None:
+def note(step: str, where: str = None) -> None:
     """
     켜는 도중 어디까지 왔는지 한 줄 적는다. 절대 던지지 않는다.
 
@@ -130,9 +130,18 @@ def note(step: str) -> None:
     기록 자체가 프로그램을 멈추게 하면 안 된다 - 그래서 무슨 일이
     있어도 조용히 넘긴다. 관찰이 제품을 멈추게 하면 관찰을 켠 것이
     잘못이 된다(beta_telemetry가 이미 그렇게 한다).
+
+    Sprint224 - where 를 주면 그 자리에 적는다
+    ------------------------------------------
+    나중에 적는 자리가 하나 있다. 브라우저를 기다리는 스레드는 최대
+    WAIT_FOR_SERVER_SECONDS(90초)를 더 기다린 뒤에야 적는데, 그때
+    자리를 다시 구하면 **그 사이에 바뀐 자리**에 적힌다.
+
+    자취는 이 프로그램이 켜진 그 집에 남아야 한다. 그래서 늦게 적는
+    쪽은 태어날 때 받은 자리를 들고 간다(_open_browser 참고).
     """
 
-    where = _trail_dir()
+    where = where or _trail_dir()
 
     if not where:
         return
@@ -459,7 +468,23 @@ def _open_browser(url: str, ready_port: int = None):
 
     못 열어도 서버는 돈다. 다만 그렇다고 말한다 - 아무 일도 안
     일어나면 사람은 프로그램이 멈춘 줄 안다.
+
+    Sprint224 - 자취를 남길 자리를 태어날 때 정한다
+    ----------------------------------------------
+    이 스레드는 서버를 최대 90초 기다린 뒤에야 적는다. 그 안에서
+    자리를 다시 구하면 **그 사이에 바뀐 자리**에 적힌다.
+
+    실측으로 걸렸다. 자리를 A로 두고 스레드를 띄운 뒤 A를 B로 바꾸자
+    자취가 B에 남았다 - 켠 집이 아니라 지금 집에 적힌 것이다. 회귀에서
+    이것이 다른 시험의 임시 집에 .dataset을 만들어 그 시험을 깨뜨렸다
+    (test_script_input_contract, "읽어 보는 것만으로 아무것도 생기면
+    안 된다").
+
+    자취는 이 프로그램이 켜진 그 집에 남아야 한다.
     """
+
+    # 지금 정한다. 90초 뒤가 아니라.
+    trail = _trail_dir()
 
     def later():
         if ready_port is None:
@@ -467,7 +492,7 @@ def _open_browser(url: str, ready_port: int = None):
         elif not _wait_until_serving(ready_port):
             # 죽은 주소를 열지 않는다. 여는 것이 "안 된다"고 잘못
             # 가르치는 것보다, 아직 준비 중이라고 말하는 편이 낫다.
-            note("browser: server never came up, not opening")
+            note("browser: server never came up, not opening", where=trail)
 
             print()
             print("  [알림] 서버가 아직 응답하지 않아 브라우저를 열지 "
@@ -478,7 +503,7 @@ def _open_browser(url: str, ready_port: int = None):
 
             return
 
-        note("browser: opening")
+        note("browser: opening", where=trail)
 
         try:
             opened = webbrowser.open(url)
@@ -486,7 +511,7 @@ def _open_browser(url: str, ready_port: int = None):
             opened = False
 
         if opened is False:
-            note("browser: could not open")
+            note("browser: could not open", where=trail)
 
             print()
             print("  [알림] 브라우저를 열지 못했습니다. "
