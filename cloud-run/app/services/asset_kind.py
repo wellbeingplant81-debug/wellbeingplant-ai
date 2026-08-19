@@ -42,6 +42,12 @@ AI_IMAGE = "AI 이미지"
 MY_LIBRARY = "내 자료"
 I_PUT_IN = "내가 넣은 그림"
 
+# Sprint224 - 내 자료는 그림일 수도 영상일 수도 있다. 스톡은 이름이
+# 이미 둘을 가르지만(pexels_video / pexels_image) 내 자료는 이름이
+# local_stock 하나뿐이라 asset_type 이 갈라 준다. "내 자료"라고만
+# 적으면 사람은 그 scene 이 움직이는지 알 수 없다.
+MY_LIBRARY_VIDEO = "내 자료 영상"
+
 VIDEO = "video"
 
 # 엔진이 스스로 그린 것. asset_integration_service가 그 이름으로
@@ -74,7 +80,7 @@ def label(provider, asset_type=None) -> str:
         return AI_IMAGE
 
     if name == provider_selection.LOCAL_STOCK:
-        return MY_LIBRARY
+        return MY_LIBRARY_VIDEO if asset_type == VIDEO else MY_LIBRARY
 
     if name == IMAGE_IMPORT:
         return I_PUT_IN

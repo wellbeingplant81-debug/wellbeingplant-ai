@@ -573,6 +573,11 @@ def preparation(project_path: str, scenes: list) -> dict:
             "image": image,
             "voice": voice,
             # 사양의 "영상 선택". 이 scene의 그림이 영상에서 왔는가다.
+            #
+            # Sprint224 - 값은 그대로인데 뜻이 자랐다. 예전에는 "영상에서
+            # 첫 프레임을 골랐다"까지였고, 이제는 그 영상이 최종 영상에서
+            # 그대로 재생된다는 뜻이다(footage.py). 판정은 한 글자도
+            # 바뀌지 않았다 - 화면의 말만 그 사실에 맞췄다.
             "video": from_video,
         })
 

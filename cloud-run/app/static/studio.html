@@ -4570,11 +4570,11 @@ function preparationPanel(){
       <span class="wc"><b>대본</b> ${r.script || 0} / ${preparation.total}</span>
       <span class="wc"><b>이미지</b> ${r.images || 0} / ${preparation.total}</span>
       <span class="wc"><b>음성</b> ${r.voice || 0} / ${preparation.total}</span>
-      <span class="wc"><b>영상에서</b> ${r.videos || 0}</span>
+      <span class="wc"><b>영상 재생</b> ${r.videos || 0}</span>
     </div>
     <table>
       <thead><tr><th>Scene</th><th>대본</th><th>이미지</th>
-        <th>음성</th><th>영상 선택</th></tr></thead>
+        <th>음성</th><th>영상 재생</th></tr></thead>
       <tbody>${preparation.scenes.map(row => `<tr>
         <td>${row.scene}</td>
         <td>${prepMark(row.script)}</td>
@@ -4582,7 +4582,10 @@ function preparationPanel(){
           row.image.ready ? `<button class="sm ghost tiny"
             onclick="openAlternatives(${row.scene})">바꾸기</button>` : ""}</td>
         <td>${prepCell(row.voice)}</td>
-        <td>${row.video ? prepMark(true) : '<span class="src">-</span>'}</td>
+        <td title="${row.video
+          ? '이 scene은 고른 영상이 그대로 재생됩니다'
+          : '정지 그림입니다'}">${
+          row.video ? prepMark(true) : '<span class="src">-</span>'}</td>
       </tr>${confirmedRow(row)}${needRow(row.scene)}${
         alternativesRow(row)}`).join("")}</tbody>
     </table>

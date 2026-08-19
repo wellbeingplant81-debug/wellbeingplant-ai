@@ -1,5 +1,6 @@
 import importlib
 import os
+import shutil
 import subprocess
 
 from app.services import asset_feedback_service
@@ -100,9 +101,18 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
         # Provider다. current의 Best-of-N·품질 게이트를 대신하지 않는다
         # - 그 둘은 후보를 여럿 뽑아 고르는 일이고 여기는 한 장이다.
         # 뒤 단계가 차이를 모르도록 같은 모양으로 돌려준다.
-        importlib.import_module(
-            SINGLE_IMAGE_PROVIDERS[provider]
-        ).generate_image(image_prompt, staging_path)
+        module = importlib.import_module(SINGLE_IMAGE_PROVIDERS[provider])
+
+        # Sprint224 - 무엇을 놓았는지까지 말할 수 있는 Provider가 있다.
+        #
+        # 말할 수 있는 쪽(local_stock)은 place로 부르고, 그렇지 않은
+        # 쪽은 예전 부름말 그대로다 - flux·gpt_image는 한 글자도 바뀌지
+        # 않는다. 셋에게 새 계약을 강요하지 않는 것이 요점이다.
+        placed = (
+            module.place(image_prompt, staging_path)
+            if hasattr(module, "place")
+            else {"path": module.generate_image(image_prompt, staging_path)}
+        )
 
         return {
             "source": provider,
@@ -111,6 +121,9 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
             "candidate_count": 1,
             "selected_candidate": 0,
             "selection": None,
+            # 사람의 폴더에 있는 영상에서 뽑은 그림이면 그 영상의 자리.
+            # 그림을 그대로 가져온 것이면 None이다.
+            "footage_source": placed.get("footage_source"),
         }
 
     candidate_paths = best_of_n_service.generate_candidates(
@@ -274,15 +287,51 @@ def _keep_footage(project_path: str, scene_number, raw_path: str) -> str:
     final_short.mp4)와 한 글자 차이다. 둘을 섞어 읽으면 안 된다.
     """
 
-    where = os.path.join(project_path, FOOTAGE_DIRNAME)
-
-    os.makedirs(where, exist_ok=True)
-
-    footage_path = os.path.join(where, f"scene{scene_number}.mp4")
+    footage_path = _footage_path(project_path, scene_number)
 
     os.replace(raw_path, footage_path)
 
     return footage_path
+
+
+def _copy_footage(project_path: str, scene_number, source_path: str) -> str:
+    """
+    사람의 폴더에 있는 영상을 프로젝트로 복사한다. 복사한 자리를
+    돌려준다.
+
+    Sprint224 - 왜 옮기지 않고 복사하는가
+    -------------------------------------
+    받아 온 영상(_keep_footage)은 우리가 방금 임시 자리에 내려놓은
+    것이라 옮겨도 잃을 것이 없다. 이것은 다르다 - 사람이 제 폴더에
+    모아 둔 자료이고, 다음 영상에도 쓸 것이다. 옮기면 그 폴더에서
+    사라지고, 사람은 우리가 지웠다는 사실조차 모른다.
+
+    image_import._place 가 "원본은 손대지 않는다"고 적어 둔 것과 같은
+    규칙이다.
+
+    확장자를 바꾸지 않는다
+    ----------------------
+    .mkv 를 받아 scene1.mp4 로 적으면 이름이 거짓말을 한다. 고른 것이
+    무엇이었는지는 파일 이름이 마지막으로 남기는 단서다.
+    """
+
+    _, extension = os.path.splitext(source_path)
+
+    footage_path = _footage_path(project_path, scene_number, extension)
+
+    shutil.copyfile(source_path, footage_path)
+
+    return footage_path
+
+
+def _footage_path(project_path: str, scene_number, extension=".mp4") -> str:
+    """영상이 놓일 자리. 폴더가 없으면 만든다."""
+
+    where = os.path.join(project_path, FOOTAGE_DIRNAME)
+
+    os.makedirs(where, exist_ok=True)
+
+    return os.path.join(where, f"scene{scene_number}{extension}")
 
 
 def integrate_asset(
@@ -389,7 +438,16 @@ def integrate_asset(
             )
 
     source = result["source"]
-    asset_type = "video" if "video" in source else "image"
+
+    # 사람의 폴더에 있는 영상에서 나온 그림인가(Sprint224). 그렇다면
+    # local_path 는 이미 뽑아 놓은 **그림**이고, 영상은 저 자리에 따로
+    # 있다 - 받아 온 스톡 영상(local_path 가 곧 영상이다)과 반대다.
+    given_footage = result.get("footage_source")
+
+    # 이름에 video 가 든 것은 스톡에서 받은 영상이다(pexels_video ·
+    # pixabay_video). 내 자료 영상은 이름이 local_stock 이라 그것으로는
+    # 알 수 없고, 위의 사실이 알려 준다.
+    asset_type = "video" if ("video" in source or given_footage) else "image"
 
     # Sprint130 - 프롬프트로 만든 것들. 스톡(검색으로 찾은 것)과
     # 구분한다. current 경로(ai_image)의 판정은 그대로다.
@@ -397,7 +455,8 @@ def integrate_asset(
 
     footage_path = None
 
-    if asset_type == "video":
+    if asset_type == "video" and not given_footage:
+        # 받아 온 영상. local_path 가 그 영상이다.
         try:
             _extract_first_frame(result["local_path"], final_image_path)
 
@@ -412,7 +471,16 @@ def integrate_asset(
             if os.path.exists(result["local_path"]):
                 os.remove(result["local_path"])
     else:
+        # 그림을 놓는 길. 내 자료 영상도 여기로 온다 - Provider 가 이미
+        # 첫 프레임을 뽑아 놓았기 때문이다. 이 줄은 예전 그대로다.
         os.replace(result["local_path"], final_image_path)
+
+        if given_footage:
+            # Sprint224 - 그리고 그 영상을 프로젝트로 **복사**한다.
+            # 옮기면 사람의 폴더에서 사라진다.
+            footage_path = _copy_footage(
+                project_path, scene_number, given_footage,
+            )
 
     confidence = 1.0 if generated_by_ai else 0.8
 

@@ -39,6 +39,20 @@ class TheKindOfAssetTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse(footage.is_footage(name))
 
+    def test_it_covers_everything_the_library_calls_a_video(self):
+        """
+        Sprint224 - 사람이 제 폴더에 넣어 둔 영상이 확장자 그대로
+        복사되어 온다. 이 목록이 그것을 덮지 못하면 덮이지 않은
+        확장자가 사진으로 읽혀 ImageClip 에 넘어가고, 그 순간 렌더가
+        깨진다. 두 목록을 여기서 잠근다.
+        """
+
+        from app.services import local_library
+
+        for extension in local_library.EXTENSIONS[local_library.VIDEOS]:
+            with self.subTest(extension=extension):
+                self.assertTrue(footage.is_footage("내 자료" + extension))
+
 
 class FillingTheScreenTest(unittest.TestCase):
     """

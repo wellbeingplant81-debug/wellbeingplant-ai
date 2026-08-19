@@ -25,6 +25,19 @@ Sprint130이 정한 규칙(고른 Provider가 실패하면 스톡으로 대체�
 -----------
 videos 폴더의 파일이 걸리면 첫 프레임을 뽑아 쓴다 - 스톡 영상을
 받았을 때 엔진이 하던 것과 같다. 새 방식을 만들지 않는다.
+
+Sprint224 - 그리고 그 영상이 최종 영상에서 실제로 재생된다 (Epic 65,
+Phase 2). 첫 프레임은 예전 그대로 뽑고, **무엇에서 뽑았는지**를 함께
+말한다(place). 그 뒤의 일은 다리(asset_integration_service)가 하고,
+재생은 Sprint223이 만든 footage.py가 그대로 한다 - 여기에 영상을
+다루는 새 코드는 한 줄도 늘지 않는다.
+
+    Sprint223 이전   스톡도 내 자료도 첫 프레임 한 장
+    Sprint223        스톡만 움직였다
+    Sprint224        내 자료도 움직인다
+
+사람의 파일은 손대지 않는다. 다리가 프로젝트로 **복사**한다 - 옮기면
+사람의 폴더에서 사라지고, 그 자료는 다음 영상에도 쓸 것이다.
 """
 
 import os
@@ -130,11 +143,29 @@ def _first_frame(video_path: str, output_file: str) -> None:
 
     그래서 UTF-8로 읽되, 읽히지 않는 바이트는 버리지 않고 자리를
     남긴다. 메시지가 조금 지저분해도 사라지는 것보다 낫다.
+
+    Sprint224 - 무엇으로 쓸지 말한다. 이름에 맡기지 않는다
+    -----------------------------------------------------
+    예전에는 -f도 -c:v도 주지 않아서 ffmpeg가 **파일 이름의 확장자로**
+    형식을 정했다. 그런데 다리(asset_integration_service)는 놓을 자리를
+    images/scene{N}.raw로 준다 - 확장자를 모르는 이름이다.
+
+        Error opening output file .../scene1.raw
+        Error opening output files: Invalid argument
+
+    그래서 파이프라인을 거쳐 내 자료 **영상**이 걸리면 언제나 여기서
+    죽었고, 화면에는 "영상에서 첫 프레임을 꺼내지 못했습니다"만 떴다.
+    등록소 경로(generated_image)는 scene{N}.png로 주기 때문에 그쪽만
+    동작했다 - 같은 기능이 부르는 자리에 따라 되고 안 되던 것이다.
+
+    이름이 무엇이든 PNG로 쓴다. 놓인 파일은 곧 scene{N}.png가 된다.
+    -q:v는 함께 뺐다 - mjpeg의 손잡이라 PNG에서는 아무 뜻이 없다.
     """
 
     result = subprocess.run(
         [media_tools.resolve(media_tools.FFMPEG),
-         "-y", "-i", video_path, "-frames:v", "1", "-q:v", "2",
+         "-y", "-i", video_path, "-frames:v", "1",
+         "-f", "image2", "-c:v", "png",
          output_file],
         capture_output=True, encoding="utf-8", errors="replace",
     )
@@ -288,6 +319,36 @@ def generate_image(prompt: str, output_file: str) -> str:
 
     다리(asset_integration_service)가 부르는 이름이 generate_image라
     이름을 맞춘다. 하는 일은 "고르기"이고, 그 사실은 이 설명이 든다.
+
+    Sprint224 - 하는 일은 place()로 옮겼고 이 함수는 그것을 부른다.
+    돌려주는 것도, 던지는 것도, 놓이는 파일도 예전과 같다 - 이 이름으로
+    부르는 자리가 아직 있고(generated_image의 등록표), 그 자리는 한
+    글자도 바뀌지 않아야 한다.
+    """
+
+    return place(prompt, output_file)["path"]
+
+
+def place(prompt: str, output_file: str) -> dict:
+    """
+    고른 파일을 output_file에 놓고, **무엇을 놓았는지** 말한다.
+
+    Sprint224 - 왜 말이 필요해졌는가
+    --------------------------------
+    영상이 걸리면 첫 프레임을 뽑아 놓는다. 놓인 것은 그림 한 장이고,
+    다리는 그 그림만 받으므로 "이것이 영상에서 나왔다"는 사실이 그
+    자리에서 사라졌다. 그래서 스톡 영상은 재생되는데(Sprint223) 사람이
+    직접 넣은 영상은 여전히 정지 사진이었다.
+
+    돌려주는 것:
+
+        path            놓은 자리(= output_file)
+        kind            images / videos
+        footage_source  영상에서 뽑았으면 그 영상이 어디 있는가.
+                        그림을 복사한 것이면 None
+
+    footage_source가 사람의 폴더를 가리킨다는 것에 주의할 것. 읽기만
+    해야 한다 - 옮기거나 지우면 사람의 자료가 사라진다.
     """
 
     project_path = os.path.dirname(os.path.dirname(output_file))
@@ -312,7 +373,9 @@ def generate_image(prompt: str, output_file: str) -> str:
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    if picked["kind"] == local_library.VIDEOS:
+    from_video = picked["kind"] == local_library.VIDEOS
+
+    if from_video:
         _first_frame(picked["path"], output_file)
     else:
         shutil.copyfile(picked["path"], output_file)
@@ -320,4 +383,9 @@ def generate_image(prompt: str, output_file: str) -> str:
     print(f"STEP02 LOCAL STOCK - {picked['name']} "
           f"({picked['kind']}) · 낱말 {', '.join(picked['tags'][:4])}")
 
-    return output_file
+    return {
+        "path": output_file,
+        "kind": picked["kind"],
+        # 사람의 폴더에 있는 파일이다. 읽기만 한다.
+        "footage_source": picked["path"] if from_video else None,
+    }

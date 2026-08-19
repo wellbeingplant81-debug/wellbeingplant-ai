@@ -67,6 +67,17 @@ class TheNameWeShowTest(unittest.TestCase):
         self.assertEqual(
             asset_kind.label("local_stock", "image"), "내 자료")
 
+    def test_my_own_video_says_it_is_a_video(self):
+        """
+        Sprint224 - 내 자료도 이제 재생된다. "내 자료"라고만 적으면
+        사람은 그 scene이 움직이는지 알 수 없다 - 스톡과 달리 이름이
+        local_stock 하나뿐이라 asset_type이 갈라 준다.
+        """
+
+        self.assertEqual(
+            asset_kind.label("local_stock", "video"), "내 자료 영상")
+        self.assertTrue(asset_kind.moves("video"))
+
     def test_what_the_person_put_in_says_so(self):
         self.assertEqual(
             asset_kind.label("image_import", "image"),

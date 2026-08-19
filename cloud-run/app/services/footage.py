@@ -88,7 +88,14 @@ FPS = 30
 # 자산이 영상인지 아는 방법. 확장자로 본다 - 파일을 열어 보는 것은
 # 렌더가 시작되기 전에 scene 마다 한 번씩 프로세스를 더 띄우는 일이고,
 # 이 폴더에 놓는 것은 우리 코드(asset_integration_service)뿐이다.
-FOOTAGE_EXTENSIONS = (".mp4", ".mov", ".m4v", ".webm")
+#
+# Sprint224 - .mkv 와 .avi 가 늘었다. 사람이 제 폴더에 넣어 둔 영상이
+# 그대로 복사되어 오기 때문이다(확장자를 바꾸지 않는다). 이 목록이
+# local_library 가 영상이라고 부르는 것을 덮지 못하면, 덮이지 않은
+# 확장자는 여기서 사진으로 읽혀 ImageClip 에 넘어간다 - 그 순간
+# 렌더가 깨진다. 두 목록이 갈라지지 않는 것은 시험으로 잠근다
+# (test_footage.TheKindOfAssetTest).
+FOOTAGE_EXTENSIONS = (".mp4", ".mov", ".m4v", ".mkv", ".webm", ".avi")
 
 # 이보다 짧으면 되풀이하지 않고 마지막 프레임을 붙잡는다.
 LOOP_MIN_SOURCE_SECONDS = 1.0
