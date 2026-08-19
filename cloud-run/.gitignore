@@ -46,3 +46,16 @@ Thumbs.db
 *.mp4
 *.mp3
 *.wav
+# Sprint222 - 저장소 안에서 켰을 때 프로그램이 만드는 것.
+#
+# 둘 다 runtime_paths.home() 아래에 사는 사용자 자리의 것이다
+# (%APPDATA%\AI영상제작소\). 개발 중에는 home()이 이 폴더로 떨어지므로
+# 여기에 생긴다 - 제품 소스가 아니라 켠 흔적이다.
+#
+#   settings.json  app/settings.py 가 쓰는 사람의 설정(테마 등)
+#   feedback/      사용자가 겪은 일을 적어 두는 자리
+#
+# output/ · logs/ 와 같은 성격이라 그 옆에 둔다. 자리를 앞에 /로
+# 못박는다 - 저장소 어딘가의 다른 settings.json 을 함께 가리지 않는다.
+/settings.json
+/feedback/
