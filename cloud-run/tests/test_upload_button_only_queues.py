@@ -50,10 +50,15 @@ def _markup() -> str:
 class TheButtonSaysOnlyWhatIsTrueTest(unittest.TestCase):
 
     def _block(self) -> str:
+        """
+        단추가 부르는 함수 본문만. 그 아래의 QUEUE_WORDS 까지 삼키면
+        "올렸습니다" 가 여기 있는 것처럼 보인다 - 실제로 걸렸다.
+        """
+
         page = _markup()
         at = page.index("async function queueUpload(")
 
-        return page[at:at + 1400]
+        return page[at:page.index(chr(10) + "}", at)]
 
     def test_연결된_곳에만_단추가_붙는다(self):
         """
@@ -71,16 +76,50 @@ class TheButtonSaysOnlyWhatIsTrueTest(unittest.TestCase):
         self.assertLess(connected, button,
                         "연결 여부를 보기 전에 단추를 내놓는다")
 
-    def test_올렸다고_말하지_않는다(self):
+    def test_누른_자리에서_결과를_단정하지_않는다(self):
+        """
+        Sprint237 - 이제 일꾼이 있으니 언젠가는 정말 올라간다. 그래도
+        **누르는 순간**에는 아직 아니다. 단추가 제 입으로 결과를
+        말하면, 줄이 무슨 상태이든 같은 말이 나온다.
+        """
+
         block = self._block()
 
         for lie in ("올렸습니다", "업로드 완료", "게시했습니다"):
             self.assertNotIn(lie, block, lie)
 
-    def test_줄에_섰다고_말한다(self):
+    def test_상태에_맞는_말을_고른다(self):
         block = self._block()
 
-        self.assertIn("줄에 세웠습니다", block)
+        self.assertIn("QUEUE_WORDS[d.state]", block,
+                      "서버가 준 상태로 말을 고른다")
+
+    def test_올렸다는_말은_SUCCESS_에만_붙어_있다(self):
+        """
+        네 가지 상태 중 그것 하나만 참이다. 다른 데 붙으면 사람은
+        올라간 줄 알고 확인하러 갔다가 없는 것을 본다.
+        """
+
+        page = _markup()
+        at = page.index("const QUEUE_WORDS = {")
+        words = page[at:page.index("};", at)]
+
+        for state in ("PENDING", "UPLOADING", "SUCCESS", "FAILED"):
+            self.assertIn(state, words, state)
+
+        for line in words.splitlines():
+            if "올렸습니다" in line:
+                self.assertIn("SUCCESS", line, line.strip())
+
+    def test_줄에_섰다는_말이_PENDING_에_있다(self):
+        page = _markup()
+        at = page.index("const QUEUE_WORDS = {")
+        words = page[at:page.index("};", at)]
+
+        pending = next(line for line in words.splitlines()
+                       if "PENDING" in line)
+
+        self.assertIn("줄에 세웠습니다", pending)
 
     def test_여기서_올리지_않는다(self):
         """

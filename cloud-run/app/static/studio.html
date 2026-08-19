@@ -1383,6 +1383,10 @@ input[type=radio],input[type=checkbox]{width:auto}
     <div class="panel">
       <h2>SNS 계정</h2>
       <div id="socialBox" class="muted">상태 확인 중…</div>
+      <div class="qh" style="margin-top:10px;font-weight:600;font-size:12.5px"
+           >올릴 차례</div>
+      <div id="publishQueue" class="muted" style="font-size:12px"
+           >확인 중…</div>
       <p class="muted" id="socialAtRest" style="margin:8px 0 0"></p>
 
       <details class="pcmp" style="margin-top:8px">
@@ -2815,11 +2819,68 @@ async function queueUpload(platform){
       return;
     }
 
-    // 상태를 그대로 옮긴다. "올렸습니다"라고 하지 않는다.
-    say(`${platform} 줄에 세웠습니다 (${d.state}). 올리는 것은 아직입니다.`);
+    say(QUEUE_WORDS[d.state] || `${platform}: ${d.state}`);
+
+    await loadPublishQueue();
   } catch(e) {
     say("줄에 세우지 못했습니다: " + e.message);
   }
+}
+
+// Sprint237 - 줄의 상태를 사람 말로.
+//
+// 상태마다 지금 사실인 말이 다르다. "올렸습니다" 는 SUCCESS 하나
+// 뿐이다 - 나머지에 그렇게 적으면 사람은 올라간 줄 알고 확인하러
+// 갔다가 없는 것을 본다.
+const QUEUE_WORDS = {
+  PENDING:   "줄에 세웠습니다. 차례가 되면 올라갑니다.",
+  UPLOADING: "올리는 중입니다.",
+  SUCCESS:   "올렸습니다.",
+  FAILED:    "올리지 못했습니다.",
+};
+
+// 줄에 무엇이 있는가. 올리지 않는다 - 읽어 보여 줄 뿐이다.
+async function loadPublishQueue(){
+  const box = $("publishQueue");
+  if(!box) return;
+
+  let rows = [];
+
+  try {
+    rows = (await (await fetch("/studio/api/publish/queue")).json()).items || [];
+  } catch(e) {
+    box.innerHTML = '<span class="muted">줄을 읽지 못했습니다.</span>';
+    return;
+  }
+
+  if(!rows.length){
+    box.innerHTML = '<span class="muted">올릴 차례를 기다리는 것이 없습니다.</span>';
+    return;
+  }
+
+  box.innerHTML = rows.map(queueRow).join("");
+}
+
+function queueRow(row){
+  const word = QUEUE_WORDS[row.state] || row.state;
+
+  // 실패는 이유가 보여야 한다. 이유 없는 실패는 다시 눌러도 같다.
+  const why = row.state === "FAILED" && row.reason
+    ? `<div class="muted" style="font-size:11px">${escHtml(row.reason)}</div>`
+    : "";
+
+  // 주소는 실제로 있을 때만. TikTok 은 주지 않는다.
+  const link = row.state === "SUCCESS" && row.url
+    ? ` <a href="${escHtml(row.url)}" target="_blank" rel="noopener">열기</a>`
+    : "";
+
+  const tries = row.attempts > 1
+    ? `<span class="muted" style="font-size:11px"> ${row.attempts}번째</span>` : "";
+
+  return `<div class="qrow" data-state="${escHtml(row.state)}">
+    <b>${escHtml(row.platform)}</b>
+    <span class="muted" style="font-size:11.5px">${escHtml(row.project_id)}</span>
+    <span>${escHtml(word)}${tries}</span>${link}${why}</div>`;
 }
 
 function socialRow(a){
@@ -8152,6 +8213,7 @@ renderStages(null);
 loadDataset();
 loadOAuth();
 loadSocial();
+loadPublishQueue();
 loadStages();
 
 // Sprint218 - 테마 견본과 만들기 갈래 카드. 둘 다 서버가 값을 준다.

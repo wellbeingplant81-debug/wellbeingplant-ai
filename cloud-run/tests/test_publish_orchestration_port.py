@@ -432,9 +432,44 @@ class TestNothingElseWasTouched(unittest.TestCase):
                 if "services.publishing." in module:
                     callers.append(path.name)
 
+        # Sprint237 - 형제가 하나 늘었다.
+        #
+        # tiktok_upload_step_service 는 instagram 쪽과 같은 종류다 -
+        # 같은 자리, 같은 판정 순서, 같은 결과 모양. 이 시험의
+        # docstring 이 이미 겪은 일이기도 하다(Sprint100 "아무도 부르지
+        # 않는다" -> Sprint101 instagram 이 붙음).
+        #
+        # 지켜야 할 경계는 그대로다. 늘어난 것은 스텝 서비스 한 벌이고,
+        # Pipeline/Queue/Workflow/UI 는 여전히 모른다 - 아래 두 시험이
+        # 그것을 따로 못 박는다.
         self.assertEqual(
-            sorted(set(callers)), ["instagram_upload_step_service.py"],
+            sorted(set(callers)),
+            ["instagram_upload_step_service.py",
+             "tiktok_upload_step_service.py"],
         )
+
+    def test_the_worker_does_not_know_the_adapter(self):
+        """
+        Sprint237 - 일꾼은 줄에서 집어 스텝 서비스를 부를 뿐이다.
+        여기서 Adapter 를 알기 시작하면 스텝 서비스와 같은 일을 두
+        곳이 하게 된다.
+        """
+
+        from app.services import publish_worker
+
+        for name in self._imports(publish_worker):
+            with self.subTest(imported=name):
+                self.assertNotIn("services.publishing", name)
+
+    def test_the_queue_itself_knows_nothing(self):
+        """줄은 무엇을 올릴 차례인지만 안다 - 올리는 법을 모른다."""
+
+        from app.services import publish_queue
+
+        for name in self._imports(publish_queue):
+            with self.subTest(imported=name):
+                self.assertNotIn("services.publishing", name)
+                self.assertNotIn("runtime", name)
 
     # Sprint235 - 줄 세우는 자리 하나가 생겼다.
     #

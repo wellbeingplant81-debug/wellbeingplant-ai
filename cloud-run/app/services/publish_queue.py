@@ -141,6 +141,35 @@ def next_pending(store_path: str):
     return None
 
 
+def claim(store_path: str):
+    """
+    다음 차례를 집어 그 자리에서 UPLOADING 으로 바꾼다.
+
+    Sprint237 - next_pending 으로 보고 mark_uploading 으로 적으면 그
+    사이가 열려 있다. 두 일꾼이 같은 것을 보고 같은 영상을 두 번
+    올릴 수 있다. 한 번의 읽고-바꾸고-적기로 끝낸다 - 집는 것이 곧
+    잠그는 것이다.
+
+    집을 것이 없으면 None. 파일은 건드리지 않는다.
+    """
+
+    data = _read(store_path)
+
+    for row in data["items"]:
+        if row["state"] != PENDING:
+            continue
+
+        row["state"] = UPLOADING
+        row["started_at"] = _now()
+        row["attempts"] = int(row.get("attempts", 0)) + 1
+
+        _write(store_path, data)
+
+        return row
+
+    return None
+
+
 def add(store_path: str, project_id: str, platform: str, **rest) -> dict:
     """
     줄에 세운다. 아직 끝나지 않은 같은 줄이 있으면 그것을 돌려준다 -
