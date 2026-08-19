@@ -436,12 +436,50 @@ class TestNothingElseWasTouched(unittest.TestCase):
             sorted(set(callers)), ["instagram_upload_step_service.py"],
         )
 
-    def test_no_publish_endpoint_exists(self):
+    # Sprint235 - 줄 세우는 자리 하나가 생겼다.
+    #
+    # 전에는 발행에 HTTP 자리가 아예 없었고, 이 시험은 그 사실을
+    # 못 박고 있었다. 이제 화면에서 [이 영상 올리기] 를 누르면
+    # publish_queue 에 한 줄이 선다 - 그 자리다.
+    #
+    # 지키려던 뜻은 그대로다. 저 자리는 **올리지 않는다** - 무엇을
+    # 올릴 차례인지만 적는다. Adapter 도 Runtime 도 모른다(그 경계는
+    # 위의 test_only_the_instagram_step_uses_the_adapter 가 지킨다).
+    # 그래서 "자리가 없다" 대신 "이 자리들뿐이고, 그것도 올리지
+    # 않는다" 를 재도록 옮긴다.
+    QUEUE_ENDPOINTS = {"/studio/api/publish/queue"}
+
+    def test_the_only_publish_endpoints_are_the_queue(self):
         from app.main import app
 
-        for path in app.openapi()["paths"]:
-            with self.subTest(path=path):
-                self.assertNotIn("publish", path.lower())
+        found = {path for path in app.openapi()["paths"]
+                 if "publish" in path.lower()}
+
+        self.assertEqual(found, self.QUEUE_ENDPOINTS, found)
+
+    def test_the_queue_endpoint_does_not_publish(self):
+        """
+        줄에 세우는 자리가 어느 날 직접 올리기 시작하면, 같은 일을
+        두 곳이 하게 된다 - 이 저장소가 여러 번 겪은 그것이다.
+        """
+
+        import app.routers.studio as studio
+
+        source = open(studio.__file__, encoding="utf-8").read()
+
+        at = source.index('@router.post("/api/publish/queue")')
+        block = source[at:at + 1600]
+
+        # 설명을 걷어낸다. 무엇을 부르지 않는지 적어 둔 주석이 그
+        # 이름을 담게 되고, 그러면 가드가 제 설명에 걸린다 - 이
+        # 저장소에서 이미 세 번 겪었다(실제로 여기서도 걸렸다).
+        doing = "\n".join(
+            line.split("#")[0] for line in block.splitlines()
+            if not line.lstrip().startswith("#"))
+
+        for forbidden in ("runtime", "adapter", "requests.", "upload_media"):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, doing.lower())
 
 
 if __name__ == "__main__":

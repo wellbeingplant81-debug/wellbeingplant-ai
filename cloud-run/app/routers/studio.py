@@ -2724,6 +2724,58 @@ def oauth_action(action: str):
 _SOCIAL_ACTIONS = ("login", "logout", "refresh")
 
 
+class QueueUploadRequest(BaseModel):
+    project_id: str
+    platform: str
+
+
+@router.get("/api/publish/queue")
+def publish_queue_view():
+    """
+    올릴 차례로 서 있는 것들. 여기서 올리지 않는다 - 줄만 보여 준다.
+    """
+
+    from app.services import publish_queue
+
+    return {"items": publish_queue.every(publish_queue.default_store_path())}
+
+
+@router.post("/api/publish/queue")
+def publish_queue_add(request: QueueUploadRequest):
+    """
+    줄에 세운다. 아직 올리지 않는다 - 올리는 일꾼은 다음 걸음이다.
+
+    올릴 것이 없는데 세우지 않는다. 세워 두면 사람은 줄에 있는 것을
+    보고 올라갈 것이라 믿고, 나중에 "영상이 없다"는 말을 듣는다.
+    """
+
+    from app.services import publish_queue
+    from app.services.studio_service import MEDIA_KINDS
+
+    project_path = _project_path(request.project_id)
+
+    # 산출물 이름은 studio_service 가 정한 것을 그대로 쓴다. 여기서
+    # 다시 적지 않는다.
+    #
+    # publishing 계층에도 같은 일을 하는 함수가 있지만 부르지 않는다 -
+    # 그 계층을 쓰는 곳은 instagram_upload_step_service 한 곳뿐이라는
+    # 경계가 있고(test_only_the_instagram_step_uses_the_adapter), 줄과
+    # 화면은 그것을 몰라야 한다. 실제로 그 가드에 걸렸다.
+    video = os.path.join(project_path, *MEDIA_KINDS["video"].split("/"))
+
+    if not os.path.isfile(video):
+        raise HTTPException(
+            status_code=400,
+            detail="아직 영상이 없습니다. 영상을 먼저 만들어 주십시오.")
+
+    try:
+        return publish_queue.add(
+            publish_queue.default_store_path(),
+            project_id=request.project_id, platform=request.platform)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("/api/social/accounts")
 def social_accounts():
     """

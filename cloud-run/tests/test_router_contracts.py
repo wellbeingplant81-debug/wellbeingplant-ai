@@ -111,6 +111,10 @@ ENDPOINTS = [
     # 계약이다). POST는 백그라운드 작업을 띄우므로 진입점만 패치한다 -
     # 패치하지 않으면 실제 브라우저 로그인이 시작된다.
     ("GET", "/studio/api/social/accounts", None, []),
+    # Sprint235 - 올릴 것을 줄 세운다. 세우기만 하고 올리지 않는다.
+    ("GET", "/studio/api/publish/queue", None, []),
+    ("POST", "/studio/api/publish/queue",
+     {"project_id": "p", "platform": "youtube"}, []),
     ("POST", "/studio/api/social/{platform}/{action}", None,
      ["app.routers.studio.studio_jobs.start_social"],
      "/studio/api/social/youtube/login"),
@@ -510,6 +514,8 @@ MULTIPART_ENDPOINTS = {
 # 루프에서는 부르지 않는다 - 등록 여부는 위 표가 덮고, 실제 호출은
 # tests/test_staging.py 가 대본을 놓고 자료를 넣어 끝까지 한다.
 NEEDS_PROJECT_STATE_ENDPOINTS = {
+    # Sprint235 - 영상 파일이 실제로 있어야 줄에 선다.
+    ("POST", "/studio/api/publish/queue"),
     ("POST", "/studio/api/projects/{project_id}/staging/apply"),
 }
 

@@ -2787,6 +2787,41 @@ const SOCIAL_DOT = {
   UNKNOWN:     {mark:"⚪", color:"var(--warn)", word:"알 수 없음"},
 };
 
+// Sprint235 - 올릴 것을 줄에 세운다. **여기서 올리지 않는다.**
+//
+// 올리는 일꾼은 다음 걸음이다. 지금 누르면 "줄에 섰다"까지가 사실이고,
+// 그보다 더 말하면 사람은 올라간 줄 알고 기다린다.
+//
+// 어느 영상인가 - 지금 열어 둔 프로젝트다. 새 고르기 화면을 만들지
+// 않는다(currentProject 는 이미 화면이 들고 있는 것이다).
+async function queueUpload(platform){
+  const box = $("socialAtRest");
+  const say = text => { if(box) box.textContent = text; };
+
+  if(!currentProject){
+    say("먼저 영상을 하나 여십시오.");
+    return;
+  }
+
+  try {
+    const r = await fetch("/studio/api/publish/queue", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({project_id: currentProject, platform: platform})});
+
+    const d = await r.json();
+
+    if(!r.ok){
+      say(typeof d.detail === "string" ? d.detail : "줄에 세우지 못했습니다.");
+      return;
+    }
+
+    // 상태를 그대로 옮긴다. "올렸습니다"라고 하지 않는다.
+    say(`${platform} 줄에 세웠습니다 (${d.state}). 올리는 것은 아직입니다.`);
+  } catch(e) {
+    say("줄에 세우지 못했습니다: " + e.message);
+  }
+}
+
 function socialRow(a){
   const d = SOCIAL_DOT[a.state] || SOCIAL_DOT.UNKNOWN;
 
@@ -2802,7 +2837,9 @@ function socialRow(a){
     ? `<button class="sm ghost" disabled title="${escHtml(a.setup_hint)}"
               >${escHtml(a.label)} 로그인</button>`
     : (a.connected
-        ? `<button class="sm ghost" onclick="socialAction('${a.platform}','logout')"
+        ? `<button class="sm" onclick="queueUpload('${a.platform}')"
+                  >이 영상 올리기</button>
+           <button class="sm ghost" onclick="socialAction('${a.platform}','logout')"
                   >연결 해제</button>
            <button class="sm ghost" onclick="socialAction('${a.platform}','refresh')"
                   >상태 확인</button>`
