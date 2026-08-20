@@ -39,6 +39,77 @@ _NO_ASSET_PUBLISHER_MESSAGE = (
     "공개 호스팅이 구성되지 않았습니다(AssetPublisher 미주입) - "
     "{platform} 업로드는 공개 접근 가능한 URL이 필요합니다."
 )
+# Sprint249-A - 닿을 수 없는 주소는 넘기지 않는다.
+#
+# Meta 는 우리가 준 주소를 **자기 서버에서 cURL** 한다("we cURL media
+# used in publishing attempts"). 그래서 우리 PC 에서만 열리는 주소는
+# 아무 소용이 없다 - 그런데 예전 검사는 비어 있는지만 보았고, 저장소를
+# http://localhost:9000 으로 잘못 잡아 둔 사람은 그 주소가 그대로 나간
+# 뒤 왜 실패했는지 알 수 없었다.
+#
+# 여기서 막는 것은 "우리가 미리 알 수 있는 것" 뿐이다. 진짜로 열리는지는
+# 불러 봐야 알고, 그것은 Meta 가 한다.
+_UNREACHABLE_HOSTS = ("localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]")
+
+_NOT_PUBLIC_MESSAGE = (
+    "공개 URL 이 아닙니다: {url} - {why}. {platform} 은(는) 그 주소를 "
+    "자기 서버에서 직접 열어 보므로, 바깥에서 닿는 https 주소여야 "
+    "합니다. 저장소의 공개 주소 설정을 확인해 주십시오."
+)
+
+
+def _why_unreachable(url: str):
+    """
+    바깥에서 닿을 수 없는 이유. 닿을 수 있어 보이면 None.
+
+    저장소가 어디인지는 보지 않는다 - S3 든 무엇이든 이 계층이 아는
+    것은 주소 하나뿐이다.
+    """
+
+    from urllib.parse import urlparse
+
+    text = str(url or "").strip()
+
+    if not text:
+        return "주소가 비어 있습니다"
+
+    parsed = urlparse(text)
+
+    if parsed.scheme in ("file", ""):
+        return "파일 경로입니다"
+
+    # 윈도우 경로는 C: 가 scheme 으로 읽힌다.
+    if len(parsed.scheme) == 1:
+        return "파일 경로입니다"
+
+    if parsed.scheme != "https":
+        return f"{parsed.scheme} 는 공개 주소가 아닙니다"
+
+    host = (parsed.hostname or "").lower()
+
+    if not host:
+        return "주소에 서버가 없습니다"
+
+    if host in _UNREACHABLE_HOSTS:
+        return "이 PC 안에서만 열리는 주소입니다"
+
+    if _is_private(host):
+        return "집·회사 안에서만 열리는 주소입니다"
+
+    return None
+
+
+def _is_private(host: str) -> bool:
+    """사설망 주소인가. 이름이면 아니다 - 우리가 풀어 볼 일이 아니다."""
+
+    import ipaddress
+
+    try:
+        return ipaddress.ip_address(host).is_private
+    except ValueError:
+        return False
+
+
 _NO_PUBLIC_URL_MESSAGE = (
     "공개 URL이 없습니다 - 구성된 StorageProvider가 로컬 파일만 참조할 "
     "뿐 공개 URL을 만들지 않습니다. {platform} 업로드는 공개 접근 "
@@ -89,6 +160,24 @@ def build_caption(plan) -> str:
 def _record_trace(plan, step: str) -> None:
     status = "failed" if step == "failed" else "success"
     plan.pipeline_trace.append({"step": step, "status": status, "timestamp": time.time()})
+
+
+def _refuse_unreachable(platform: str, url: str):
+    """닿을 수 없으면 거절을 만들고, 닿을 수 있으면 None."""
+
+    why = _why_unreachable(url)
+
+    if why is None:
+        return None
+
+    # 설정을 고치기 전에는 몇 번을 눌러도 같은 자리에서 같은 이유로
+    # 멈춘다 - 재시도 줄에 걸어 두지 않는다.
+    return ConnectorResult(
+        status="Failed", platform=platform, retryable=False,
+        error_category="INVALID_REQUEST",
+        message=_NOT_PUBLIC_MESSAGE.format(
+            url=url, why=why, platform=platform),
+    )
 
 
 def _default_account_id(platform: str) -> str:
@@ -182,6 +271,18 @@ class RuntimeBackedPublishAdapter(PublishPlatform):
                     message=_NO_PUBLIC_URL_MESSAGE.format(platform=self.platform),
                     retryable=False,
                 )
+
+            # Sprint249-A - 있기만 한 것으로는 모자란다. 바깥에서 닿는
+            # 주소여야 한다.
+            #
+            # 이 갈래(requires_public_url) 안에만 둔다. 공개 URL 이
+            # 필요 없는 쪽은 여기 들어오지 않으므로 영향이 없다.
+            refused = _refuse_unreachable(self.platform, asset.public_url)
+
+            if refused is not None:
+                _record_trace(plan, "failed")
+                return refused
+
             source = asset.public_url
             cover_source = self._resolve_cover_via_asset_publisher(plan.output_folder)
         else:

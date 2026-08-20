@@ -149,8 +149,13 @@ class TestInstagramOAuthServiceLogsTheRealAuthorizeUrl(unittest.TestCase):
         with self.assertLogs(_MODULE, level="INFO") as captured:
             service.authenticate(DEFAULT_ACCOUNT_ID)
 
+        # Sprint249-A - 주소를 여기 박아 두지 않는다. 그 값이 공식
+        # 문서와 맞는지는 test_instagram_needs_a_reachable_url 이
+        # 따로 지킨다 - 두 겹이라, 상수만 바꿔서는 통과하지 못한다.
+        from app.providers.upload import instagram_oauth_service
+
         logged = "\n".join(captured.output)
-        self.assertIn("https://api.instagram.com/oauth/authorize?", logged)
+        self.assertIn(instagram_oauth_service.AUTHORIZE_URL + "?", logged)
         self.assertIn("halogen-duly-limeade.ngrok-free.dev%2Fcallback", logged)
 
 
@@ -207,8 +212,11 @@ class TestInstagramOAuthServiceAuthenticate(unittest.TestCase):
 
         _service().authenticate(DEFAULT_ACCOUNT_ID)
 
+        from app.providers.upload import instagram_oauth_service
+
         called_url = mock_open.call_args[0][0]
-        self.assertTrue(called_url.startswith("https://api.instagram.com/oauth/authorize?"))
+        self.assertTrue(called_url.startswith(
+            instagram_oauth_service.AUTHORIZE_URL + "?"))
         self.assertIn("client_id=app-id", called_url)
         self.assertIn("response_type=code", called_url)
         self.assertIn("instagram_business_basic", called_url)

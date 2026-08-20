@@ -56,7 +56,11 @@ def _mask_token(token: str) -> str:
         return "***"
     return f"{token[:8]}...{token[-4:]}"
 
-AUTHORIZE_URL = "https://api.instagram.com/oauth/authorize"
+# Sprint249-A - 사람이 로그인하러 가는 자리는 www 다.
+#
+# 토큰을 바꾸는 자리(아래 SHORT_LIVED_TOKEN_URL)는 api.instagram.com
+# 그대로다 - 둘은 서로 다른 용도이고, 이 자리만 옛 주소를 쓰고 있었다.
+AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
 SHORT_LIVED_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
 LONG_LIVED_EXCHANGE_URL = "https://graph.instagram.com/access_token"
 REFRESH_URL = "https://graph.instagram.com/refresh_access_token"
