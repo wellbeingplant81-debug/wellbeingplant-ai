@@ -104,12 +104,27 @@ class TestGoogleOAuthServiceAuthenticate(unittest.TestCase):
         self.assertEqual(credential.access_token, "fresh-access-token")
         self.assertEqual(credential.refresh_token, "fresh-refresh-token")
 
-    def test_authenticate_requests_readonly_and_upload_scopes(self):
+    def test_authenticate_requests_read_upload_and_playlist_scopes(self):
         """
-        2026-07-21 - 실제 운영 검증에서 youtube.upload Scope 없이는
-        업로드가 항상 insufficientPermissions로 실패함을 확인해 추가
-        했다(google_oauth_service.py 자체 변경 이력 참고). readonly는
-        채널 조회에 계속 쓰이므로 함께 유지된다.
+        세 가지가 각각 다른 일을 한다. 하나라도 빠지면 그 일만 조용히
+        403 이 되고, 나머지는 멀쩡해서 원인을 찾기 어렵다.
+
+            youtube.readonly   채널 조회
+            youtube.upload     영상 올리기
+            youtube            재생목록 만들기·넣기
+
+        2026-07-21 - youtube.upload 가 없으면 업로드가 늘
+        insufficientPermissions 로 실패하는 것을 실제 운영에서 확인해
+        더했다.
+
+        Sprint251 - 같은 일이 재생목록에서 되풀이됐다. Sprint247 의 실제
+        업로드는 성공했는데 재생목록 단계만 403 "insufficient
+        authentication scopes" 로 죽었다. 공식 문서를 보면
+        playlists.insert 와 playlistItems.insert 의 허용 목록에
+        youtube.upload 가 아예 없다 - 그 자리에 필요한 것은 youtube 다.
+
+        force-ssl 이나 youtubepartner 가 아니라 youtube 를 고른 것은
+        셋 중 가장 좁으면서 재생목록 읽기·쓰기에 충분하기 때문이다.
         """
 
         from app.providers.upload.google_oauth_service import GoogleOAuthService
@@ -134,6 +149,7 @@ class TestGoogleOAuthServiceAuthenticate(unittest.TestCase):
             [
                 "https://www.googleapis.com/auth/youtube.readonly",
                 "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube",
             ],
         )
 

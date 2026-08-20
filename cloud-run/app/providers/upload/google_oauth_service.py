@@ -39,9 +39,30 @@ from app.providers.upload.channel_info import ChannelInfo
 from app.providers.upload.oauth_credential import OAuthCredential
 from app.providers.upload.oauth_service import OAuthError, OAuthService
 
+# 세 가지가 각각 다른 일을 한다.
+#
+#     youtube.readonly   채널 조회
+#     youtube.upload     영상 올리기
+#     youtube            재생목록 만들기 · 영상 넣기
+#
+# Sprint251 - 셋째가 없어서 Sprint247 의 실제 업로드가 반쪽으로 끝났다.
+# 영상은 올라갔는데 재생목록 단계만 403 "insufficient authentication
+# scopes" 로 죽었고, 나머지가 멀쩡해서 원인이 잘 보이지 않았다.
+#
+# 공식 문서를 보면 playlists.insert 와 playlistItems.insert 의 허용
+# 목록에 youtube.upload 가 아예 없다 - 그 자리에 필요한 것은 youtube 다.
+# force-ssl 이나 youtubepartner 도 되지만, 셋 중 가장 좁으면서 재생목록
+# 읽기·쓰기에 충분한 것을 고른다.
+#
+# 넓히기만 하고 빼지 않는다. 업로드 경로는 그대로다.
+#
+# 다만 이것을 바꾼다고 이미 받아 둔 토큰이 넓어지지는 않는다 - Google 의
+# refresh token 은 처음 동의된 범위를 그대로 지닌다. 사람이 다시 한 번
+# 동의해야 한다.
 _YOUTUBE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube",
 ]
 _TOKEN_URI = "https://oauth2.googleapis.com/token"
 
