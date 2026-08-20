@@ -2,6 +2,7 @@ import os
 
 from app.providers import elevenlabs_provider
 from app.providers import google_tts_provider
+from app.services import voice_policy
 from app.services.speech_normalizer import normalize_for_speech
 from app.services.voice_quality_engine import optimize_for_tts
 
@@ -33,7 +34,15 @@ def generate_voice(text: str, output_file: str, provider: str = None):
     작업이 겹치면 서로의 설정을 덮어쓴다.
     """
 
-    provider = (provider or os.getenv("TTS_PROVIDER", "google")).lower()
+    # Sprint244 - 고르지 않았다고 가장 비싼 길로 가지 않는다.
+    #
+    # 예전에는 여기가 os.getenv("TTS_PROVIDER", "google") 이었다.
+    # 아무도 화면에서 고르지 않아도 .env 한 줄이 유료를 정했고, 실제로
+    # 그렇게 요금이 나갔다.
+    #
+    # 이 줄이 무엇을 부를지 정하지는 않는다 - 어디까지나 기본값이고,
+    # 유료 쪽은 자기 문 앞에서 다시 한 번 확인한다.
+    provider = (provider or voice_policy.default_provider()).lower()
 
     # Sprint151 - 내 PC 음성. 아래 두 갈래보다 먼저 본다.
     #

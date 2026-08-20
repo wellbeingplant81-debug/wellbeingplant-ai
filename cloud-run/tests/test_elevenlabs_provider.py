@@ -109,6 +109,18 @@ class TestGenerateVoice(unittest.TestCase):
 
     def setUp(self):
         elevenlabs_provider._voice_id_cache.clear()
+
+        # Sprint244 - 이 묶음은 **유료 Provider 자신의 동작**을 잰다.
+        # 고른 voice_id 를 쓰는가, 응답을 정책 오디오 포맷으로 바꾸는가.
+        #
+        # 그 자리에 관문이 생겼다 - 고르지 않은 유료는 부르지 않는다.
+        # 여기서 재려는 것은 관문 뒤의 일이므로 그 전제를 적는다.
+        # 실제 API 는 이 파일이 이미 mock 으로 막아 두었다.
+        from app.services import voice_policy
+
+        gate = patch.object(voice_policy, "require_allowed", lambda *a: None)
+        gate.start()
+        self.addCleanup(gate.stop)
         self._tmp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp_dir.cleanup)
         self.output_file = os.path.join(self._tmp_dir.name, "voice.wav")

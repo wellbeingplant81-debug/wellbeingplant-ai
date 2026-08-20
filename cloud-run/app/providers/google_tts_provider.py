@@ -2,10 +2,23 @@ import os
 
 from google.cloud import texttospeech
 
-from app.services import audio_policy
+from app.services import audio_policy, voice_policy
+
+
+PROVIDER_NAME = "google"
 
 
 def generate_voice(text: str, output_file: str):
+
+    # Sprint244 - 돈이 나가기 직전의 마지막 문.
+    #
+    # 고르지 않은 사람이 여기까지 오고 있었다. .env 의 TTS_PROVIDER
+    # 한 줄이 기본값으로 이 경로를 정했고, 화면에는 그런 선택이
+    # 없었다.
+    #
+    # 관문이 tts_provider 가 아니라 여기 있는 이유는 그 위층을 무료인
+    # 내 PC 음성도 지나기 때문이다. 목이 아니라 문에 세운다.
+    voice_policy.require_allowed(output_file, PROVIDER_NAME)
 
     client = texttospeech.TextToSpeechClient()
 

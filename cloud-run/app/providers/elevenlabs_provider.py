@@ -4,7 +4,7 @@ import tempfile
 
 import requests
 
-from app.services import audio_policy, media_tools
+from app.services import audio_policy, media_tools, voice_policy
 
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 VOICES_URL = "https://api.elevenlabs.io/v1/voices"
@@ -85,7 +85,15 @@ def _resolve_voice_id(api_key: str) -> str:
     return voice_id
 
 
+PROVIDER_NAME = "elevenlabs"
+
+
 def generate_voice(text: str, output_file: str):
+
+    # Sprint244 - 돈이 나가기 직전의 마지막 문. 열쇠를 찾기도 전에
+    # 본다 - 쓰지 않기로 한 것에 대해 "키가 없습니다" 라고 말하면
+    # 사람은 키를 넣으려 한다.
+    voice_policy.require_allowed(output_file, PROVIDER_NAME)
 
     api_key = os.getenv("ELEVENLABS_API_KEY")
 

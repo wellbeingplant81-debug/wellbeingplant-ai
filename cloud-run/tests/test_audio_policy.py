@@ -70,6 +70,19 @@ class TestGoogleTtsRequestsLossless(unittest.TestCase):
     def test_requests_linear16_at_policy_sample_rate(self, mock_tts):
         from app.providers import google_tts_provider
 
+        # Sprint244 - 이 시험은 **유료 Provider 가 실제로 부를 때** 어떤
+        # 요청을 보내는지를 잰다(LINEAR16 · 24kHz). 그 자리에 관문이
+        # 생겼다 - 고르지 않은 유료 음성은 부르지 않는다.
+        #
+        # 재려는 것은 관문 뒤의 일이므로 그 전제만 적는다. 음질 정책
+        # 자체(app/services/audio_policy.py)는 한 글자도 바뀌지 않았고,
+        # 아래 assertion 도 그대로다. 실제 API 는 위 mock 이 막는다.
+        from app.services import voice_policy
+
+        gate = patch.object(voice_policy, "require_allowed", lambda *a: None)
+        gate.start()
+        self.addCleanup(gate.stop)
+
         mock_tts.AudioEncoding.LINEAR16 = "LINEAR16"
 
         client = MagicMock()

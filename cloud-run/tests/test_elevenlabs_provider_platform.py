@@ -236,17 +236,35 @@ class TestTheSelectionIsExplicitNotGlobal(unittest.TestCase):
 
         self.assertIn("provider", signature.parameters)
 
-    def test_the_default_is_still_the_environment(self):
-        """Google 경로는 한 글자도 달라지지 않는다."""
+    def test_the_environment_can_no_longer_choose_a_paid_provider(self):
+        """
+        Sprint244 - 이 자리는 예전에 "기본값은 여전히 환경변수다" 를
+        잠그고 있었다. 그때는 그것이 지켜야 할 것이었다 - Sprint125 가
+        ElevenLabs 를 붙이면서 Google 경로를 건드리지 않았다는 증거였다.
 
-        from app.providers import google_tts_provider, tts_provider
+        그런데 그 기본값이 유료였다. 아무도 고르지 않아도 .env 한 줄이
+        Google 을 불렀고 실제로 요금이 나갔다.
 
-        with patch.dict(os.environ, {}, clear=True):
-            with patch.object(google_tts_provider, "generate_voice",
-                              return_value="ok") as google:
-                tts_provider.generate_voice("문장", "/tmp/x.wav")
+        같은 자리를 계속 지킨다. 지키는 방향만 뒤집는다 - 환경변수는
+        더 이상 유료를 고르지 못한다.
+        """
 
-        google.assert_called_once()
+        from app.providers import (
+            google_tts_provider, local_voice_provider, tts_provider,
+        )
+
+        for value in ({}, {"TTS_PROVIDER": "google"},
+                      {"TTS_PROVIDER": "elevenlabs"}):
+            with self.subTest(env=value or "없음"):
+                with patch.dict(os.environ, value, clear=True):
+                    with patch.object(google_tts_provider, "generate_voice",
+                                      return_value="ok") as google:
+                        with patch.object(local_voice_provider,
+                                          "generate_voice",
+                                          return_value="ok"):
+                            tts_provider.generate_voice("문장", "/tmp/x.wav")
+
+                google.assert_not_called()
 
     def test_asking_for_google_explicitly_works_too(self):
         from app.providers import google_tts_provider, tts_provider
