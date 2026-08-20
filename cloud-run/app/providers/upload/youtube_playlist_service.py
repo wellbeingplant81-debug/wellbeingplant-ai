@@ -28,18 +28,45 @@ class YouTubePlaylistService:
         return build("youtube", "v3", credentials=google_credentials)
 
     def find_playlist_by_title(self, title: str):
+        """
+        그 이름의 재생목록을 찾는다. 없으면 None.
+
+        뒤 장까지 본다. 한 번에 오는 것은 최대 50 개라, 첫 장만 보면
+        51 번째의 이름이 "없다" 로 읽힌다 - 그리고 그 답을 받은
+        get_or_create_playlist 는 같은 이름을 하나 더 만든다. 찾지
+        못해서 만드는 것이지 없어서 만드는 것이 아니다.
+
+        Sprint252 가 playlistItems 쪽에 놓은 걸음과 같은 모양이다.
+        한쪽만 고치면 다른 쪽이 언젠가 같은 결함으로 돌아간다.
+
+        찾으면 거기서 멈춘다 - 뒤에 장이 남아 있어도 더 묻지 않는다.
+        같은 이름이 여럿이면 먼저 만난 것이고, 장이 늘어도 그 차례는
+        그대로다.
+        """
+
         youtube = self._client()
-        response = (
-            youtube.playlists()
-            .list(part="snippet", mine=True, maxResults=_MAX_LOOKUP_RESULTS)
-            .execute()
-        )
 
-        for item in response.get("items") or []:
-            if item.get("snippet", {}).get("title") == title:
-                return item["id"]
+        token = None
 
-        return None
+        while True:
+            asked = {"part": "snippet", "mine": True,
+                     "maxResults": _MAX_LOOKUP_RESULTS}
+
+            if token:
+                asked["pageToken"] = token
+
+            response = youtube.playlists().list(**asked).execute()
+
+            for item in response.get("items") or []:
+                if item.get("snippet", {}).get("title") == title:
+                    return item["id"]
+
+            token = response.get("nextPageToken")
+
+            # 글자일 때만 다음 장이 있다. 이 자리를 느슨하게 두면 시험의
+            # 가짜 객체가 무엇이든 돌려줄 때 여기서 영원히 돈다.
+            if not isinstance(token, str) or not token:
+                return None
 
     def create_playlist(
         self, title: str, description: str = "", privacy_status: str = "private"
