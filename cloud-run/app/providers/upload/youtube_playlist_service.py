@@ -59,7 +59,62 @@ class YouTubePlaylistService:
 
         return response["id"]
 
-    def add_video_to_playlist(self, playlist_id: str, video_id: str) -> None:
+    def already_in_playlist(self, playlist_id: str, video_id: str) -> bool:
+        """
+        그 재생목록에 그 영상이 이미 있는가.
+
+        둘이 동시에 맞을 때만 참이다 - 다른 재생목록에 같은 영상이
+        드는 것은 정상이고, 중복이 아니다.
+
+        뒤 페이지까지 본다. 한 번에 오는 것은 최대 50 개라, 첫 장만
+        보고 "없다" 고 하면 큰 재생목록에서는 매번 중복이 쌓인다.
+
+        읽지 못하면 그대로 올려 보낸다. 모르는 채로 "없다" 고 하면
+        그것이 곧 중복이 된다.
+        """
+
+        youtube = self._client()
+
+        token = None
+
+        while True:
+            asked = {"part": "snippet", "playlistId": playlist_id,
+                     "maxResults": _MAX_LOOKUP_RESULTS}
+
+            if token:
+                asked["pageToken"] = token
+
+            response = youtube.playlistItems().list(**asked).execute()
+
+            for item in response.get("items") or []:
+                resource = item.get("snippet", {}).get("resourceId", {})
+
+                if resource.get("videoId") == video_id:
+                    return True
+
+            token = response.get("nextPageToken")
+
+            # 글자일 때만 다음 장이 있다. 이 자리를 느슨하게 두면 시험의
+            # 가짜 객체가 무엇이든 돌려줄 때 여기서 영원히 돈다.
+            if not isinstance(token, str) or not token:
+                return False
+
+    def add_video_to_playlist(self, playlist_id: str, video_id: str) -> bool:
+        """
+        그 영상을 재생목록에 넣는다. 이미 있으면 넣지 않는다.
+
+        올린 뒤의 이 걸음은 다시 눌릴 수 있다(재시도 · 줄 다시
+        세우기). YouTube 는 같은 영상이 한 재생목록에 여러 번 드는
+        것을 막지 않으므로, 확인하지 않으면 누를 때마다 항목이 하나씩
+        더 생긴다.
+
+        돌려주는 것은 "넣었는가" 다. 예전에는 None 이었고 부르는 쪽은
+        예외만 보았다 - 그 계약은 그대로다(예외가 없으면 성공).
+        """
+
+        if self.already_in_playlist(playlist_id, video_id):
+            return False
+
         youtube = self._client()
         youtube.playlistItems().insert(
             part="snippet",
@@ -70,6 +125,8 @@ class YouTubePlaylistService:
                 },
             },
         ).execute()
+
+        return True
 
     def get_or_create_playlist(self, title: str) -> str:
         existing = self.find_playlist_by_title(title)
