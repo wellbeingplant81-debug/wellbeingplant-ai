@@ -33,6 +33,7 @@ imagen-4.0을 쓰는 것은 맞지만, 그것은 파이프라인(Best-of-N·품�
 """
 
 import ast
+from app.services import media_policy
 import json
 import os
 import sys
@@ -59,6 +60,15 @@ class _Case(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.project = self._tmp.name
         os.makedirs(os.path.join(self.project, "images"))
+
+        # Sprint241 - 이 시험은 **유료 AI Provider 가 도는 것**을 잰다.
+        #
+        # 제품의 기본값은 AI 이미지 생성 금지다(결제 잠금). 그러니 AI
+        # 경로를 재려면 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는
+        # 세상이 유일해서 적을 필요가 없었을 뿐이다.
+        #
+        # 약하게 만드는 것이 아니라 숨어 있던 전제를 드러내는 것이다.
+        media_policy.choose(self.project, media_policy.MODE_MINE_STOCK_AI)
 
     def _scene(self, number=1, visual_type="ai"):
         return {"scene": number, "narration": f"{number}번",
@@ -160,7 +170,9 @@ class TestTheNameReachesTheGenerator(_Case):
 
         def fake_ai(image_prompt, staging_path, channel, is_hook_scene,
                     image_style=None, candidate_count=1, scene=None,
-                    provider=None):
+                    provider=None, project_path=None):
+  # Sprint241 - 진짜 _ai_result 가 project_path 를 받는다.
+                    # 대역도 같은 것을 받아야 그 자리에 설 수 있다.
             seen.append(provider)
             return {"source": "ai_image", "local_path": staging_path,
                     "asset_type": "image", "selection": None}
@@ -248,7 +260,9 @@ class TestTheReviewRegenerationCarriesItToo(_Case):
 
         def fake_ai(image_prompt, staging_path, channel, is_hook_scene,
                     image_style=None, candidate_count=1, scene=None,
-                    provider=None):
+                    provider=None, project_path=None):
+  # Sprint241 - 진짜 _ai_result 가 project_path 를 받는다.
+                    # 대역도 같은 것을 받아야 그 자리에 설 수 있다.
             seen.append(provider)
             return {"source": "ai_image", "local_path": staging_path,
                     "asset_type": "image", "selection": None}
@@ -272,7 +286,9 @@ class TestThreadsDoNotMix(unittest.TestCase):
 
         def fake_ai(image_prompt, staging_path, channel, is_hook_scene,
                     image_style=None, candidate_count=1, scene=None,
-                    provider=None):
+                    provider=None, project_path=None):
+  # Sprint241 - 진짜 _ai_result 가 project_path 를 받는다.
+                    # 대역도 같은 것을 받아야 그 자리에 설 수 있다.
             with lock:
                 seen.setdefault(os.path.dirname(staging_path), []).append(
                     provider)

@@ -14,6 +14,7 @@ from app.services.asset_priority_classifier import effective_pexels_threshold
 from app.services.asset_ranking_service import select_best_with_score
 from app.services.asset_selector import download_candidate, get_candidates
 from app.services import image_service
+from app.services import media_policy
 from app.services.character_consistency_engine import CHARACTER_SCENE_FIELD
 from app.services.search_query_extractor import extract_search_query
 from app.services.visual_type_classifier import VISUAL_TYPE_AI, VISUAL_TYPE_REAL
@@ -76,7 +77,8 @@ FOOTAGE_DIRNAME = "videos"
 
 def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
                image_style=image_service.IMAGE_STYLE_DEFAULT,
-               candidate_count=1, scene=None, provider=None):
+               candidate_count=1, scene=None, provider=None,
+               project_path=None):
     """
     Sprint74 - Imagen을 부르는 유일한 지점. Best-of-N이 여기 붙는다.
 
@@ -95,6 +97,33 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
 
     # 고른 것이 없으면(None) 예전 경로 그대로다.
     provider_selection.require_wired("image", provider)
+
+    # Sprint241 - 돈이 나가는 것만 막는다.
+    #
+    # 이 함수가 유료 모델로 가는 유일한 지점이다(위 docstring). 세
+    # 갈래가 전부 여기로 모이므로 관문도 하나면 된다.
+    #
+    #   visual_type 없음   스톡 실패/품질 미달 -> 여기
+    #   visual_type real   스톡 실패           -> 여기
+    #   visual_type ai     처음부터            -> 여기
+    #
+    # 그런데 이 함수는 유료 전용이 아니다. local_stock(내 PC 자료)도
+    # 여기를 지나간다 - 만들지 않고 고를 뿐이라 돈이 들지 않는다.
+    # 관문을 함수 입구에 두었더니 그 무료 경로까지 막혔고, "모델을
+    # 부르지 않는다"를 재던 시험들이 걸렸다(실측: test_the_journey_
+    # calls_no_model · test_nothing_external_was_called).
+    #
+    # 그래서 부르는 것이 무엇인지 보고 나서 막는다. 그 판단은
+    # provider_selection.calls_api 가 이미 한다 - 여기서 다시 짓지
+    # 않는다.
+    #
+    # 던지는 것이 곧 답이다. visual_type=ai 갈래는 이미 예외를 잡아
+    # 스톡으로 이어 가고(_select_ai_first), 나머지 둘은 스톡이 이미
+    # 실패한 자리라 사람이 읽을 수 있는 말로 멈춘다.
+    #
+    # 결제가 잠긴 채 배포된 EXE 가 Imagen 404 로 500을 내던 그 경로다.
+    if provider_selection.calls_api("image", provider):
+        media_policy.require_ai_allowed(media_policy.mode_for(project_path))
 
     if provider in SINGLE_IMAGE_PROVIDERS:
         # Sprint130, Sprint131 - 이들은 이미지 한 장을 만드는
@@ -156,7 +185,7 @@ def _ai_result(image_prompt, staging_path, channel, is_hook_scene,
 
 def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
                        image_style=image_service.IMAGE_STYLE_DEFAULT,
-                       scene=None, provider=None):
+                       scene=None, provider=None, project_path=None):
     """
     Sprint60 - visual_type == "real": Pexels(스톡) 우선, 실패 시 Imagen
     폴백. "실패"는 후보가 아예 없는 경우와, 후보는 있었지만 다운로드
@@ -186,6 +215,7 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
         _ai_result(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
             candidate_count=1, scene=scene, provider=provider,
+            project_path=project_path,
         ),
         False,
     )
@@ -193,7 +223,8 @@ def _select_real_first(image_prompt, staging_path, channel, is_hook_scene,
 
 def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
                      image_style=image_service.IMAGE_STYLE_DEFAULT,
-                     candidate_count=1, scene=None, provider=None):
+                     candidate_count=1, scene=None, provider=None,
+                     project_path=None):
     """
     Sprint60 - visual_type == "ai": Imagen 우선, 실패 시 Pexels 폴백.
 
@@ -208,7 +239,7 @@ def _select_ai_first(image_prompt, staging_path, channel, is_hook_scene,
             _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
                 candidate_count=candidate_count, scene=scene,
-                provider=provider,
+                provider=provider, project_path=project_path,
             ),
             True,
         )
@@ -404,12 +435,13 @@ def integrate_asset(
     if visual_type == VISUAL_TYPE_REAL:
         result, ai_priority_choice = _select_real_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
-            scene=scene, provider=provider,
+            scene=scene, provider=provider, project_path=project_path,
         )
     elif visual_type == VISUAL_TYPE_AI:
         result, ai_priority_choice = _select_ai_first(
             image_prompt, staging_path, channel, is_hook_scene, image_style,
             candidate_count=candidate_count, scene=scene, provider=provider,
+            project_path=project_path,
         )
     else:
         # Sprint38 - visual_type이 없는 scene(구버전 데이터/다른 호출부)은
@@ -447,7 +479,7 @@ def integrate_asset(
             result = _ai_result(
                 image_prompt, staging_path, channel, is_hook_scene, image_style,
                 candidate_count=candidate_count, scene=scene,
-                provider=provider,
+                provider=provider, project_path=project_path,
             )
 
     source = result["source"]

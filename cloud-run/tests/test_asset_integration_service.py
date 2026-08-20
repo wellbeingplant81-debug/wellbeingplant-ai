@@ -1,4 +1,5 @@
 import os
+from app.services import media_policy
 import sys
 import tempfile
 import unittest
@@ -54,6 +55,15 @@ class TestAssetIntegrationService(unittest.TestCase):
         self.addCleanup(self._tmp_dir.cleanup)
         self.project_path = self._tmp_dir.name
         os.makedirs(os.path.join(self.project_path, "images"), exist_ok=True)
+
+        # Sprint241 - 이 시험은 **유료 AI Provider 가 도는 것**을 잰다.
+        #
+        # 제품의 기본값은 AI 이미지 생성 금지다(결제 잠금). 그러니 AI
+        # 경로를 재려면 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는
+        # 세상이 유일해서 적을 필요가 없었을 뿐이다.
+        #
+        # 약하게 만드는 것이 아니라 숨어 있던 전제를 드러내는 것이다.
+        media_policy.choose(self.project_path, media_policy.MODE_MINE_STOCK_AI)
 
         # Sprint31: integrate_asset()이 이제 asset_feedback_service.record()를
         # 호출한다. 실제 공유 .cache/feedback.json에 테스트 데이터가

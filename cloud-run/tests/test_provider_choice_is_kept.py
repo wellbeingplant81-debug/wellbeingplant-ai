@@ -31,6 +31,7 @@ integrate_asset은 맨 위에서 이 프로젝트가 고른 Provider를 읽는�
 """
 
 import json
+from app.services import media_policy
 import os
 import shutil
 import sys
@@ -62,6 +63,15 @@ class _Bridge(unittest.TestCase):
 
         os.makedirs(os.path.join(self.project, "images"), exist_ok=True)
 
+        # Sprint241 - 이 시험은 **유료 AI Provider 가 도는 것**을 잰다.
+        #
+        # 제품의 기본값은 AI 이미지 생성 금지다(결제 잠금). 그러니 AI
+        # 경로를 재려면 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는
+        # 세상이 유일해서 적을 필요가 없었을 뿐이다.
+        #
+        # 약하게 만드는 것이 아니라 숨어 있던 전제를 드러내는 것이다.
+        media_policy.choose(self.project, media_policy.MODE_MINE_STOCK_AI)
+
         blocked = patch.object(bridge.asset_feedback_service, "record")
         blocked.start()
         self.addCleanup(blocked.stop)
@@ -73,7 +83,9 @@ class _Bridge(unittest.TestCase):
 
         def spy(image_prompt, staging_path, channel, is_hook_scene,
                 image_style=None, candidate_count=1, scene=None,
-                provider=None):
+                provider=None, project_path=None):
+  # Sprint241 - 진짜 _ai_result 가 project_path 를 받는다.
+                # 대역도 같은 것을 받아야 그 자리에 설 수 있다.
             seen["provider"] = provider
             raise RuntimeError("여기까지만 본다")
 
@@ -133,6 +145,15 @@ class TheFreeChoiceNeverCallsThePaidEngineTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.project, ignore_errors=True)
 
         os.makedirs(os.path.join(self.project, "images"), exist_ok=True)
+
+        # Sprint241 - 이 시험은 **유료 AI Provider 가 도는 것**을 잰다.
+        #
+        # 제품의 기본값은 AI 이미지 생성 금지다(결제 잠금). 그러니 AI
+        # 경로를 재려면 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는
+        # 세상이 유일해서 적을 필요가 없었을 뿐이다.
+        #
+        # 약하게 만드는 것이 아니라 숨어 있던 전제를 드러내는 것이다.
+        media_policy.choose(self.project, media_policy.MODE_MINE_STOCK_AI)
 
         blocked = patch.object(bridge.asset_feedback_service, "record")
         blocked.start()
