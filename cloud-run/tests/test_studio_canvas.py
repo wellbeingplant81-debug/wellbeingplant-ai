@@ -285,6 +285,10 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
             "/studio/api/review/{project_id}/completion",
             "/studio/api/review/{project_id}/asset",
             "/studio/api/review/{project_id}/scenes/{scene}/alternatives",
+            # Sprint242 - 자료 사용 방식(내 자료 / 무료 스톡 / AI)을
+            # 화면에서 고르게 하면서 더했다. 조용히 늘지 않게 하려는
+            # 것이 이 시험의 목적이므로 이름으로 적어 둔다.
+            "/studio/api/review/{project_id}/media-policy",
             "/studio/api/review/{project_id}/scenes/{scene}/asset",
             "/studio/api/review/{project_id}/scenes/{scene}/confirm",
             "/studio/api/review/{project_id}/script",

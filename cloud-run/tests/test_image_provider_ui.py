@@ -417,7 +417,18 @@ class TestNothingElseMoved(unittest.TestCase):
 
         paths = set(re.findall(r'"/studio/api/review[^"`]*"', _page()))
 
-        self.assertEqual(paths, {'"/studio/api/review"'})
+        # Sprint242 - 자료 사용 방식을 화면에서 고르게 하면서 review
+        # 엔드포인트가 하나 늘었다. 그 Sprint 가 **의도적으로** 더한
+        # 것이고, 이 시험이 그것을 알아챈 것이 곧 이 가드가 제 일을
+        # 한 것이다.
+        #
+        # 정규식을 비켜 가거나(백틱 템플릿) 검사를 지우지 않는다 -
+        # 늘어난 것을 이름으로 적어 다음에 또 조용히 늘면 여전히
+        # 걸리게 둔다.
+        self.assertEqual(paths, {
+            '"/studio/api/review"',
+            '"/studio/api/review/"',
+        })
 
     def test_the_engine_layer_did_not_change(self):
         """

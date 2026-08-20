@@ -2240,6 +2240,256 @@ input[type=radio],input[type=checkbox]{width:auto}
 })();
 </script>
 
+<style>
+.mpol{margin:8px 0 4px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--panel);padding:13px 14px 11px}
+.mpol .mh{font-weight:700;font-size:14px;margin:0 0 2px}
+.mpol .pnow{margin:6px 0 9px;padding:7px 10px;border-radius:var(--radius);
+  background:var(--accent-soft);border:1px solid var(--accent-edge);
+  font-size:12.5px}
+.mpol .pnow b{font-weight:700}
+.mpol .pmodes{display:flex;flex-direction:column;gap:5px}
+.mpol label.pm{display:flex;align-items:flex-start;gap:8px;
+  padding:7px 9px;border-radius:var(--radius);background:var(--panel2);
+  border:1px solid var(--line);cursor:pointer;font-size:12.5px}
+.mpol label.pm:hover{border-color:var(--accent-edge)}
+.mpol label.pm.on{border-color:var(--accent);background:var(--raised)}
+.mpol label.pm .pw{flex:1 1 auto}
+.mpol label.pm .ptag{font-size:10.5px;color:var(--dim)}
+.mpol .pai{margin-top:9px;padding:9px 11px;border-radius:var(--radius);
+  background:var(--panel2);border:1px solid var(--line)}
+.mpol .pai .ph{font-weight:600;font-size:12.5px;margin-bottom:5px}
+.mpol .prow{display:flex;align-items:center;gap:8px;padding:4px 0;
+  font-size:12px}
+.mpol .prow .pname{min-width:110px}
+.mpol .pst{font-size:10.5px;padding:1px 7px;border-radius:999px;
+  border:1px solid var(--line)}
+.mpol .pst.AVAILABLE{color:var(--ok-text);border-color:var(--ok-edge)}
+.mpol .pst.NOT_CONFIGURED{color:var(--warn-text);border-color:var(--warn-edge)}
+.mpol .pst.NOT_IMPLEMENTED{color:var(--dim)}
+.mpol .pst.DISABLED{color:var(--faint)}
+.mpol .psheet{margin-top:9px;font-size:11.5px;color:var(--dim);
+  display:flex;flex-wrap:wrap;gap:4px 14px}
+.mpol .psheet b{color:var(--text);font-weight:600}
+</style>
+
+<script>
+/* Sprint242 - 자료 사용 방식을 화면에서 고른다.
+ *
+ * Sprint241 이 정책을 만들었지만 고를 자리가 없었다. 다섯 갈래와
+ * 관문과 상한이 다 있는데 그것을 바꾸려면 코드를 고쳐야 했고, 그러니
+ * 있어도 없는 것이었다.
+ *
+ * 목록을 여기서 짓지 않는다
+ * -------------------------
+ * 갈래도 상태도 상한도 서버가 준 것을 그대로 그린다. 화면이 제 나름대로
+ * 지으면 두 곳이 목록을 들게 되고, 어느 날 한쪽만 늘어난다 - 이
+ * 저장소가 여러 번 겪은 그것이다.
+ *
+ * 고를 수 없는 것은 잠근다
+ * ------------------------
+ * 쓸 수 없는 Provider 를 고를 수 있게 내놓으면 사람은 눌러 보고, 왜
+ * 안 되는지 모른 채 시간을 버린다. 무엇이 고를 수 있는지는 서버가
+ * choosable 로 말해 준다 - 화면이 상태를 다시 해석하지 않는다.
+ */
+(function () {
+  "use strict";
+
+  // 서버가 준 것. 화면이 짓는 것이 아니다.
+  let mediaPolicy = null;
+
+  function byId(id) { return document.getElementById(id); }
+
+  function esc(text) {
+    return typeof escHtml === "function"
+      ? escHtml(String(text == null ? "" : text))
+      : String(text == null ? "" : text);
+  }
+
+  function projectId() {
+    // 지금 열어 둔 프로젝트. 없으면 아직 고를 것이 없다.
+    if (typeof wizProject === "object" && wizProject && wizProject.project_id) {
+      return wizProject.project_id;
+    }
+
+    return typeof currentProject === "string" ? currentProject : "";
+  }
+
+  const STATE_WORDS = {
+    AVAILABLE: "쓸 수 있음",
+    NOT_CONFIGURED: "열쇠 없음",
+    NOT_IMPLEMENTED: "아직 안 붙음",
+    DISABLED: "이 방식에서는 꺼짐",
+  };
+
+  function mediaProviderRow(name, row) {
+    const off = !row.choosable;
+
+    return '<label class="prow">' +
+      '<input type="radio" name="mpolProvider" value="' + esc(name) + '"' +
+      (off ? " disabled" : "") + ">" +
+      '<span class="pname">' + esc(row.label) + "</span>" +
+      '<span class="pst ' + esc(row.state) + '">' +
+      esc(STATE_WORDS[row.state] || row.state) + "</span>" +
+      (row.needs && row.state === "NOT_CONFIGURED"
+        ? '<span class="ptag">' + esc(row.needs) + "</span>" : "") +
+      "</label>";
+  }
+
+  function costSheet(plan) {
+    if (!plan) return "";
+
+    return '<div class="psheet">' +
+      "<span>장면 <b>" + plan.scenes + "</b></span>" +
+      "<span>내 자료 <b>" + (plan.mine_allowed ? "사용" : "사용 안 함") + "</b></span>" +
+      "<span>무료 스톡 <b>" + (plan.stock_allowed ? "사용" : "사용 안 함") + "</b></span>" +
+      "<span>AI 생성 최대 <b>" + plan.ai_max_images + "</b>장</span>" +
+      "<span>AI 호출 최대 <b>" + plan.ai_max_calls + "</b>회</span>" +
+      "<span>예상 비용 <b>" +
+      (plan.cost_unknown ? "확인 불가" : plan.estimated_cost) + "</b></span>" +
+      "</div>";
+  }
+
+  function renderMediaPolicy() {
+    const box = byId("mediaPolicy");
+    if (!box) return;
+
+    if (!mediaPolicy) {
+      box.innerHTML = '<span class="muted">자료 사용 방식을 읽는 중…</span>';
+      return;
+    }
+
+    const now = mediaPolicy;
+
+    const modes = (now.modes || []).map(function (row) {
+      const on = row.mode === now.mode;
+
+      // 무엇을 쓰는 방식인지 한 줄로 적는다.
+      const uses = [row.mine ? "내 자료" : null,
+                    row.stock ? "무료 스톡" : null,
+                    row.ai ? "AI" : null].filter(Boolean).join(" · ");
+
+      return '<label class="pm ' + (on ? "on" : "") + '">' +
+        '<input type="radio" name="mpolMode" value="' + esc(row.mode) + '"' +
+        (on ? " checked" : "") + ">" +
+        '<span class="pw">' + esc(row.label) +
+        '<div class="ptag">' + esc(uses) + "</div></span></label>";
+    }).join("");
+
+    // AI 를 쓰지 않는 방식이면 Provider 를 아예 내놓지 않는다.
+    const ai = now.ai_allowed
+      ? '<div class="pai"><div class="ph">AI 이미지 Provider</div>' +
+        Object.keys(now.providers || {}).map(function (name) {
+          return mediaProviderRow(name, now.providers[name]);
+        }).join("") + "</div>"
+      : "";
+
+    box.innerHTML =
+      '<div class="mh">🎨 영상 자료 사용 방식</div>' +
+      '<div class="pnow" id="policyLabel">지금 <b>' + esc(now.label) +
+      "</b> 로 만듭니다." +
+      (now.ai_allowed ? "" : " AI 이미지 생성을 하지 않습니다.") + "</div>" +
+      '<div class="pmodes">' + modes + "</div>" +
+      ai + costSheet(now.plan) +
+      '<div class="muted" id="mpolNote" style="margin-top:7px;font-size:11px">' +
+      "</div>";
+  }
+
+  async function loadMediaPolicy() {
+    const project = projectId();
+
+    if (!project) {
+      const box = byId("mediaPolicy");
+
+      if (box) {
+        box.innerHTML = '<span class="muted">프로젝트를 만들면 ' +
+          "자료 사용 방식을 고를 수 있습니다.</span>";
+      }
+
+      return;
+    }
+
+    const scenes = (typeof wizScript === "object" && wizScript
+                    && wizScript.scene_count) || 0;
+
+    try {
+      mediaPolicy = await (await fetch(
+        "/studio/api/review/" + encodeURIComponent(project) +
+        "/media-policy?scene_count=" + scenes)).json();
+    } catch (e) {
+      mediaPolicy = null;
+    }
+
+    renderMediaPolicy();
+  }
+
+  async function chooseMediaMode(mode) {
+    const project = projectId();
+    const note = byId("mpolNote");
+
+    if (!project) return;
+
+    try {
+      const r = await fetch(
+        "/studio/api/review/" + encodeURIComponent(project) + "/media-policy",
+        {method: "PUT", headers: {"Content-Type": "application/json"},
+         body: JSON.stringify({
+           mode: mode,
+           scene_count: (typeof wizScript === "object" && wizScript
+                         && wizScript.scene_count) || 0})});
+
+      const d = await r.json();
+
+      if (!r.ok) {
+        if (note) note.textContent = typeof d.detail === "string"
+          ? d.detail : "바꾸지 못했습니다.";
+        return;
+      }
+
+      mediaPolicy = d;
+      renderMediaPolicy();
+    } catch (e) {
+      if (note) note.textContent = "바꾸지 못했습니다: " + e.message;
+    }
+  }
+
+  function mount() {
+    const anchor = byId("mediaLibrary");
+    if (!anchor || byId("mediaPolicy")) return;
+
+    anchor.insertAdjacentHTML(
+      "afterend", '<div class="mpol" id="mediaPolicy"></div>');
+
+    // 카드는 다시 그려질 때마다 새로 만들어진다 - 단추마다 묶으면
+    // 언젠가 하나를 빠뜨린다. 한 곳에서 받는다.
+    byId("mediaPolicy").addEventListener("change", function (ev) {
+      const target = ev.target;
+
+      if (target && target.name === "mpolMode") {
+        chooseMediaMode(target.value);
+      }
+    });
+
+    loadMediaPolicy();
+  }
+
+  function start() {
+    try { mount(); } catch (e) { }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+
+  window.renderMediaPolicy = renderMediaPolicy;
+  window.loadMediaPolicy = loadMediaPolicy;
+  window.chooseMediaMode = chooseMediaMode;
+  window.mediaProviderRow = mediaProviderRow;
+})();
+</script>
+
 <script>
 const $ = (id) => document.getElementById(id);
 let currentProject = null, currentDetail = null, jobId = null;

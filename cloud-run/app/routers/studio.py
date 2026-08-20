@@ -1944,6 +1944,85 @@ def review_state(project_id: str):
     }
 
 
+class MediaPolicyRequest(BaseModel):
+    mode: str
+    # 장수를 알면 최대 몇 장까지 만들지 셀 수 있다. 모르면 0 이다 -
+    # 지어내지 않는다.
+    scene_count: int = 0
+
+
+def _media_policy_view(project_path: str, scene_count: int = 0) -> dict:
+    """
+    화면이 한 번에 그릴 수 있게 모아 준다.
+
+    갈래 목록도 상태도 상한도 media_policy 가 정한 것을 그대로 옮긴다 -
+    화면이 제 나름대로 지으면 두 곳이 목록을 들게 되고, 어느 날 한쪽만
+    늘어난다.
+    """
+
+    from app.services import media_policy
+
+    mode = media_policy.mode_for(project_path)
+
+    states = media_policy.provider_states(mode)
+
+    return {
+        "mode": mode,
+        "label": media_policy.LABELS[mode],
+        "ai_allowed": media_policy.ai_allowed(mode),
+        "ai_is_the_point": media_policy.ai_is_the_point(mode),
+        "modes": [
+            {
+                "mode": name,
+                "label": media_policy.LABELS[name],
+                "mine": media_policy.mine_allowed(name),
+                "stock": media_policy.stock_allowed(name),
+                "ai": media_policy.ai_allowed(name),
+            }
+            for name in media_policy.MODES
+        ],
+        "providers": {
+            name: {
+                **row,
+                # 고를 수 있는가. 상태를 화면이 다시 해석하지 않게
+                # 여기서 한 번만 정한다 - 쓸 수 없는 것을 고를 수
+                # 있게 내놓으면 사람은 눌러 보고 시간을 버린다.
+                "choosable": row["state"] == media_policy.AVAILABLE,
+            }
+            for name, row in states.items()
+        },
+        "plan": media_policy.plan_for(mode, scene_count=scene_count),
+    }
+
+
+@router.get("/api/review/{project_id}/media-policy")
+def review_media_policy(project_id: str, scene_count: int = 0):
+    """이 프로젝트가 무엇으로 만들기로 했는가."""
+
+    return _media_policy_view(_project_path(project_id), scene_count)
+
+
+@router.put("/api/review/{project_id}/media-policy")
+def review_save_media_policy(project_id: str, request: MediaPolicyRequest):
+    """
+    사람이 고른 제작 방식을 프로젝트에 적는다.
+
+    새 저장소를 만들지 않는다 - project.json 의 한 칸이고,
+    provider_selection 이 이미 그 파일에 산다.
+    """
+
+    from app.services import media_policy
+
+    path = _project_path(project_id)
+
+    try:
+        media_policy.choose(path, request.mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return _media_policy_view(path, request.scene_count)
+
+
 @router.put("/api/review/{project_id}/providers")
 def review_save_providers(project_id: str, request: ReviewProviderRequest):
     """
