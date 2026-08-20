@@ -110,11 +110,38 @@ _TOKEN_PATTERN = re.compile(r"[가-힣]+")
 
 
 def _strip_suffix(word: str, suffixes: List[str]):
-    """가장 긴 꼬리 하나를 뗀다. 뗐으면 (어간, True)."""
+    """
+    가장 긴 꼬리 하나를 뗀다. 뗐으면 (어간, True).
+
+    Sprint240 - 길이 때문에 막히면 **다른 꼬리로 갈아타지 않는다.**
+
+    예전에는 짧은 꼬리로 내려갔다. 그래서 실제로 이런 것이 채널에
+    나갔다(2026-08-19 실측).
+
+        손으로
+          꼬리 '으로'  남는 것 '손'   길이 1  -> 건너뜀
+          꼬리 '로'    남는 것 '손으'  길이 2  -> 채택
+
+    "손으" 는 한국어 낱말이 아니다. '으로' 가 조사인 것은 맞고, 떼면
+    '손' 이 남는데 그것이 짧아서 못 쓸 뿐이다. 짧아서 못 쓰는 것을
+    짧지 않게 만들려고 조사 한 글자를 낱말에 남기면, 사람이 읽을 수
+    없는 것이 나간다 - 빠지는 것보다 이상한 것이 나가는 쪽이 나쁘다는
+    이 파일의 원칙 그대로다.
+
+    그래서 붙어 있는 것 중 가장 긴 것 하나만 본다. 그것을 떼서 남는
+    것이 짧으면 그 낱말은 후보에서 빠진다.
+    """
 
     for suffix in sorted(suffixes, key=len, reverse=True):
-        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_LENGTH:
-            return word[: -len(suffix)], True
+        if not word.endswith(suffix):
+            continue
+
+        if len(word) - len(suffix) < _MIN_LENGTH:
+            # 이 낱말은 여기서 끝이다. 덜 떼지 않는다.
+            return word, False
+
+        return word[: -len(suffix)], True
+
     return word, False
 
 
