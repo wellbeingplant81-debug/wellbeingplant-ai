@@ -125,12 +125,20 @@ class TestGenerateImagePicksStyleByName(unittest.TestCase):
 
         import tempfile
 
+        from app.services import media_policy
+
         with tempfile.TemporaryDirectory() as tmp_dir, \
              patch.object(
                  image_service.client.models, "generate_images",
                  fake_generate_images,
              ), \
              patch.object(image_service, "enhance_image", lambda path: None):
+
+            # Sprint243 - 이 시험은 **AI 로 그림을 만들 때의 프롬프트**를
+            # 잰다. 제품의 기본값은 AI 이미지 생성 금지(결제 잠금)이므로
+            # 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는 세상이
+            # 유일해서 적을 필요가 없었을 뿐이다.
+            media_policy.choose(tmp_dir, media_policy.MODE_MINE_STOCK_AI)
 
             image_service.generate_image(
                 "a prompt", os.path.join(tmp_dir, "out.png"), **kwargs,

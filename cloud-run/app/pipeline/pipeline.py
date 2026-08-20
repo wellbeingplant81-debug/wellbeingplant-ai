@@ -344,19 +344,34 @@ def run_pipeline(
     scene1 = data["scenes"][0]
 
     t0 = time.perf_counter()
-    step06_thumbnail.run(
-        data["title"],
-        topic,
-        project_path,
-        channel,
-        scene1["narration"],
-        scene1["image_prompt"],
-        # Sprint75 - 썸네일도 같은 인물이어야 한다. scene 1의 subject는
-        # 이제 짧아서("the same man") 외형 묘사가 들어 있지 않다.
-        character_reference=scene1.get(
-            scene_prompt_service.CHARACTER_REFERENCE_FIELD, "",
-        ),
-    )
+
+    # Sprint243 - 썸네일 한 장이 제작 전체를 죽이지 않는다.
+    #
+    # 실측: 영상까지 다 만들어진 뒤(424초) 썸네일이 404 로 죽어 제작이
+    # 실패로 끝났다. 영상은 손에 있는데 결과는 실패였다.
+    #
+    # 바로 아래 step07_quality 가 이미 이렇게 보호받는다 - 같은 함수 안에
+    # 대조가 있었고, 썸네일만 무방비였다.
+    #
+    # 하류는 썸네일이 없어도 견딘다(publishing 은 None 을 돌려주고
+    # 업로드는 있을 때만 붙인다). 그러니 여기서 멈출 이유가 없다.
+    try:
+        step06_thumbnail.run(
+            data["title"],
+            topic,
+            project_path,
+            channel,
+            scene1["narration"],
+            scene1["image_prompt"],
+            # Sprint75 - 썸네일도 같은 인물이어야 한다. scene 1의 subject는
+            # 이제 짧아서("the same man") 외형 묘사가 들어 있지 않다.
+            character_reference=scene1.get(
+                scene_prompt_service.CHARACTER_REFERENCE_FIELD, "",
+            ),
+        )
+    except Exception as exc:
+        print(f"Thumbnail step failed: {exc}")
+
     timings["thumbnail_generation"] = time.perf_counter() - t0
 
     try:

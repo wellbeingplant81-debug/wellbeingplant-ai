@@ -60,6 +60,23 @@ from this beyond expression or mood):
         "thumbnail.png",
     )
 
+    # Sprint243 - AI 를 쓰지 않기로 한 프로젝트는 이미 있는 그림을 쓴다.
+    #
+    # 이 자리가 실제로 제작을 멈춰 세웠다(실측). 자산 6장은 관문에 막혀
+    # 스톡으로 갔고 영상까지 다 만들어졌는데, 썸네일 한 장이 유료
+    # 모델로 곧장 가서 404 로 죽었다.
+    #
+    #     [424s] 영상 완료
+    #     [440s] 썸네일 -> FAILED  imagen-4.0-generate-001
+    #
+    # 자산 쪽에는 스톡으로 내려가는 길이 있는데 여기에는 없었다. 그래서
+    # 첫 장면 그림을 쓴다 - 그 영상의 그림이고, 돈이 들지 않고, 결과가
+    # 늘 같다.
+    from app.services import media_policy
+
+    if not media_policy.ai_allowed(media_policy.mode_for(project_path)):
+        return _copy_first_scene(project_path, output)
+
     generate_image(
         subject,
         output,
@@ -67,5 +84,33 @@ from this beyond expression or mood):
         image_style=image_service.IMAGE_STYLE_THUMBNAIL,
         elements=elements,
     )
+
+    return output
+
+
+def _copy_first_scene(project_path: str, output: str):
+    """
+    첫 장면 그림을 썸네일 자리에 베낀다.
+
+    옮기지 않고 베낀다 - 그 그림은 영상이 쓰는 것이라 사라지면 안 된다.
+
+    첫 장면 그림도 없으면 썸네일 없이 둔다. 하류는 이미 그것을 견딘다 -
+    publishing 은 없으면 None 을 돌려주고, 업로드는 있을 때만 붙인다.
+    없는 것을 지어내는 것보다 없다고 두는 편이 낫다.
+    """
+
+    import shutil
+
+    scene1 = os.path.join(project_path, "images", "scene1.png")
+
+    if not os.path.isfile(scene1):
+        print("[Thumbnail] 첫 장면 그림이 없어 썸네일을 만들지 않습니다.")
+
+        return None
+
+    shutil.copyfile(scene1, output)
+
+    print(f"[Thumbnail] AI 를 쓰지 않는 방식이라 첫 장면 그림을 씁니다: "
+          f"{output}")
 
     return output

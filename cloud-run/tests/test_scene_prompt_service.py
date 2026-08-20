@@ -248,15 +248,27 @@ class TestThumbnailKeepsTheCharacter(unittest.TestCase):
             captured["elements"] = elements
             return output_file
 
-        with patch.object(
-            self.thumbnail_service, "generate_image", side_effect=fake_generate,
-        ):
-            self.thumbnail_service.create_thumbnail(
-                "제목", "주제", "/tmp/p", "wellbeing",
-                scene1_narration="나레이션",
-                scene1_image_prompt="the same man waking up",
-                character_reference="a 50s Korean man with thin glasses",
-            )
+        # Sprint243 - 이 시험은 **AI 로 썸네일을 그릴 때** 인물 앵커가
+        # 프롬프트에 닿는지를 잰다. 제품의 기본값은 AI 이미지 생성
+        # 금지(결제 잠금)라, 그 전제를 적어야 그 경로로 들어간다.
+        #
+        # 경로가 "/tmp/p" 라 폴더가 없어 project.json 을 적을 수 없다.
+        # 그래서 판정만 그 블록에서 허용으로 둔다 - assertion 은 한
+        # 글자도 바뀌지 않는다.
+        from app.services import media_policy
+
+        with patch.object(media_policy, "ai_allowed", return_value=True):
+            with patch.object(
+                self.thumbnail_service, "generate_image",
+                side_effect=fake_generate,
+            ):
+                self.thumbnail_service.create_thumbnail(
+                    "제목", "주제", "/tmp/p", "wellbeing",
+                    scene1_narration="나레이션",
+                    scene1_image_prompt="the same man waking up",
+                    character_reference=(
+                        "a 50s Korean man with thin glasses"),
+                )
 
         self.assertEqual(
             captured["elements"][slots.REFERENCE],
@@ -274,13 +286,24 @@ class TestThumbnailKeepsTheCharacter(unittest.TestCase):
             captured["elements"] = elements
             return output_file
 
-        with patch.object(
-            self.thumbnail_service, "generate_image", side_effect=fake_generate,
-        ):
-            self.thumbnail_service.create_thumbnail(
-                "제목", "주제", "/tmp/p", "wellbeing",
-                scene1_image_prompt="a bowl of oatmeal",
-            )
+        # Sprint243 - 이 시험은 **AI 로 썸네일을 그릴 때** 인물 앵커가
+        # 프롬프트에 닿는지를 잰다. 제품의 기본값은 AI 이미지 생성
+        # 금지(결제 잠금)라, 그 전제를 적어야 그 경로로 들어간다.
+        #
+        # 경로가 "/tmp/p" 라 폴더가 없어 project.json 을 적을 수 없다.
+        # 그래서 판정만 그 블록에서 허용으로 둔다 - assertion 은 한
+        # 글자도 바뀌지 않는다.
+        from app.services import media_policy
+
+        with patch.object(media_policy, "ai_allowed", return_value=True):
+            with patch.object(
+                self.thumbnail_service, "generate_image",
+                side_effect=fake_generate,
+            ):
+                self.thumbnail_service.create_thumbnail(
+                    "제목", "주제", "/tmp/p", "wellbeing",
+                    scene1_image_prompt="a bowl of oatmeal",
+                )
 
         self.assertNotIn(slots.REFERENCE, captured["elements"] or {})
 

@@ -36,6 +36,14 @@ class TestGenerateImageVisualTypeStyle(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.output_file = os.path.join(self.tmp_dir, "out.png")
 
+        # Sprint243 - 이 시험은 **AI 로 그림을 만들 때**의 요청 모양을
+        # 잰다. 제품의 기본값은 AI 이미지 생성 금지(결제 잠금)이므로
+        # 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는 세상이 유일해서
+        # 적을 필요가 없었을 뿐이다.
+        from app.services import media_policy
+
+        media_policy.choose(self.tmp_dir, media_policy.MODE_MINE_STOCK_AI)
+
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
@@ -175,6 +183,14 @@ class TestOnlyOneImageIsRequested(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
         self.output_file = os.path.join(self.tmp_dir, "out.png")
+
+        # Sprint243 - 이 시험은 **AI 로 그림을 만들 때**의 요청 모양을
+        # 잰다. 제품의 기본값은 AI 이미지 생성 금지(결제 잠금)이므로
+        # 그 전제를 적어야 한다 - 지금까지는 AI 를 쓰는 세상이 유일해서
+        # 적을 필요가 없었을 뿐이다.
+        from app.services import media_policy
+
+        media_policy.choose(self.tmp_dir, media_policy.MODE_MINE_STOCK_AI)
 
     def tearDown(self):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)

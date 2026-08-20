@@ -131,6 +131,71 @@ def _write_generated(generated, output_file: str) -> str:
     return output_file
 
 
+def project_of(output_file):
+    """
+    적을 파일이 어느 프로젝트의 것인가.
+
+    이 모듈은 project_path 를 받지 않는다. 아홉 자리와 그 대역들의
+    서명을 다 바꾸는 것은 Sprint241 에서 겪은 일을 더 크게 반복하는
+    것이다 - 대신 파일에서 거슬러 올라가 그 프로젝트를 찾는다.
+
+    표는 project.json 이다. 그 프로젝트의 결정들이 이미 그 파일에
+    산다. 못 찾으면 None 이고, 그때는 전역 기본값을 따른다.
+
+    이 모듈은 무엇을 고를지 정하는 계층을 알지 않는다 - 이름을 적기만
+    해도 그것을 금하는 가드가 울린다(실제로 걸렸다). 여기서 보는 것은
+    "만들어도 되는가" 하나뿐이다.
+    """
+
+    where = os.path.dirname(os.path.abspath(str(output_file or "")))
+
+    # 열 칸이면 어떤 프로젝트 구조든 닿는다. 무한히 올라가지 않는다 -
+    # 못 찾는 것이 답인 경우가 있다.
+    for _ in range(10):
+        if os.path.isfile(os.path.join(where, "project.json")):
+            return where
+
+        parent = os.path.dirname(where)
+
+        if parent == where:
+            break
+
+        where = parent
+
+    return None
+
+
+def _refuse_if_not_allowed(output_file) -> None:
+    """
+    돈이 나가는 마지막 문.
+
+    Sprint241 은 asset_integration_service._ai_result 하나에 관문을
+    세웠다. 그 함수의 주석이 "Imagen 을 부르는 유일한 지점" 이라고
+    적고 있었기 때문인데, 그것은 **자산 통합 경로 안에서만** 참이었다.
+
+    실제 EXE 로 영상을 만들어 보니 썸네일이 다른 길로 새어 유료 모델을
+    불렀고 404 로 제작이 멈췄다(실측). 저장소를 뒤져 보니 부르는 자리가
+    아홉이었다.
+
+    그래서 관문을 목이 아니라 **문 자체**로 옮긴다. 이 모듈의 두
+    함수만이 imagen-4.0-generate-001 을 부르므로, 여기 세우면 문이
+    몇 개든 전부 이 하나를 지난다.
+
+    무료 경로는 이 관문과 무관하다. 다른 엔진과 사진 서비스들은 각자
+    다른 모듈에 살고 이 함수를 지나지 않는다 - 이 모듈은 그것들의
+    이름조차 알지 않는다(가드가 그것을 지킨다).
+    """
+
+    from app.services import media_policy
+
+    project = project_of(output_file)
+
+    mode = (media_policy.mode_for(project) if project
+            else media_policy.current_mode())
+
+    media_policy.require_ai_allowed(mode)
+
+
 def generate_image_candidates(
     prompt: str,
     output_files: list,
@@ -149,6 +214,8 @@ def generate_image_candidates(
     아니라 후보가 줄어든 것이므로, 받은 만큼만 쓰고 그만큼의 경로를
     돌려준다. 한 장도 못 받은 경우만 예외다.
     """
+
+    _refuse_if_not_allowed(output_files[0] if output_files else None)
 
     final_prompt, negative_prompt = _build_prompt(
         prompt, image_style, channel, is_hook_scene, elements,
@@ -186,6 +253,8 @@ def generate_image(
     image_style: str = IMAGE_STYLE_DEFAULT,
     elements: dict = None,
 ):
+
+    _refuse_if_not_allowed(output_file)
 
     final_prompt, negative_prompt = _build_prompt(
         prompt, image_style, channel, is_hook_scene, elements,
