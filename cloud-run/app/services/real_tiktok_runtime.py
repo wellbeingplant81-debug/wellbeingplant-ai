@@ -50,6 +50,13 @@ from app.services.publishing_runtime_protocol import (
 )
 
 # 공식 Content Posting API. 지어낸 주소가 아니다.
+#
+# Sprint248-A - 올리기 전에 그 계정에 먼저 묻는다. 공식 문서가
+# "privacy_level 은 이 응답의 privacy_level_options 중 하나여야 한다"
+# 고 적는다.
+CREATOR_INFO_URL = (
+    "https://open.tiktokapis.com/v2/post/publish/creator_info/query/")
+
 INIT_URL = "https://open.tiktokapis.com/v2/post/publish/video/init/"
 STATUS_URL = "https://open.tiktokapis.com/v2/post/publish/status/fetch/"
 
@@ -157,6 +164,29 @@ def _ask(fn, *args, **kwargs):
                                     error_category="NETWORK_ERROR")
 
 
+def _video_seconds(path: str):
+    """
+    그 파일이 몇 초인가. 재지 못하면 None - 모른다는 뜻이다.
+
+    모르는 것을 0 으로 두면 "한도 안" 으로 읽혀 그냥 지나간다. 그래서
+    모를 때는 재지 않는다.
+    """
+
+    # duration_optimizer 가 이미 ffprobe 로 재고 있다. format=duration 은
+    # 컨테이너 전체 길이라 소리든 영상이든 같은 답이 나온다 - 여기서
+    # 같은 명령을 다시 적으면 두 자리가 갈린다.
+    from app.services import duration_optimizer
+
+    try:
+        seconds = float(duration_optimizer.get_audio_duration(path))
+    except Exception:
+        return None
+
+    # 그 함수는 못 잰 것을 0.0 으로 돌려준다. 0 초짜리 영상은 없으므로
+    # 그것은 "못 쟀다" 는 뜻이다 - 한도 안이라고 읽지 않는다.
+    return seconds if seconds > 0 else None
+
+
 class RealTikTokRuntime(PublishingRuntimeProtocol):
 
     capabilities = RuntimeCapabilities(
@@ -212,6 +242,82 @@ class RealTikTokRuntime(PublishingRuntimeProtocol):
         return {"Authorization": f"Bearer {credential.access_token}",
                 "Content-Type": "application/json; charset=UTF-8"}
 
+    def creator_info(self, credential) -> dict:
+        """
+        그 계정이 지금 무엇을 허용하는가.
+
+        공식 문서가 init 전에 이것을 묻게 되어 있다 - privacy_level 은
+        여기 돌아온 privacy_level_options 중 하나여야 한다.
+
+        읽는 것은 둘뿐이다.
+
+            privacy_level_options        어떤 공개 범위가 되는가
+            max_video_post_duration_sec  얼마나 긴 것까지 되는가(선택)
+
+        나머지 칸(이름·사진·댓글 허용 여부 등)은 돌아오지만 지금 쓰지
+        않는다. 쓰지 않는 것을 모델에 넣으면 쓰는 척이 된다.
+        """
+
+        self._refuse_if_unset()
+
+        asked = _ask(requests.post, CREATOR_INFO_URL,
+                     headers=self._headers(credential),
+                     json={}, timeout=_TIMEOUT)
+
+        if asked.status_code != 200:
+            _raise_for(asked, "계정 확인")
+
+        return (asked.json() or {}).get("data") or {}
+
+    def _refuse_unless_allowed(self, credential, path) -> None:
+        """
+        SELF_ONLY 로 올릴 수 있는 계정인지 본다.
+
+        허용하지 않으면 올리지 않는다. 다른 공개 범위로 바꾸지 않는다 -
+        심사 전 앱은 비공개로만 올릴 수 있고, 그것이 안 되는 계정에
+        공개로 보내는 것은 사람이 원한 적 없는 일이다.
+
+        모르는 답도 "된다" 로 읽지 않는다. 목록이 없거나 비어 있으면
+        거기서 멈춘다.
+        """
+
+        given = self.creator_info(credential)
+
+        allowed = given.get("privacy_level_options")
+
+        if not isinstance(allowed, list) or not allowed:
+            raise _permanent(
+                "TikTok 이 이 계정의 공개 범위를 알려 주지 않아 "
+                "올리지 않았습니다. 잠시 뒤에 다시 시도해 주십시오.",
+                "INVALID_REQUEST")
+
+        if DEFAULT_PRIVACY not in allowed:
+            raise _permanent(
+                f"이 계정은 {DEFAULT_PRIVACY}(나만 보기) 로 올릴 수 "
+                f"없습니다 - TikTok 이 알려 준 것은 "
+                f"{', '.join(str(a) for a in allowed)} 입니다. "
+                "심사를 통과하지 않은 앱은 나만 보기로만 올릴 수 "
+                "있으므로 여기서 멈춥니다.",
+                "PERMISSION_DENIED")
+
+        # 길이는 알려 줄 때만 본다. 없는 사실로 막지 않는다.
+        limit = given.get("max_video_post_duration_sec")
+
+        if not isinstance(limit, (int, float)) or limit <= 0:
+            return
+
+        seconds = _video_seconds(path)
+
+        if seconds is None:
+            return
+
+        if seconds > float(limit):
+            raise _permanent(
+                f"이 계정은 {int(limit)}초까지 올릴 수 있는데 영상이 "
+                f"{seconds:.0f}초입니다. 짧게 만든 뒤 다시 시도해 "
+                "주십시오.",
+                "INVALID_REQUEST")
+
     def upload_media(self, credential, video_url, caption,
                      cover_url=None, plan=None):
         """
@@ -234,6 +340,10 @@ class RealTikTokRuntime(PublishingRuntimeProtocol):
                              "FILE_NOT_FOUND")
 
         size = os.path.getsize(path)
+
+        # Sprint248-A - 묻고 나서 올린다. 여기서 막히면 init 은 한 번도
+        # 불리지 않는다.
+        self._refuse_unless_allowed(credential, path)
 
         started = _ask(
             requests.post, INIT_URL, headers=self._headers(credential),

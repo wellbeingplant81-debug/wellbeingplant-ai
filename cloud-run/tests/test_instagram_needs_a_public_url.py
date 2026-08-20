@@ -278,6 +278,14 @@ class TheTikTokPathNeedsNoStorageTest(unittest.TestCase):
         def post(url, **kwargs):
             posted.append((url, kwargs))
 
+            # Sprint248-A - 공식 문서대로 init 전에 그 계정에 묻는다.
+            # 여기서 답하지 않으면 관문이 올리지 않는다 - 이 시험이
+            # 재려는 것은 저장소 없이 지나가는가이므로, 계정은 허락한
+            # 것으로 둔다.
+            if url == real_tiktok_runtime.CREATOR_INFO_URL:
+                return _response(200, {"data": {
+                    "privacy_level_options": ["SELF_ONLY"]}})
+
             if url == real_tiktok_runtime.INIT_URL:
                 return _response(200, {"data": {
                     "publish_id": "pid", "upload_url": "https://up/1"}})

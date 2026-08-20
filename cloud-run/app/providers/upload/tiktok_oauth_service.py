@@ -48,10 +48,21 @@ AUTHORIZE_URL = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/"
 USER_INFO_URL = "https://open.tiktokapis.com/v2/user/info/"
 
-# 최소 권한. 올리기까지 하려면 video.publish가 더 필요하고 그것은
-# TikTok의 심사를 받아야 한다 - 지금 하는 일은 "계정 연결"이므로
-# 여기서 더 넓히지 않는다.
-SCOPES = "user.info.basic"
+# Sprint217 은 "계정 연결" 만 하려고 user.info.basic 하나로 두었다.
+# Sprint235 가 올리는 자리를 만들었는데 여기를 넓히지 않아서, 로그인은
+# 되고 올릴 때 권한 오류가 나는 상태였다.
+#
+# 둘 다 필요하다.
+#
+#     user.info.basic   누구인지 - 화면이 이름과 사진을 쓴다
+#     video.publish     프로필에 바로 올린다 (Direct Post)
+#
+# 초안으로 보내는 video.upload 가 아니다. 그쪽은 사람이 TikTok 앱에서
+# 다시 눌러야 끝나므로, 이 프로그램이 하려는 일과 다르다.
+#
+# 심사를 통과하지 않은 앱은 이 권한이 있어도 비공개로만 올라간다.
+# 그것을 우리가 우회할 방법은 없고, 우회하려 해서도 안 된다.
+SCOPES = "user.info.basic,video.publish"
 
 _REQUEST_TIMEOUT_SECONDS = 30
 _DEFAULT_REDIRECT_URI = "http://127.0.0.1:8562/callback"

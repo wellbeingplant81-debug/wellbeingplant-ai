@@ -188,11 +188,25 @@ class TheUploadFollowsTheApiTest(unittest.TestCase):
         self.assertEqual(
             getattr(caught.exception, "error_category", ""), "FILE_NOT_FOUND")
 
-    def test_init_이_먼저다(self):
+    def test_init_이_계약대로_간다(self):
+        """
+        Sprint248-A - 이 시험의 이름은 원래 "init 이 먼저다" 였다.
+
+        그때는 그것이 사실이었다. 이제 공식 문서가 요구하는 대로
+        creator_info 를 먼저 묻고, 그 계정이 허락해야 init 으로 간다 -
+        첫 번째가 아니라는 것 말고는 재는 것이 그대로다.
+
+        그래서 차례를 세지 않고 init 호출을 찾아 그 안을 본다.
+        """
+
         posted = []
 
         def post(url, **kwargs):
             posted.append((url, kwargs))
+
+            if url == tiktok.CREATOR_INFO_URL:
+                return _response(200, {"data": {
+                    "privacy_level_options": ["SELF_ONLY"]}})
 
             return _response(200, {"data": {
                 "publish_id": "pid-1",
@@ -206,7 +220,8 @@ class TheUploadFollowsTheApiTest(unittest.TestCase):
 
         self.assertEqual(got, "pid-1")
 
-        url, kwargs = posted[0]
+        url, kwargs = next(
+            (u, k) for u, k in posted if u == tiktok.INIT_URL)
 
         self.assertEqual(url, tiktok.INIT_URL)
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer tok")
@@ -225,25 +240,41 @@ class TheUploadFollowsTheApiTest(unittest.TestCase):
 
         posted = []
 
-        with patch.object(tiktok.requests, "post",
-                          side_effect=lambda url, **kw: (
-                              posted.append(kw),
-                              _response(200, {"data": {
-                                  "publish_id": "p", "upload_url": "u"}}))[1]), \
+        def post(url, **kwargs):
+            posted.append((url, kwargs))
+
+            if url == tiktok.CREATOR_INFO_URL:
+                return _response(200, {"data": {
+                    "privacy_level_options": ["SELF_ONLY"]}})
+
+            return _response(200, {"data": {
+                "publish_id": "p", "upload_url": "u"}})
+
+        with patch.object(tiktok.requests, "post", side_effect=post), \
                 patch.object(tiktok.requests, "put",
                              return_value=_response(201)):
             self.runtime.upload_media(_credential(), self.video, "글")
 
-        self.assertEqual(posted[0]["json"]["post_info"]["privacy_level"],
+        # Sprint248-A - init 은 이제 첫 번째가 아니다. 차례를 세지 않고
+        # 그 호출을 찾는다. 재는 것은 그대로다.
+        _, kwargs = next((u, k) for u, k in posted if u == tiktok.INIT_URL)
+
+        self.assertEqual(kwargs["json"]["post_info"]["privacy_level"],
                          tiktok.DEFAULT_PRIVACY)
 
     def test_받은_자리에_파일을_밀어_넣는다(self):
         put = []
 
-        with patch.object(tiktok.requests, "post",
-                          return_value=_response(200, {"data": {
-                              "publish_id": "pid",
-                              "upload_url": "https://upload.example/put"}})), \
+        def post(url, **kwargs):
+            if url == tiktok.CREATOR_INFO_URL:
+                return _response(200, {"data": {
+                    "privacy_level_options": ["SELF_ONLY"]}})
+
+            return _response(200, {"data": {
+                "publish_id": "pid",
+                "upload_url": "https://upload.example/put"}})
+
+        with patch.object(tiktok.requests, "post", side_effect=post), \
                 patch.object(tiktok.requests, "put",
                              side_effect=lambda url, **kw: (
                                  put.append((url, kw)), _response(201))[1]):
