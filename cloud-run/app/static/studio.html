@@ -2491,6 +2491,210 @@ input[type=radio],input[type=checkbox]{width:auto}
 </script>
 
 <script>
+/*
+ * Sprint245 - 누가 읽어 줄지 화면에서 고른다.
+ *
+ * Sprint244 가 관문을 세웠다. 고르지 않은 유료 목소리는 부르지
+ * 않는다. 그런데 고르는 자리가 없었다 - 관문만 있고 문고리가 없는
+ * 셈이었다.
+ *
+ * 바로 위 자료 카드와 같은 모양이다. 화면이 두 벌의 규칙을 배우게
+ * 하지 않는다.
+ *
+ * 무엇을 고르는가
+ * ---------------
+ * Provider 하나다. 모드는 서버가 거기서 정한다. 둘을 따로 고르게
+ * 하면 "유료 허용인데 내 PC 음성" 같은 말이 만들어진다.
+ *
+ * 이름을 여기 적지 않는다
+ * -----------------------
+ * 무엇을 고를 수 있는지도, 그것이 유료인지도 서버가 말해 준다.
+ * 화면에 적어 두면 하나가 붙거나 빠질 때 두 곳을 고쳐야 하고,
+ * 언젠가 한 곳만 고친다.
+ */
+(function () {
+  "use strict";
+
+  let voicePolicy = null;
+
+  function byId(id) { return document.getElementById(id); }
+
+  function esc(text) {
+    return typeof escHtml === "function"
+      ? escHtml(String(text == null ? "" : text))
+      : String(text == null ? "" : text);
+  }
+
+  function projectId() {
+    if (typeof wizProject === "object" && wizProject && wizProject.project_id) {
+      return wizProject.project_id;
+    }
+
+    return typeof currentProject === "string" ? currentProject : "";
+  }
+
+  function sceneCount() {
+    return (typeof wizScript === "object" && wizScript
+            && wizScript.scene_count) || 0;
+  }
+
+  function voiceRow(name, row) {
+    const off = !row.choosable;
+    const on = voicePolicy && voicePolicy.provider === name;
+
+    return '<label class="prow ' + (on ? "on" : "") + '">' +
+      '<input type="radio" name="vpolProvider" value="' + esc(name) + '"' +
+      (on ? " checked" : "") + (off ? " disabled" : "") + ">" +
+      '<span class="pname">' + esc(row.label) + "</span>" +
+      '<span class="pst ' + esc(row.state) + '">' +
+      esc(VOICE_STATE_WORDS[row.state] || row.state) + "</span>" +
+      (row.paid ? '<span class="ptag">유료</span>'
+                : '<span class="free">API 비용 없음</span>') +
+      (row.needs && row.state === "NOT_CONFIGURED"
+        ? '<span class="ptag">' + esc(row.needs) + "</span>" : "") +
+      "</label>";
+  }
+
+  const VOICE_STATE_WORDS = {
+    AVAILABLE: "쓸 수 있음",
+    NOT_CONFIGURED: "열쇠 없음",
+    NOT_IMPLEMENTED: "아직 안 붙음",
+    DISABLED: "이 방식에서는 꺼짐",
+  };
+
+  function voiceSheet(plan) {
+    if (!plan) return "";
+
+    // 금액은 서버가 아는 것만 적는다. 모르면 모른다고 적는다 -
+    // 가격을 지어내면 그것이 사실인 양 읽힌다.
+    const cost = plan.cost_unknown
+      ? "확인 불가"
+      : (plan.estimated_cost === 0 ? "API 비용 없음" : plan.estimated_cost);
+
+    return '<div class="psheet">' +
+      "<span>고른 음성 <b>" + esc(plan.provider_label) + "</b></span>" +
+      "<span>음성 생성 최대 <b>" + plan.voice_calls + "</b>회</span>" +
+      "<span>유료 호출 최대 <b>" + plan.paid_calls + "</b>회</span>" +
+      "<span>예상 비용 <b>" +
+      (plan.paid ? esc(cost) : "API 비용 없음") + "</b></span>" +
+      "</div>";
+  }
+
+  function renderVoicePolicy() {
+    const box = byId("voicePolicy");
+    if (!box) return;
+
+    if (!voicePolicy) {
+      box.innerHTML = '<span class="muted">음성 만드는 방식을 읽는 중…</span>';
+      return;
+    }
+
+    const now = voicePolicy;
+
+    const rows = Object.keys(now.providers || {}).map(function (name) {
+      return voiceRow(name, now.providers[name]);
+    }).join("");
+
+    box.innerHTML =
+      '<div class="mh">🎙 목소리 고르기</div>' +
+      '<div class="pnow" id="voiceLabel">지금 <b>' +
+      esc((now.providers[now.provider] || {}).label || now.provider) +
+      "</b> 로 읽습니다." +
+      (now.paid_allowed ? "" : " 유료 음성을 부르지 않습니다.") + "</div>" +
+      '<div class="pai">' + rows + "</div>" +
+      voiceSheet(now.plan) +
+      '<div class="muted" id="vpolNote" style="margin-top:7px;font-size:11px">' +
+      "</div>";
+  }
+
+  async function loadVoicePolicy() {
+    const project = projectId();
+
+    if (!project) {
+      const box = byId("voicePolicy");
+
+      if (box) {
+        box.innerHTML = '<span class="muted">프로젝트를 만들면 ' +
+          "음성 만드는 방식을 고를 수 있습니다.</span>";
+      }
+
+      return;
+    }
+
+    try {
+      voicePolicy = await (await fetch(
+        "/studio/api/review/" + encodeURIComponent(project) +
+        "/voice-policy?scene_count=" + sceneCount())).json();
+    } catch (e) {
+      voicePolicy = null;
+    }
+
+    renderVoicePolicy();
+  }
+
+  async function chooseVoiceProvider(name) {
+    const project = projectId();
+    const note = byId("vpolNote");
+
+    if (!project) return;
+
+    try {
+      const r = await fetch(
+        "/studio/api/review/" + encodeURIComponent(project) + "/voice-policy",
+        {method: "PUT", headers: {"Content-Type": "application/json"},
+         body: JSON.stringify({provider: name, scene_count: sceneCount()})});
+
+      const d = await r.json();
+
+      if (!r.ok) {
+        if (note) note.textContent = typeof d.detail === "string"
+          ? d.detail : "바꾸지 못했습니다.";
+        return;
+      }
+
+      voicePolicy = d;
+      renderVoicePolicy();
+    } catch (e) {
+      if (note) note.textContent = "바꾸지 못했습니다: " + e.message;
+    }
+  }
+
+  function mount() {
+    const anchor = byId("mediaPolicy");
+    if (!anchor || byId("voicePolicy")) return;
+
+    anchor.insertAdjacentHTML(
+      "afterend", '<div class="mpol" id="voicePolicy"></div>');
+
+    byId("voicePolicy").addEventListener("change", function (ev) {
+      const target = ev.target;
+
+      if (target && target.name === "vpolProvider") {
+        chooseVoiceProvider(target.value);
+      }
+    });
+
+    loadVoicePolicy();
+  }
+
+  function start() {
+    try { mount(); } catch (e) { }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+
+  window.renderVoicePolicy = renderVoicePolicy;
+  window.loadVoicePolicy = loadVoicePolicy;
+  window.chooseVoiceProvider = chooseVoiceProvider;
+  window.voiceRow = voiceRow;
+})();
+</script>
+
+<script>
 const $ = (id) => document.getElementById(id);
 let currentProject = null, currentDetail = null, jobId = null;
 let consoleNext = 0, poll = null, selectedScene = null, regenView = null;

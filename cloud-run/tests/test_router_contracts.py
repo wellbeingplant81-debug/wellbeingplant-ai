@@ -119,6 +119,13 @@ ENDPOINTS = [
     ("PUT", "/studio/api/review/{project_id}/media-policy",
      {"mode": "mine_then_stock"}, [],
      "/studio/api/review/p/media-policy"),
+    # Sprint245 - 누가 읽어 줄지 화면에서 고른다. 고르지 않은 유료
+    # 목소리는 부르지 않는다(Sprint244)는 관문에 문고리를 단 자리다.
+    ("GET", "/studio/api/review/{project_id}/voice-policy", None, [],
+     "/studio/api/review/p/voice-policy"),
+    ("PUT", "/studio/api/review/{project_id}/voice-policy",
+     {"provider": "local_voice"}, [],
+     "/studio/api/review/p/voice-policy"),
     ("POST", "/studio/api/publish/queue",
      {"project_id": "p", "platform": "youtube"}, []),
     ("POST", "/studio/api/social/{platform}/{action}", None,
@@ -523,6 +530,9 @@ NEEDS_PROJECT_STATE_ENDPOINTS = {
     # Sprint242 - project.json 에 적으므로 프로젝트가 있어야 한다.
     ("GET", "/studio/api/review/{project_id}/media-policy"),
     ("PUT", "/studio/api/review/{project_id}/media-policy"),
+    # Sprint245 - 같은 이유다. 고른 목소리도 그 파일의 한 칸이다.
+    ("GET", "/studio/api/review/{project_id}/voice-policy"),
+    ("PUT", "/studio/api/review/{project_id}/voice-policy"),
     # Sprint235 - 영상 파일이 실제로 있어야 줄에 선다.
     ("POST", "/studio/api/publish/queue"),
     ("POST", "/studio/api/projects/{project_id}/staging/apply"),

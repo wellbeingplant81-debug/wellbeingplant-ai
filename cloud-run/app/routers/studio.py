@@ -2023,6 +2023,109 @@ def review_save_media_policy(project_id: str, request: MediaPolicyRequest):
     return _media_policy_view(path, request.scene_count)
 
 
+class VoicePolicyRequest(BaseModel):
+    # 사람이 정하는 것은 "누가 읽어 주는가" 하나다. 모드는 거기서
+    # 따라 나온다 - 둘을 따로 고르게 하면 "유료 허용인데 내 PC 음성"
+    # 같은 말이 만들어진다.
+    provider: str
+    scene_count: int = 0
+
+
+def _voice_policy_view(project_path: str, scene_count: int = 0) -> dict:
+    """
+    화면이 한 번에 그릴 수 있게 모아 준다.
+
+    Sprint242 가 그림에 만든 모양 그대로다. 목록도 상태도 계획도
+    voice_policy 가 정한 것을 옮기기만 한다 - 화면이 제 나름대로
+    세면 사람이 본 횟수와 청구서가 갈린다.
+    """
+
+    from app.services import provider_selection, voice_policy
+
+    mode = voice_policy.mode_for(project_path)
+    states = voice_policy.provider_states(mode)
+
+    # 고를 수 있는가는 **지금 허용되는가**가 아니라 **고르면 실제로
+    # 돌아가는가**다.
+    #
+    # 실제 창에서 드러났다: 무료 모드라 유료 두 줄이 꺼져 있었고,
+    # 그것을 켜는 방법이 바로 그 줄을 고르는 것이었다. 닭과 달걀이라
+    # 사장님이 유료 음성을 영영 켤 수 없었다.
+    #
+    # 그래서 "유료가 열렸다면 쓸 수 있었을까" 를 따로 묻는다. 열쇠가
+    # 없거나 안 붙은 것은 그대로 고를 수 없다.
+    ready = voice_policy.provider_states(voice_policy.MODE_PAID_OK)
+
+    chosen = provider_selection.selected(project_path, "voice")
+
+    if chosen is None:
+        chosen = voice_policy.default_provider()
+
+    return {
+        "mode": mode,
+        "label": voice_policy.LABELS[mode],
+        "paid_allowed": voice_policy.paid_allowed(mode),
+        "provider": chosen,
+        "providers": {
+            name: {
+                **row,
+                # 화면이 상태를 다시 해석하지 않게 여기서 한 번만
+                # 정한다.
+                "choosable": ready[name]["state"] == voice_policy.AVAILABLE,
+            }
+            for name, row in states.items()
+        },
+        "plan": voice_policy.plan_for(mode, scene_count, project_path),
+    }
+
+
+@router.get("/api/review/{project_id}/voice-policy")
+def review_voice_policy(project_id: str, scene_count: int = 0):
+    """이 프로젝트가 누구의 목소리로 만들기로 했는가."""
+
+    return _voice_policy_view(_project_path(project_id), scene_count)
+
+
+@router.put("/api/review/{project_id}/voice-policy")
+def review_save_voice_policy(project_id: str, request: VoicePolicyRequest):
+    """
+    사람이 고른 목소리를 프로젝트에 적는다.
+
+    유료를 고른 그때만 유료가 열린다(Sprint244). 무료로 되돌리면
+    다시 닫힌다 - 한 번 연 것이 계속 열려 있으면 그 프로젝트는
+    영원히 요금이 나갈 수 있는 상태가 된다.
+
+    새 저장소를 만들지 않는다. provider_selection 이 쓰는 그
+    project.json 이다.
+    """
+
+    from app.services import provider_selection, voice_policy
+
+    path = _project_path(project_id)
+
+    try:
+        provider_selection.require_wired("voice", request.provider)
+    except provider_selection.ProviderNotWired as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if request.provider not in voice_policy.provider_states():
+        raise HTTPException(
+            status_code=400,
+            detail=f"알 수 없는 음성입니다: {request.provider}",
+        )
+
+    paid = provider_selection.calls_api("voice", request.provider)
+
+    voice_policy.choose(
+        path,
+        voice_policy.MODE_PAID_OK if paid else voice_policy.MODE_FREE_ONLY,
+    )
+
+    provider_selection.save(path, {"voice": request.provider})
+
+    return _voice_policy_view(path, request.scene_count)
+
+
 @router.put("/api/review/{project_id}/providers")
 def review_save_providers(project_id: str, request: ReviewProviderRequest):
     """

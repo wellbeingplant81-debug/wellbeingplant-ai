@@ -289,6 +289,12 @@ class TestTheReviewWorkflowIsUntouched(unittest.TestCase):
             # 화면에서 고르게 하면서 더했다. 조용히 늘지 않게 하려는
             # 것이 이 시험의 목적이므로 이름으로 적어 둔다.
             "/studio/api/review/{project_id}/media-policy",
+            # Sprint245 - 목소리도 같은 자리를 얻었다. Sprint244 가
+            # 유료 음성 앞에 관문을 세웠는데 고르는 자리가 없어서,
+            # 관문만 있고 문고리가 없는 상태였다.
+            #
+            # 이 시험이 우는 것이 맞다 - 자리를 늘렸으니 이름을 적는다.
+            "/studio/api/review/{project_id}/voice-policy",
             "/studio/api/review/{project_id}/scenes/{scene}/asset",
             "/studio/api/review/{project_id}/scenes/{scene}/confirm",
             "/studio/api/review/{project_id}/script",
