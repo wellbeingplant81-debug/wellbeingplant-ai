@@ -220,9 +220,30 @@ class RealTikTokRuntime(PublishingRuntimeProtocol):
             client_key=self.client_key, client_secret=self.client_secret)
 
     def login(self, account_id):
+        """
+        Sprint257 - 저장해 둔 로그인을 다시 쓴다.
+
+        예전에는 authenticate() 를 곧장 불렀다. 그것은 브라우저를 여는
+        걸음이라, 일꾼이 이 자리를 지날 때마다 로그인 창이 뜨려 하고
+        사람이 지켜보지 않는 자리에서 멈춘다. 저장된 토큰이 있어도
+        쓰이지 않고 만료돼도 갱신되지 않았다 - token_store 를 받아
+        두기만 하고 한 번도 읽지 않았다.
+
+        YouTube · Instagram 은 처음부터 get_valid_credential 을 쓰고
+        있었다. 같은 함수를 부른다. 없으면 로그인하고, 만료됐으면
+        갱신하고, 멀쩡하면 그대로 쓰는 것 - 그 셋이 이미 계약이고
+        여기서 새로 지어내지 않는다.
+
+        설정이 없으면 저장소를 보기도 전에 거절한다. 순서를 바꾸면
+        열쇠가 없는 사람에게 엉뚱한 오류가 간다.
+        """
+
         self._refuse_if_unset()
 
-        return self._build_oauth_service().authenticate(account_id)
+        from app.providers.upload.credential_loader import get_valid_credential
+
+        return get_valid_credential(
+            self._build_oauth_service(), self._token_store, account_id)
 
     def refresh_token(self, credential):
         self._refuse_if_unset()
@@ -434,8 +455,22 @@ class RealTikTokRuntime(PublishingRuntimeProtocol):
 
 
 def build_default_tiktok_runtime() -> RealTikTokRuntime:
-    """열쇠는 바깥에서 온다. 코드에 적지 않는다."""
+    """
+    열쇠는 바깥에서 온다. 코드에 적지 않는다.
+
+    Sprint257 - 저장소도 함께 준다. 예전에는 주지 않아 늘 None 이었고,
+    그러면 login() 이 저장된 것을 읽을 수 없다.
+
+    자리는 화면이 쓰는 것과 같은 resolver 로 정한다(social_accounts 가
+    로그인 결과를 적는 그 파일이다) - 다르면 화면에서 로그인해도
+    일꾼이 못 읽는다.
+    """
+
+    from app.providers.upload.file_token_store import FileTokenStore
+    from app.services import credential_paths
 
     return RealTikTokRuntime(
         client_key=os.environ.get("TIKTOK_CLIENT_KEY", ""),
-        client_secret=os.environ.get("TIKTOK_CLIENT_SECRET", ""))
+        client_secret=os.environ.get("TIKTOK_CLIENT_SECRET", ""),
+        token_store=FileTokenStore(storage_path=credential_paths.resolve(
+            "TIKTOK_OAUTH_TOKEN_STORE_PATH", "tiktok_oauth_tokens.json")))
