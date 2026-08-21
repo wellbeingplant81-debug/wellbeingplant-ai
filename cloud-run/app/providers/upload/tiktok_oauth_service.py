@@ -31,7 +31,6 @@ client_key와 client_secret은 TikTok for Developers에서 사람이 앱을
 않고 무엇을 설정해야 하는지 말한다 - 가짜 로그인을 흉내내지 않는다.
 """
 
-import base64
 import hashlib
 import os
 import secrets
@@ -93,14 +92,30 @@ def new_verifier() -> str:
 
 def challenge_for(verifier: str) -> str:
     """
-    code_challenge = BASE64URL(SHA256(verifier)), 패딩 없이.
+    code_challenge = HEX(SHA256(verifier)).
 
-    TikTok은 S256만 받는다(plain 불가).
+    Sprint258 - 여기가 BASE64URL 이었다. RFC 7636 이 정한 방식이고
+    다른 제공자들은 그것을 받는다. TikTok 은 받지 않는다.
+
+    실제 로그인이 마지막 걸음에서 죽었다 - authorize · 로그인 · 승인 ·
+    callback 까지 다 지나고 토큰 교환에서 "Code verifier or code
+    challenge is invalid" 가 왔다. verifier 는 흠이 없었다. 옮기는
+    방식이 달랐을 뿐이다.
+
+    공식 문서가 이렇게 적는다.
+
+        "Create the code challenge by hashing the code verifier using
+         hex encoding of SHA256. Since we only support S256 as
+         code_challenge_method, use
+         code_challenge = SHA256(code_verifier).toString(CryptoJS.enc.Hex)"
+
+    그래서 64 글자의 16진수다. 표준이 우리 편이어도 상대가 다른 것을
+    기다리면 통하지 않는다.
+
+    method 이름은 그대로 S256 이다 - TikTok 이 그 이름만 받는다.
     """
 
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-
-    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return hashlib.sha256(verifier.encode("ascii")).hexdigest()
 
 
 class TikTokOAuthService:

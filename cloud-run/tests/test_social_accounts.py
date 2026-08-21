@@ -706,11 +706,21 @@ class TheTikTokPkceTest(unittest.TestCase):
         self.assertEqual(len({new_verifier() for _ in range(200)}), 200)
 
     def test_the_challenge_is_really_s256(self):
+        """
+        Sprint258 - 여기가 BASE64URL 을 기다리고 있었다.
+
+        RFC 7636 이 정한 방식이고, 그때는 그것이 옳아 보였다. 실제
+        로그인이 마지막 걸음에서 죽고 나서야 TikTok 이 다른 것을
+        기다린다는 사실이 드러났다 - 공식 문서가 "hex encoding of
+        SHA256" 이라고 적는다.
+
+        재는 것은 그대로다: challenge 가 정말 verifier 의 SHA-256 인가.
+        옮겨 적는 방식만 문서에 맞춘다.
+        """
+
         verifier = "abc123-_~test"
 
-        expected = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode("ascii")).digest()
-        ).decode("ascii").rstrip("=")
+        expected = hashlib.sha256(verifier.encode("ascii")).hexdigest()
 
         self.assertEqual(challenge_for(verifier), expected)
 
