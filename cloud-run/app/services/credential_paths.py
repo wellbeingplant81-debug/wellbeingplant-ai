@@ -58,9 +58,30 @@ def user_dir() -> str:
 
 
 def repo_dir() -> str:
-    """저장소의 자격증명 폴더(개발 중에 쓰던 그 자리)."""
+    """
+    저장소의 자격증명 폴더(개발 중에 쓰던 그 자리).
 
-    return CREDENTIALS_DIRNAME
+    Sprint255 - 여기가 "credentials" 라는 글자였다. 켠 자리(cwd)를
+    따라가는 값이라, 저장소 밖에서 켜면 저장소의 credentials/ 를 보지
+    못하고 사용자 자리로 흘러갔다.
+
+    실제로 그것 때문에 Sprint254 의 업로드가 두 번 죽었다. 화면에서
+    로그인한 토큰과 일꾼이 읽은 토큰이 서로 다른 파일이었고, 일꾼 쪽에
+    남아 있던 옛 토큰은 권한이 둘뿐이라 셋을 요구하니 거절당했다.
+
+    저장소의 자리는 저장소가 어디 있느냐로 정해진다 - 우리가 어디서
+    켰느냐로 정해지는 것이 아니다. 그래서 이 파일의 자리에서 거슬러
+    올라가 찾는다(app/services/ 에서 두 단계 위).
+
+    묶인 프로그램에서는 이 자리가 풀린 임시 폴더 안이고 거기에
+    credentials/ 는 없다 - resolve() 가 셋째 걸음(사용자 자리)으로
+    간다. 예전과 같은 결과다.
+    """
+
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(os.path.dirname(os.path.dirname(here)),
+                        CREDENTIALS_DIRNAME)
 
 
 def resolve(env_name: str, filename: str) -> str:

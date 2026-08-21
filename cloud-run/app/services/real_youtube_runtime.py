@@ -118,14 +118,21 @@ def _classify_upload_error(status_code, reason: str) -> str:
     return "UNKNOWN_ERROR"
 
 
+# Sprint255 - 자리는 credential_paths 가 정한다.
+#
+# 예전에는 여기도 상대 경로였다. 업로드 걸음(youtube_upload_step_
+# service)과 이 런타임이 각자 같은 글자를 따로 들고 있었고, 둘 다 켠
+# 자리를 따라갔다 - 로그인이 쓰는 자리와 갈라진 이유다.
 def _default_client_secret_path() -> str:
-    return os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET_PATH", "credentials/client_secret.json")
+    from app.services import youtube_upload_step_service
+
+    return youtube_upload_step_service.client_secret_path()
 
 
 def _default_token_store_path() -> str:
-    return os.environ.get(
-        "YOUTUBE_OAUTH_TOKEN_STORE_PATH", "credentials/youtube_oauth_tokens.json"
-    )
+    from app.services import youtube_upload_step_service
+
+    return youtube_upload_step_service.token_store_path()
 
 
 class RealYouTubeRuntime(PublishingRuntimeProtocol):

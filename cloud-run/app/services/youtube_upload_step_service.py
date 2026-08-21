@@ -66,9 +66,39 @@ from app.services.oauth_manager import OAuthManager
 from app.services.real_youtube_runtime import DISABLED_MESSAGE
 from app.services.studio_service import MEDIA_KINDS
 
-_DEFAULT_CLIENT_SECRET_PATH = "credentials/client_secret.json"
-_DEFAULT_TOKEN_STORE_PATH = "credentials/youtube_oauth_tokens.json"
+# Sprint255 - 자리가 아니라 이름만 안다.
+#
+# 예전에는 여기가 "credentials/..." 라는 상대 경로였고, 켠 자리(cwd)를
+# 따라갔다. 화면의 로그인은 credential_paths 를 쓰는데 이쪽만 쓰지
+# 않아서, 같은 계정인데 서로 다른 파일을 보았다.
+#
+# Sprint254 의 업로드가 그것 때문에 두 번 죽었다 - 일꾼이 읽은 토큰은
+# 권한이 둘뿐인 옛 것이었고, 셋을 요구하니 Google 이 거절했다.
+#
+# 어디서 찾을지는 credential_paths 가 정한다(환경변수 > 저장소 >
+# 사용자 자리). 새 규칙을 만드는 것이 아니라, 쓰지 않던 자리가 쓰는
+# 것이다.
+_CLIENT_SECRET_FILENAME = "client_secret.json"
+_TOKEN_STORE_FILENAME = "youtube_oauth_tokens.json"
 _DEFAULT_ACCOUNT_ID = "default"
+
+
+def client_secret_path() -> str:
+    """Google 데스크톱 앱 자격증명 파일이 있는(또는 있어야 할) 자리."""
+
+    from app.services import credential_paths
+
+    return credential_paths.resolve(
+        "YOUTUBE_OAUTH_CLIENT_SECRET_PATH", _CLIENT_SECRET_FILENAME)
+
+
+def token_store_path() -> str:
+    """로그인 결과를 읽고 쓰는 자리."""
+
+    from app.services import credential_paths
+
+    return credential_paths.resolve(
+        "YOUTUBE_OAUTH_TOKEN_STORE_PATH", _TOKEN_STORE_FILENAME)
 
 # Sprint92 - 결과 파일 이름과 outcome 어휘는 studio_upload가 갖는다.
 # 파이프라인이 그 층만 import하고도 결과를 읽을 수 있어야 하기 때문이다
@@ -208,25 +238,21 @@ def run_youtube_upload_step(
     if not config.ENABLE_YOUTUBE_UPLOAD:
         return _refused(project_path, DISABLED_MESSAGE)
 
-    client_secret_path = os.environ.get(
-        "YOUTUBE_OAUTH_CLIENT_SECRET_PATH", _DEFAULT_CLIENT_SECRET_PATH,
-    )
-    token_store_path = os.environ.get(
-        "YOUTUBE_OAUTH_TOKEN_STORE_PATH", _DEFAULT_TOKEN_STORE_PATH,
-    )
+    secret_file = client_secret_path()
+    token_file = token_store_path()
     account_id = os.environ.get("YOUTUBE_OAUTH_ACCOUNT_ID", _DEFAULT_ACCOUNT_ID)
 
     # 없는 것을 대신 만들지 않는다. 어디를 봤는지 그대로 적어 준다.
-    if not os.path.exists(client_secret_path):
+    if not os.path.exists(secret_file):
         return _refused(
             project_path,
-            f"client_secret 파일이 없습니다: {client_secret_path}. "
+            f"client_secret 파일이 없습니다: {secret_file}. "
             "Google Cloud Console에서 OAuth Client(Desktop)를 발급해 "
             "이 경로에 두거나 YOUTUBE_OAUTH_CLIENT_SECRET_PATH로 "
             "위치를 지정하십시오.",
         )
 
-    health = _check_health(client_secret_path, token_store_path, account_id)
+    health = _check_health(secret_file, token_file, account_id)
 
     if health.status not in _UPLOADABLE_HEALTH:
         return _refused(
@@ -235,8 +261,8 @@ def run_youtube_upload_step(
             "Studio의 YouTube 연결에서 Google 로그인을 먼저 완료하십시오.",
         )
 
-    oauth_service = GoogleOAuthService(client_secret_path=client_secret_path)
-    token_store = FileTokenStore(storage_path=token_store_path)
+    oauth_service = GoogleOAuthService(client_secret_path=secret_file)
+    token_store = FileTokenStore(storage_path=token_file)
     credential = get_valid_credential(oauth_service, token_store, account_id)
 
     provider = YouTubeUploadProvider(credential=credential)
