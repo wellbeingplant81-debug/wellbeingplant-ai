@@ -94,8 +94,20 @@ class _Case(unittest.TestCase):
 class TestTheGateOrder(_Case):
     """앞 관문에서 막히면 뒤쪽 코드는 실행되지 않는다."""
 
-    def test_the_flag_is_off_by_default(self):
-        self.assertFalse(config.ENABLE_INSTAGRAM_UPLOAD)
+    def test_the_flag_is_on_now(self):
+        """
+        Sprint260 - 여기가 assertFalse 였다.
+
+        Sprint101 이 그렇게 적은 이유는 "실업로드가 한 번도 검증되지
+        않았다" 였고, 그때는 사실이었다. Sprint259 에서 실제 Reel 이
+        올라가면서(DcS1RrNCiCC) Release Gate 가 요구한 증거가 생겼다.
+
+        재는 것은 그대로다 - 이 값이 우연이 아니라 의도된 것인가.
+        열린 상태를 못박는 자세한 계약은
+        test_instagram_upload_is_released.py 가 갖는다.
+        """
+
+        self.assertTrue(config.ENABLE_INSTAGRAM_UPLOAD)
 
     def test_a_disabled_flag_refuses_before_anything_else(self):
         adapter = _Adapter()

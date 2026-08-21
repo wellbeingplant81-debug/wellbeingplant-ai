@@ -269,12 +269,23 @@ ENABLE_METADATA_INTELLIGENCE = True
 # Meta 자격증명도 로그인 상태도 확인하지 않고, Adapter와 Storage(boto3)
 # 를 import조차 하지 않는다.
 #
-# 이 저장소에서 Instagram 실업로드는 아직 한 번도 검증되지 않았다.
-# Evaluation Policy v3에 따라 True로 올리려면 Level 3 Release Gate가
-# 필요하다.
+# Sprint260 - 열었다.
 #
-# 켜기 전에 준비돼야 하는 것이 둘 더 있다 - Meta App 자격증명
+# 여기에 "아직 한 번도 검증되지 않았다"고 적혀 있었다. Evaluation
+# Policy v3의 Level 3 Release Gate가 실증을 요구했고, 그 증거가 생겼다.
+#
+#     Reel      https://www.instagram.com/reel/DcS1RrNCiCC/
+#     media id  18033618371832629
+#     영상      output/20260820_233933/video/final_short.mp4
+#     경로      R2 공개 URL -> /{ig-user-id}/media -> 상태 확인
+#               -> /{ig-user-id}/media_publish
+#
+# mock도 fake도 없었다. 실제 자격증명 · 실제 ig_user_id · 실제 R2
+# 주소 · 실제 Graph API로 파이프라인 여섯 걸음이 전부 success였다.
+# 이 플래그 검사 한 줄만 건너뛰고 나머지 관문은 그대로 밟았다.
+#
+# 켜져 있어도 뒤쪽 관문은 그대로다 - Meta App 자격증명
 # (INSTAGRAM_OAUTH_CLIENT_ID/SECRET)과 공개 URL을 만들 수 있는
-# Storage(STORAGE_PROVIDER=s3 + R2/S3 설정). 둘 중 하나라도 없으면
-# 플래그를 켜도 각 관문에서 정직하게 거절된다.
-ENABLE_INSTAGRAM_UPLOAD = False
+# Storage(STORAGE_PROVIDER=s3 + R2/S3 설정)가 없으면 각 관문에서
+# 정직하게 거절한다. 플래그는 첫 번째 문일 뿐이다.
+ENABLE_INSTAGRAM_UPLOAD = True
