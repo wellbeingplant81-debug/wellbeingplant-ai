@@ -1,0 +1,116 @@
+/* AI영상제작소 - 약관 · 개인정보처리방침 공통 모양.
+   읽기만 하는 문서다. 글자와 여백 말고는 아무것도 두지 않는다. */
+
+:root {
+  --ink: #1b1f24;
+  --muted: #5b6672;
+  --line: #e3e7eb;
+  --bg: #ffffff;
+  --accent: #2f6feb;
+  --warn-bg: #fff8e1;
+  --warn-line: #f0d38a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e7ebf0;
+    --muted: #9aa5b1;
+    --line: #2a3038;
+    --bg: #14171c;
+    --accent: #7aa2f7;
+    --warn-bg: #2b2617;
+    --warn-line: #5c4f24;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 20px 64px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.wrap { max-width: 760px; margin: 0 auto; }
+
+header {
+  padding: 40px 0 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 30px;
+}
+
+h1 { font-size: 25px; line-height: 1.35; margin: 0 0 6px; }
+
+.en { color: var(--muted); font-size: 14px; margin: 0; }
+
+.meta { color: var(--muted); font-size: 13px; margin: 14px 0 0; }
+
+h2 {
+  font-size: 18px;
+  margin: 36px 0 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+h2 .en { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
+
+h2:first-of-type { border-top: 0; padding-top: 0; }
+
+p { margin: 0 0 12px; }
+
+ul, ol { margin: 0 0 12px; padding-left: 22px; }
+
+li { margin-bottom: 7px; }
+
+a { color: var(--accent); }
+
+.note {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 0 0 24px;
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+th, td {
+  border: 1px solid var(--line);
+  padding: 9px 11px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th { background: rgba(127, 127, 127, .08); font-weight: 600; }
+
+footer {
+  margin-top: 52px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+footer .name { color: var(--ink); font-weight: 600; }
+
+.nav { margin-top: 10px; }
+
+@media (max-width: 560px) {
+  body { font-size: 15px; padding: 0 16px 48px; }
+  h1 { font-size: 22px; }
+  table, th, td { font-size: 14px; }
+  th, td { padding: 8px 9px; }
+}
