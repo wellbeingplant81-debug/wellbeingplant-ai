@@ -46,9 +46,19 @@ def _default_redirect_uri() -> str:
 
 
 def _default_token_store_path() -> str:
-    return os.environ.get(
-        "INSTAGRAM_OAUTH_TOKEN_STORE_PATH", "credentials/instagram_oauth_tokens.json",
-    )
+    """
+    Sprint256 - 업로드 걸음이 정한 그 자리를 그대로 쓴다.
+
+    여기가 실제로 열리는 파일을 정한다 - 걸음이 runtime 을 주지 않으면
+    _build_default_runtime() 이 이 값으로 저장소를 만든다. 걸음만
+    고치고 여기를 두면 고친 것이 쓰이지 않는다.
+
+    같은 결정을 두 곳에서 따로 적지 않는다.
+    """
+
+    from app.services import instagram_upload_step_service
+
+    return instagram_upload_step_service._token_store_path()
 
 
 def _build_default_runtime() -> RealInstagramRuntime:

@@ -43,7 +43,15 @@ _MEDIA_TYPE = "REELS"
 _REQUEST_TIMEOUT_SECONDS = 30
 
 _DEFAULT_REDIRECT_URI = "http://localhost:8551/callback"
-_DEFAULT_TOKEN_STORE_PATH = "credentials/instagram_oauth_tokens.json"
+# Sprint256 - 자리는 업로드 걸음이 정한다.
+#
+# 예전에는 여기가 상대 경로 상수였고, 아래 생성자가 그것을 그대로
+# 썼다. 환경변수(INSTAGRAM_OAUTH_TOKEN_STORE_PATH)조차 보지 않아서,
+# 사람이 자리를 가리켜도 이 기본 저장소에는 닿지 않았다.
+def _default_token_store_path() -> str:
+    from app.services import instagram_upload_step_service
+
+    return instagram_upload_step_service._token_store_path()
 
 _NOT_CONFIGURED_MESSAGE = (
     "Meta App Client ID/Secret이 아직 설정되지 않았습니다 - Setup Wizard "
@@ -164,7 +172,7 @@ class RealInstagramRuntime(InstagramRuntimeProtocol):
         self._client_secret = client_secret
         self._redirect_uri = redirect_uri
         self._token_store = token_store or InstagramTokenStore(
-            storage_path=_DEFAULT_TOKEN_STORE_PATH,
+            storage_path=_default_token_store_path(),
         )
         self._oauth_service_factory = oauth_service_factory or InstagramOAuthService
 

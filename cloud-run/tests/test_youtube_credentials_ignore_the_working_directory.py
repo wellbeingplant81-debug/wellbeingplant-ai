@@ -298,16 +298,22 @@ class TheRestIsUnchangedTest(_Clean):
             "https://www.googleapis.com/auth/youtube",
         ])
 
-    def test_다른_플랫폼_경로는_건드리지_않는다(self):
+    def test_다른_플랫폼도_이제_같은_정책을_쓴다(self):
         """
-        Instagram 에도 같은 결함이 있지만 이번 범위가 아니다. 그 값이
-        그대로인지만 확인한다 - 모르는 사이에 함께 움직이지 않도록.
+        Sprint255 에서는 이 자리가 "Instagram 은 아직 상대 경로다" 를
+        확인하고 있었다. 이번 범위가 아니니 모르는 사이에 함께 움직이지
+        않도록 잠가 둔 것이었다.
+
+        Sprint256 이 그 결함을 없앴다. 전제가 사라졌으므로 확인하는
+        사실도 바뀐다 - 이제는 두 플랫폼이 같은 정책을 쓴다는 것을
+        본다. 잠금을 푸는 것이 아니라, 잠그는 대상이 옮겨간 것이다.
         """
 
         from app.services import instagram_upload_step_service as ig
 
-        self.assertEqual(ig._DEFAULT_TOKEN_STORE_PATH,
-                         "credentials/instagram_oauth_tokens.json")
+        self.assertEqual(ig._TOKEN_STORE_FILENAME,
+                         "instagram_oauth_tokens.json")
+        self.assertTrue(os.path.isabs(ig._token_store_path()))
 
     def test_토큰_보호_방식이_그대로다(self):
         from app.providers.upload import file_token_store

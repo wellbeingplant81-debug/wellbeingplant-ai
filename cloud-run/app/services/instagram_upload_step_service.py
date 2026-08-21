@@ -41,7 +41,16 @@ from app.services import oauth_health
 from app.services.oauth_manager import OAuthManager
 from app.services.studio_upload import FAILED, SKIPPED, UPLOADED
 
-_DEFAULT_TOKEN_STORE_PATH = "credentials/instagram_oauth_tokens.json"
+# Sprint256 - 자리가 아니라 이름만 안다.
+#
+# 예전에는 여기가 상대 경로였고 켠 자리(cwd)를 따라갔다. 로그인
+# (instagram_oauth_manager)은 credential_paths 를 쓰는데 이쪽만 쓰지
+# 않아서, 같은 계정인데 서로 다른 파일을 볼 수 있었다.
+#
+# YouTube 에서 그것이 실제로 일어났다 - Sprint254 의 업로드가 두 번
+# invalid_scope 로 죽었고 원인은 저장소가 둘로 갈린 것이었다.
+# Instagram 은 아직 자격증명이 없어 드러나지 않았을 뿐이다.
+_TOKEN_STORE_FILENAME = "instagram_oauth_tokens.json"
 _DEFAULT_REDIRECT_URI = "http://localhost:8551/callback"
 _DEFAULT_ACCOUNT_ID = "default"
 
@@ -67,7 +76,12 @@ def _client_secret() -> str:
 
 
 def _token_store_path() -> str:
-    return _env("INSTAGRAM_OAUTH_TOKEN_STORE_PATH", _DEFAULT_TOKEN_STORE_PATH)
+    """로그인 결과를 읽고 쓰는 자리. 환경변수 > 저장소 > 사용자 자리."""
+
+    from app.services import credential_paths
+
+    return credential_paths.resolve(
+        "INSTAGRAM_OAUTH_TOKEN_STORE_PATH", _TOKEN_STORE_FILENAME)
 
 
 def _account_id() -> str:
